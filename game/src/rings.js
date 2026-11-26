@@ -156,12 +156,17 @@ export function createCourse(random, seed, islands) {
 /** Build the visible rings, their glow halos and the next-ring guide. */
 export function buildRingMeshes(THREE, course) {
   const group = new THREE.Group();
-  const ringGeo = new THREE.TorusGeometry(COURSE.ringRadius, COURSE.ringTube, 12, 42);
+  // v11: a thicker tube (0.75 m, was COURSE.ringTube 0.5) and a stronger
+  // glow (2.6x tube, 0.22 opacity, was 2.1x / 0.15) — thick glowing
+  // circular geometry with golden light, per the redesign prompt. The pass
+  // radius is unchanged (the tube is visual only; createCourse's ringRadius
+  // still decides a pass), so the flight model is untouched.
+  const ringGeo = new THREE.TorusGeometry(COURSE.ringRadius, 0.75, 12, 64);
   // v3: a thin outer glow layer around each ring (a fatter, faint torus in the
   // same gold), so the ring reads as light, not as a painted hoop.
-  const glowGeo = new THREE.TorusGeometry(COURSE.ringRadius, COURSE.ringTube * 2.1, 10, 42);
+  const glowGeo = new THREE.TorusGeometry(COURSE.ringRadius, 0.75 * 2.6, 10, 64);
   const glowMat = new THREE.MeshBasicMaterial({
-    color: PALETTE.ring, transparent: true, opacity: 0.15, depthWrite: false,
+    color: PALETTE.ring, transparent: true, opacity: 0.22, depthWrite: false,
   });
   const nextMat = new THREE.MeshBasicMaterial({ color: PALETTE.ringNext });
   // v4: future rings at 0.45 (was 0.55) — the distant rings cluttered the sky
@@ -195,6 +200,49 @@ export function buildRingMeshes(THREE, course) {
     return { mesh, glow };
   });
 
+  // v11: golden sparkle particles orbiting the next ring — a slow-spinning
+  // cloud of tiny additive gold points scattered on the ring's
+  // circumference, so the gate reads as glowing light with a subtle
+  // particle effect (the redesign prompt's "subtle particle effects").
+  // The points are decorative only: their positions use Math.random once
+  // at build and never touch the course, the flight model or any seed.
+  const sparkleGroup = new THREE.Group();
+  const sparkles = (() => {
+    const count = 48;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) {
+      const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+      const r = COURSE.ringRadius + (Math.random() - 0.5) * 4;
+      positions[i * 3] = Math.cos(a) * r;
+      positions[i * 3 + 1] = Math.sin(a) * r;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 3;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    // v11 (iterasi 2): the points wear a soft round glow texture — bare
+    // PointsMaterial renders hard white squares, and the first v11 title
+    // shot showed the sparkles as white confetti pixels around the ring.
+    const dotCanvas = document.createElement('canvas');
+    dotCanvas.width = 64;
+    dotCanvas.height = 64;
+    const dotCtx = dotCanvas.getContext('2d');
+    const glow = dotCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    glow.addColorStop(0, 'rgba(255,255,255,1)');
+    glow.addColorStop(0.4, 'rgba(255,230,92,0.9)');
+    glow.addColorStop(1, 'rgba(255,230,92,0)');
+    dotCtx.fillStyle = glow;
+    dotCtx.fillRect(0, 0, 64, 64);
+    const dotTex = new THREE.CanvasTexture(dotCanvas);
+    const mat = new THREE.PointsMaterial({
+      color: 0xFFE65C, size: 1.6, sizeAttenuation: true, map: dotTex,
+      transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    return new THREE.Points(geo, mat);
+  })();
+  sparkleGroup.add(sparkles);
+  sparkleGroup.visible = false;
+  group.add(sparkleGroup);
+
   /** Recolour rings by state; the next one pulses so it reads at a glance. */
   function refresh(time, planePos) {
     // v4: planePos is unused now that the chevron is gone — kept in the
@@ -221,6 +269,18 @@ export function buildRingMeshes(THREE, course) {
         glow.visible = true;
         glow.scale.setScalar(1);
       }
+    }
+    // v11: park the sparkles on the next ring and spin them slowly around
+    // its normal, so the particle cloud orbits the gate the plane is
+    // flying toward.
+    if (next) {
+      const idx = course.rings.indexOf(next);
+      sparkleGroup.visible = true;
+      sparkleGroup.position.copy(meshes[idx].mesh.position);
+      sparkleGroup.quaternion.copy(meshes[idx].mesh.quaternion);
+      sparkles.rotation.z = time * 0.6;
+    } else {
+      sparkleGroup.visible = false;
     }
   }
 

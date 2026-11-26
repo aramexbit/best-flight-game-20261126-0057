@@ -18,7 +18,10 @@ export function createRenderer(canvas, THREE, groups) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   // v3: exposure 1.15 (blueprint). v4: the daytime sky is bright on its own —
   // the exposure stays 1.15, and the screenshots will tell if it needs a nudge.
-  renderer.toneMappingExposure = 1.15;
+  // v11: 1.22 — the vibrant premium grade needs the extra brightness so the
+  // bright blue sky, turquoise sea and vivid grass read as saturated, not
+  // washed by the ACES curve.
+  renderer.toneMappingExposure = 1.22;
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(PALETTE.fog, WORLD.fogNear, WORLD.fogFar);
@@ -189,7 +192,9 @@ export function createRenderer(canvas, THREE, groups) {
     shadowMesh.scale.set(7.5 * shadowScale, 5.5 * shadowScale, 1);
     // v6: opacity floor 0.12 and ceiling 0.55 (was 0.05 / 0.42) — the shadow
     // stays readable at altitude instead of washing out to nothing.
-    shadowMesh.material.opacity = Math.max(0.12, Math.min(0.55, 0.55 - altAbove * 0.0013));
+    // v11: floor 0.15 and ceiling 0.6 — a touch stronger still, so the blob
+    // shadow anchors the plane against the brighter v11 grade.
+    shadowMesh.material.opacity = Math.max(0.15, Math.min(0.6, 0.6 - altAbove * 0.0013));
 
     // The ring guide chevron fades as the plane closes in, so it needs the
     // plane's position (the flight state carries x, y, z).

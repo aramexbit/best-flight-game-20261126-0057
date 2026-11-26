@@ -137,6 +137,27 @@ function runGame() {
   let cameraMode = CAMERA_CHASE;
   let muted = false;
 
+  // v11: the title screen's Start button and settings gear are real buttons
+  // on the overlay, not the canvas — the canvas pointerdown listener in
+  // input.js never sees their clicks, so they get their own handlers here.
+  // Start begins the flight exactly like Space; the gear toggles sound
+  // (the same mute as the M key) and works before the audio context exists,
+  // because audio.setMuted stores the flag for the first start() call.
+  const startBtn = document.getElementById('btn-start');
+  if (startBtn) {
+    startBtn.addEventListener('click', () => {
+      if (screen === 'title' || screen === 'over') startGame();
+    });
+  }
+  const gearBtn = document.getElementById('btn-gear');
+  if (gearBtn) {
+    gearBtn.addEventListener('click', () => {
+      muted = !muted;
+      audio.setMuted(muted);
+      announce(muted ? 'Sound off.' : 'Sound on.');
+    });
+  }
+
   function announce(message) {
     status.textContent = message;
   }
@@ -286,6 +307,10 @@ function runGame() {
   // v4: the title orbit is framed closer and from the side, aircraft clearly
   // right of the panel (same framing as the title screenshot).
   // v9: lateral -30 (was -24), matching the screenshot framing.
+  // v11: the framing is unchanged — the new title UI (top bar, wider info
+  // card, objective pills, Start button) was laid out around this shot,
+  // not the other way round; the ring still clears the card's right edge
+  // and the plane still banks right of centre.
   renderer.setFov(62);
   renderer.setChase(28, -30, 4.5);
   announce('Langit Nusantara. Press Space or click to fly.');

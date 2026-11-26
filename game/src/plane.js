@@ -9,8 +9,11 @@ export function buildPlane(THREE) {
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
 
-  const cream = new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.55, metalness: 0.15 });
-  const red = new THREE.MeshStandardMaterial({ color: PALETTE.planeRed, roughness: 0.5, metalness: 0.2 });
+  // v11: glossier premium materials (cream roughness 0.42, red 0.38, both
+  // with more metalness) — the redesign prompt's improved material quality
+  // and colour contrast, while the red-and-white scheme itself is kept.
+  const cream = new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.42, metalness: 0.25 });
+  const red = new THREE.MeshStandardMaterial({ color: PALETTE.planeRed, roughness: 0.38, metalness: 0.25 });
   const glass = new THREE.MeshStandardMaterial({
     color: PALETTE.planeGlass, roughness: 0.12, metalness: 0.4, transparent: true, opacity: 0.85,
   });
@@ -181,12 +184,18 @@ export function buildPlane(THREE) {
   // cockpit shot showed the shield as one big black slab hanging over the
   // dials, because the camera sees its shadowed underside; less overhang
   // and a lighter grey keep it a top surface, not a roof.
+  // v11: deeper (0.34 m, was 0.20) and brought forward (z 0.10, was 0.02),
+  // so the glareshield reads as a deep cowling top with real depth in front
+  // of the pilot instead of a thin strip over the dials (Gemini v10: "no
+  // glare-shield depth"). The v9 lesson still holds — it stays light grey
+  // and slopes gently, so its underside does not become a black slab over
+  // the dials.
   const shield = new THREE.Mesh(
-    new THREE.BoxGeometry(2.05, 0.04, 0.20),
+    new THREE.BoxGeometry(2.05, 0.04, 0.34),
     new THREE.MeshStandardMaterial({ color: PALETTE.cockpitShield, roughness: 0.8, metalness: 0.1 }),
   );
-  shield.position.set(0, 0.26, 0.02);
-  shield.rotation.x = 0.35;
+  shield.position.set(0, 0.24, 0.10);
+  shield.rotation.x = 0.28;
   dash.add(shield);
   // The lower console is a different, lighter grey than the panel, so
   // the dash reads as separate built parts instead of one black mass.
@@ -220,13 +229,16 @@ export function buildPlane(THREE) {
   // the console read as a floating box with no aircraft around it).
   // v10: the pillars now end at y 0.42, where the curved canopy bow
   // springs from them — no more posts sticking up past the arch.
+  // v11: thicker pillars (0.07 m wide, 0.95 m tall, was 0.05 / 0.87) — the
+  // canopy frame needs to read as solid structure from the pilot's seat,
+  // not thin posts, so the windshield framing is unmistakable.
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.87, 0.06), dark);
-    pillar.position.set(side * 0.98, -0.015, 0.02);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.95, 0.06), dark);
+    pillar.position.set(side * 0.98, -0.05, 0.02);
     pillar.rotation.z = -side * 0.15;
     dash.add(pillar);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.07), dark);
-    base.position.set(side * 0.96, -0.42, 0.03);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.07), dark);
+    base.position.set(side * 0.96, -0.48, 0.03);
     dash.add(base);
   }
   // v6: canopy framing — a top arch bar joining the pillar tops, side rails
@@ -251,30 +263,70 @@ export function buildPlane(THREE) {
   // between the pillars, so the top of the cockpit reads as a framed
   // canopy instead of a dark beam (Gemini v9: "a dark bracket bar with
   // jutting ends").
-  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.024, 8, 28, Math.PI), frameMat);
-  arch.scale.set(1, 0.14, 1);
+  // v11: the bow is thicker (tube 0.035, was 0.024) and taller (scale y
+  // 0.22, was 0.14, arching to 0.64), so it reads as a solid canopy frame
+  // instead of the "thin floating wire" Gemini v10 saw. Two canopy struts
+  // divide the windshield into three panes, and a headliner slab runs back
+  // from the bow — the top of the frame is now a cabin roof, not open sky.
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.035, 8, 28, Math.PI), frameMat);
+  arch.scale.set(1, 0.22, 1);
   arch.position.set(0, 0.42, 0.0);
   dash.add(arch);
+  for (const side of [-1, 1]) {
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.04), frameMat);
+    strut.position.set(side * 0.5, 0.31, 0.0);
+    dash.add(strut);
+  }
+  // v11 (iterasi 2): the headliner is darker (frameMat, was the light-grey
+  // consoleMat), narrower (1.7 m, was 2.0), shallower (0.3 m, was 0.35) and
+  // higher and further back (y 0.62, z 0.30) — the first v11 shot showed it
+  // as a straight light-grey shelf across the windshield, separate from the
+  // dark canopy bow. Now it reads as one dark canopy structure with the bow.
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 0.3), frameMat);
+  roof.position.set(0, 0.62, 0.30);
+  roof.rotation.x = -0.35;
+  dash.add(roof);
   const glassMat = new THREE.MeshStandardMaterial({
     color: PALETTE.cockpitGlass, roughness: 0.05, metalness: 0.2,
     transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false,
   });
-  const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.84, 0.24), glassMat);
-  windshield.position.set(0, 0.36, 0.0);
+  const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.84, 0.34), glassMat);
+  windshield.position.set(0, 0.40, 0.0);
   windshield.rotation.x = -0.06;
   dash.add(windshield);
   for (const side of [-1, 1]) {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.55), frameMat);
     rail.position.set(side * 0.98, 0.42, 0.28);
     dash.add(rail);
-    // Side wall: an angled interior panel at the dash end, with a dark sill
-    // on top — the cockpit now has sides, not just a front face.
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), consoleMat);
-    wall.position.set(side * 1.0, -0.25, 0.15);
-    wall.rotation.y = -side * 0.3;
-    dash.add(wall);
-    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.55), frameMat);
-    sill.position.set(side * 1.0, 0.22, 0.15);
+    // v11: the side walls are taller (1.1 m, was 0.9) and deeper (0.8 m,
+    // was 0.6), so they reach from the console up to the canopy bow — the
+    // cabin now has real sides. Each wall carries a framed side window: a
+    // glass pane set into the wall's inner face with a dark frame around
+    // it, so the cockpit reads as enclosed with side windows instead of
+    // open at the sides (Gemini v10: "no visible side walls, struts, or
+    // enclosed canopy framing").
+    const wallGroup = new THREE.Group();
+    wallGroup.position.set(side * 1.0, -0.18, 0.18);
+    wallGroup.rotation.y = -side * 0.3;
+    dash.add(wallGroup);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.1, 0.8), consoleMat);
+    wallGroup.add(wall);
+    const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.45), glassMat);
+    sideGlass.position.set(-side * 0.03, 0.08, 0);
+    sideGlass.rotation.y = -side * Math.PI / 2;
+    wallGroup.add(sideGlass);
+    for (const wy of [-0.17, 0.33]) {
+      const frameBar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.56), frameMat);
+      frameBar.position.set(-side * 0.03, wy, 0);
+      wallGroup.add(frameBar);
+    }
+    for (const wz of [-0.26, 0.26]) {
+      const frameBar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.56, 0.05), frameMat);
+      frameBar.position.set(-side * 0.03, 0.08, wz);
+      wallGroup.add(frameBar);
+    }
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.8), frameMat);
+    sill.position.set(side * 1.0, 0.36, 0.18);
     sill.rotation.y = -side * 0.3;
     dash.add(sill);
   }
@@ -286,26 +338,32 @@ export function buildPlane(THREE) {
   // wheel on a short column with a hub, a red centre cap and grip sleeves
   // at 9 and 3 o'clock, so it reads as a control wheel at a glance
   // instead of a stiff black bracket (Gemini v9).
-  const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.24, 8), frameMat);
-  yokeCol.position.set(0, -0.28, 0.14);
-  yokeCol.rotation.x = 0.4;
+  // v11: a BIG properly-scaled wheel (0.22 m radius, was 0.15) in lighter
+  // grey, raised and brought forward so it dominates the lower centre of
+  // the frame instead of reading as a tiny dark curve at the bottom edge
+  // (Gemini v10: "only a tiny dark curve/hub poking up from the grey dash
+  // box"). The old wheel was small AND low-contrast against the dark panel.
+  const yokeMat = new THREE.MeshStandardMaterial({ color: '#7a8090', roughness: 0.45, metalness: 0.3 });
+  const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.3, 8), yokeMat);
+  yokeCol.position.set(0, -0.26, 0.18);
+  yokeCol.rotation.x = 0.35;
   dash.add(yokeCol);
-  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 10, 28), frameMat);
-  yokeWheel.position.set(0, -0.155, 0.215);
-  yokeWheel.rotation.x = 0.45;
+  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 12, 32), yokeMat);
+  yokeWheel.position.set(0, -0.06, 0.28);
+  yokeWheel.rotation.x = 0.35;
   dash.add(yokeWheel);
-  const yokeHub = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 10), frameMat);
-  yokeHub.position.set(0, -0.155, 0.215);
-  yokeHub.rotation.x = Math.PI / 2 + 0.45;
+  const yokeHub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 12), yokeMat);
+  yokeHub.position.set(0, -0.06, 0.28);
+  yokeHub.rotation.x = Math.PI / 2 + 0.35;
   dash.add(yokeHub);
-  const yokeCap = new THREE.Mesh(new THREE.CircleGeometry(0.02, 12), new THREE.MeshBasicMaterial({ color: 0xc83c32 }));
-  yokeCap.position.set(0, -0.167, 0.24);
-  yokeCap.rotation.x = 0.45;
+  const yokeCap = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), new THREE.MeshBasicMaterial({ color: 0xc83c32 }));
+  yokeCap.position.set(0, -0.072, 0.305);
+  yokeCap.rotation.x = 0.35;
   dash.add(yokeCap);
   for (const side of [-1, 1]) {
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.10, 0.045), frameMat);
-    grip.position.set(side * 0.15, -0.155, 0.215);
-    grip.rotation.x = 0.45;
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.05), yokeMat);
+    grip.position.set(side * 0.22, -0.06, 0.28);
+    grip.rotation.x = 0.35;
     dash.add(grip);
   }
   // Three small indicator dots, FLUSH on the panel face below the middle
@@ -457,15 +515,19 @@ export function buildPlane(THREE) {
   // v5: 1.25 m wide (was 1.15) and a touch lower, so it meets the lowered
   // console and the panel's bottom edge reads as one continuous airframe
   // instead of two separate dark shapes.
+  // v11: the cowling sits higher (y -0.40, was -0.46) and wider (1.8 m,
+  // was 1.6), so more of the engine cover shows below the panel — the
+  // cockpit view gets its cowling into the frame (Gemini v10: bring the
+  // glare shield/cowling into frame) instead of only a thin dark sliver.
   const nose = new THREE.Group();
-  nose.position.set(0, -0.46, -2.55);
+  nose.position.set(0, -0.40, -2.55);
   nose.visible = false;
   // v9: wider (1.6 m, was 1.25) with a red centre stripe, so the cowling
   // reads as the engine cover ahead of the panel when it peeks into view.
-  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.9), dark);
+  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.18, 0.9), dark);
   noseTop.rotation.x = -0.12;
   nose.add(noseTop);
-  const noseStripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.9), red);
+  const noseStripe = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.9), red);
   noseStripe.position.set(0, 0.08, 0);
   noseStripe.rotation.x = -0.12;
   nose.add(noseStripe);

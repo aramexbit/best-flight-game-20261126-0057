@@ -53,7 +53,9 @@ try {
     }
   }
 
-  // Playtest: title -> Space starts -> hold throttle + roll, HUD must move.
+  // Playtest: title -> Start button click starts -> hold throttle + roll,
+  // HUD must move. (Space is pressed after the click too, as a second start
+  // path check — it is a no-op once the game is already in play.)
   await page.goto('http://localhost:' + PORT + '/index.html', { waitUntil: 'load', timeout: 20000 });
   await page.waitForTimeout(800);
   // v3: on the title screen the clock must sit at 0:00 and the HUD must be
@@ -70,6 +72,22 @@ try {
       hudHidden: hudStyle.opacity === '0' && hudStyle.visibility === 'hidden',
     };
   });
+  // v11: the title screen's big yellow Start button must actually start the
+  // game when clicked — not just look like a button. Click it, then check
+  // the title panel is gone and the HUD is back before the throttle test.
+  await page.click('#btn-start');
+  await page.waitForTimeout(500);
+  const startClick = await page.evaluate(() => {
+    const hudStyle = getComputedStyle(document.getElementById('hud'));
+    return {
+      titleHidden: document.getElementById('panel-title').style.display,
+      hudVisible: hudStyle.opacity !== '0' && hudStyle.visibility !== 'hidden',
+      time: document.getElementById('hud-time').textContent,
+    };
+  });
+  console.log('start button click', JSON.stringify(startClick));
+  if (startClick.titleHidden !== 'none') throw new Error('Start button did not start the game');
+  if (!startClick.hudVisible) throw new Error('HUD hidden after Start button click');
   await page.keyboard.press('Space');
   await page.waitForTimeout(500);
   await page.keyboard.down('ShiftLeft');
