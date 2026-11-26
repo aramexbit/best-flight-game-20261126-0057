@@ -11,6 +11,24 @@
 import { STORM } from './config.js';
 import { createRandom } from './random.js';
 
+/**
+ * The gust at time t (a pure function of time). OpenGame layer 2: the
+ * same function createStorm used internally, lifted to module level so
+ * a headless test can apply it exactly as main.js does in live play.
+ * Cosines, not sines: a sine's integral from phase 0 is (1 - cos),
+ * which is >= 0 — a one-sided push that banked the plane right at
+ * ~10°/s with no input (v16 live playtest). A cosine's integral is
+ * a sine — zero-mean, so the buffet shakes the stick without ever
+ * steering the plane. (The auto-level gate fix in flight.js is the
+ * other half; this removes the bias itself.)
+ */
+export function gustAt(t) {
+  return {
+    roll: (Math.cos(t * 0.9) * 0.7 + Math.cos(t * 1.73) * 0.4) * STORM.gustAmp,
+    pitch: Math.cos(t * 0.62 + 1.3) * 0.5 * STORM.gustAmp,
+  };
+}
+
 export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   const group = new THREE.Group();
   const rnd = createRandom(seed + 1601);
@@ -39,11 +57,15 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // --- The tornado: 8 stacked open cone segments, wide at the top, ---
   // narrow at the base, spinning as one group with a slow wobble, plus
   // a white spray crown churning at its foot.
+  // v17: the funnel is DARKER grey-blue, not pale white — the v16
+  // funnel read as a thin white wisp with almost no contrast against
+  // the bright sky (Gemini v16: "funnel tornado + hujan pucat, kontras
+  // rendah"). A storm funnel is dark slate against daylight.
   const funnelMat = new THREE.MeshStandardMaterial({
-    color: 0xdfe8ee, roughness: 0.9, transparent: true, opacity: 0.88, side: THREE.DoubleSide,
+    color: 0x9fb2c2, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
   });
   const funnelDark = new THREE.MeshStandardMaterial({
-    color: 0xb9c6d2, roughness: 0.9, transparent: true, opacity: 0.88, side: THREE.DoubleSide,
+    color: 0x7e93a8, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
   });
   function buildFunnel(scale) {
     const funnel = new THREE.Group();
@@ -77,6 +99,17 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
       );
       funnel.add(spray);
     }
+    // v17: a spray RING on the surface at the funnel's foot — a flat
+    // white ring, so the waterspout reads as churning water, not a
+    // smooth cone touching a flat sea (Gemini v17: tornado needs a
+    // spray ring at its base).
+    const sprayRing = new THREE.Mesh(
+      new THREE.TorusGeometry(14 * scale, 1.4 * scale, 6, 28),
+      new THREE.MeshBasicMaterial({ color: 0xf4feff, transparent: true, opacity: 0.55, depthWrite: false }),
+    );
+    sprayRing.rotation.x = -Math.PI / 2;
+    sprayRing.position.y = 1.5 * scale;
+    funnel.add(sprayRing);
     return funnel;
   }
   const funnel = buildFunnel(1);
@@ -101,22 +134,26 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // Seven overlapping rounded lobes in slate blue-grey, in an arc along
   // the course behind the funnel — a wall, not scattered puffs. The
   // bright cumulus banks (terrain.js) stay on the clear side.
+  // v17: the lobes are BIGGER, DARKER and packed TIGHTER (spacing 80 m,
+  // was 110) — the v16 wall read as a row of separate grey oval blobs,
+  // one of which looked like a floating dark rock (Gemini v16). A storm
+  // wall is one merged dark mass.
   const wall = new THREE.Group();
   const wallMats = [
-    new THREE.MeshLambertMaterial({ color: 0x6d7f92, transparent: true, opacity: 0.96 }),
-    new THREE.MeshLambertMaterial({ color: 0x7d8ea0, transparent: true, opacity: 0.96 }),
-    new THREE.MeshLambertMaterial({ color: 0x5d6e7f, transparent: true, opacity: 0.96 }),
+    new THREE.MeshLambertMaterial({ color: 0x55677a, transparent: true, opacity: 0.98 }),
+    new THREE.MeshLambertMaterial({ color: 0x64748a, transparent: true, opacity: 0.98 }),
+    new THREE.MeshLambertMaterial({ color: 0x47586a, transparent: true, opacity: 0.98 }),
   ];
   const lobeGeo = new THREE.IcosahedronGeometry(1, 1);
   const wallAnchor = { x: cellX + perpX * 150 * side, z: cellZ + perpZ * 150 * side };
   for (let i = 0; i < 7; i += 1) {
     const lobe = new THREE.Mesh(lobeGeo, wallMats[i % wallMats.length]);
-    const rx = 90 + rnd.range(0, 50);
-    lobe.scale.set(rx, rx * rnd.range(0.42, 0.55), rx * rnd.range(0.75, 1.0));
+    const rx = 120 + rnd.range(0, 60);
+    lobe.scale.set(rx, rx * rnd.range(0.5, 0.65), rx * rnd.range(0.75, 1.0));
     lobe.position.set(
-      wallAnchor.x + (ax / alen) * (i - 3) * 110 + rnd.range(-30, 30),
-      300 + rnd.range(-15, 45),
-      wallAnchor.z + (az / alen) * (i - 3) * 110 + rnd.range(-30, 30),
+      wallAnchor.x + (ax / alen) * (i - 3) * 80 + rnd.range(-20, 20),
+      290 + rnd.range(-15, 45),
+      wallAnchor.z + (az / alen) * (i - 3) * 80 + rnd.range(-20, 20),
     );
     lobe.rotation.y = rnd.range(0, Math.PI * 2);
     wall.add(lobe);
@@ -139,7 +176,7 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   const rainGeo = new THREE.BufferGeometry();
   rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
   const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({
-    color: 0xbcd8ee, transparent: true, opacity: 0.45,
+    color: 0xbcd8ee, transparent: true, opacity: 0.6,
   }));
   group.add(rain);
   function writeRain() {
@@ -148,9 +185,9 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
       rainPos[i * 6] = r.x;
       rainPos[i * 6 + 1] = r.y;
       rainPos[i * 6 + 2] = r.z;
-      rainPos[i * 6 + 3] = r.x + STORM.windX * 0.9;
-      rainPos[i * 6 + 4] = r.y - 14;
-      rainPos[i * 6 + 5] = r.z + STORM.windZ * 0.9;
+      rainPos[i * 6 + 3] = r.x + STORM.windX * 1.4;
+      rainPos[i * 6 + 4] = r.y - 22;
+      rainPos[i * 6 + 5] = r.z + STORM.windZ * 1.4;
     }
     rainGeo.attributes.position.needsUpdate = true;
   }
@@ -242,13 +279,7 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     }
   }
 
-  /** Gust buffet for the player's stick (live play only, main.js). */
-  function gustAt(t) {
-    return {
-      roll: (Math.sin(t * 0.9) * 0.7 + Math.sin(t * 1.73) * 0.4) * STORM.gustAmp,
-      pitch: Math.sin(t * 0.62 + 1.3) * 0.5 * STORM.gustAmp,
-    };
-  }
-
+  // OpenGame layer 2: gustAt is now the module-level export above;
+  // the returned object still exposes it, so main.js is unchanged.
   return { group, update, gustAt, anchor: { x: cellX, z: cellZ } };
 }

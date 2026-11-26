@@ -1,8 +1,9 @@
 // Simple pooled particles for the race: smoke puffs, fireballs, shockwave
 // rings, debris and wrecks. Plain meshes with transparent materials and
-// capped counts — busy, not heavy. No textures, no shaders, no per-frame
-// allocation of geometries: the four shapes are shared, only the materials
-// are per-particle (and disposed when the particle dies).
+// capped counts — busy, not heavy. One shared canvas texture softens the
+// smoke (v17); no shaders, no per-frame allocation of geometries: the
+// four shapes are shared, only the materials are per-particle (and
+// disposed when the particle dies).
 //
 // Two kinds of explosion:
 //   air  — a mid-air collision: fireball + shockwave + debris + a dozen
@@ -49,17 +50,46 @@ export function createEffects(THREE, scene) {
   // pool; 90 evicted fresh explosion smoke mid-blast.
   const PUFF_BUDGET = 140;
 
+  // v17: a soft smoke texture — several blurred radial blobs on a canvas,
+  // so smoke puffs read as clouds instead of hard-edged balls (Gemini
+  // v17: the blast's charcoal smoke needs soft edges). One texture,
+  // shared by every smoke material; the material colour tints it.
+  const smokeTexture = (() => {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const g = c.getContext('2d');
+    const blobs = [
+      [64, 64, 46, 0.85], [38, 52, 30, 0.7], [90, 54, 32, 0.7],
+      [52, 88, 28, 0.65], [80, 88, 26, 0.6], [64, 34, 26, 0.55],
+    ];
+    for (const [x, y, r, a] of blobs) {
+      const grad = g.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, `rgba(255,255,255,${a})`);
+      grad.addColorStop(0.7, `rgba(255,255,255,${a * 0.5})`);
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.needsUpdate = true;
+    return tex;
+  })();
+
   function smokePuff(x, y, z, size, opts = {}) {
     if (puffs.length >= PUFF_BUDGET) {
       const old = puffs.shift();
       scene.remove(old.mesh);
       old.mesh.material.dispose();
     }
+    // v17: the soft smoke texture (see above) — the map fades the
+    // sphere's edge to transparent, so puffs read as clouds.
     const mat = new THREE.MeshBasicMaterial({
       color: opts.color ?? 0x555555,
       transparent: true,
       opacity: opts.opacity ?? 0.55,
       depthWrite: false,
+      map: smokeTexture,
     });
     const mesh = new THREE.Mesh(puffGeo, mat);
     mesh.position.set(x, y, z);
@@ -121,6 +151,12 @@ export function createEffects(THREE, scene) {
    * means sea or ground (a wreck and a rising smoke column stay behind).
    */
   function explode(x, y, z, air) {
+    // v17: a layered fireball — the three concentric shells are OFFSET
+    // from each other, plus two extra lobes, so the blast reads as an
+    // irregular blooming fire (Gemini v17: concentric circles look
+    // drawn-on), with a yellow-white core, an orange-red mid layer and
+    // charcoal smoke at soft edges. The smoke stays dark and outboard
+    // of the flame, so the fire is never swallowed by it.
     const shellMat = new THREE.MeshBasicMaterial({
       color: 0xff7a00, transparent: true, opacity: 0.95, depthWrite: false,
     });
@@ -136,7 +172,7 @@ export function createEffects(THREE, scene) {
       color: 0xffd52a, transparent: true, opacity: 0.95, depthWrite: false,
     });
     const core = new THREE.Mesh(ballGeo, coreMat);
-    core.position.set(x, y, z);
+    core.position.set(x + 4, y + 2, z + 2);
     core.scale.setScalar(1.2);
     scene.add(core);
     balls.push({ mesh: core, life: 0, maxLife: 1.8, from: 1.2, to: 18 });
@@ -144,10 +180,28 @@ export function createEffects(THREE, scene) {
       color: 0xffffff, transparent: true, opacity: 0.98, depthWrite: false,
     });
     const inner = new THREE.Mesh(ballGeo, innerMat);
-    inner.position.set(x, y, z);
+    inner.position.set(x - 3, y - 1, z - 2);
     inner.scale.setScalar(1);
     scene.add(inner);
     balls.push({ mesh: inner, life: 0, maxLife: 1.2, from: 1, to: 10 });
+    // v17: two extra lobes, offset sideways so the silhouette is
+    // lopsided — a fireball with a single centre reads as a balloon.
+    const lobeAMat = new THREE.MeshBasicMaterial({
+      color: 0xff5d1a, transparent: true, opacity: 0.95, depthWrite: false,
+    });
+    const lobeA = new THREE.Mesh(ballGeo, lobeAMat);
+    lobeA.position.set(x + 9, y - 3, z + 6);
+    lobeA.scale.setScalar(1.5);
+    scene.add(lobeA);
+    balls.push({ mesh: lobeA, life: 0, maxLife: 2.2, from: 1.5, to: 20 });
+    const lobeBMat = new THREE.MeshBasicMaterial({
+      color: 0xe63c00, transparent: true, opacity: 0.95, depthWrite: false,
+    });
+    const lobeB = new THREE.Mesh(ballGeo, lobeBMat);
+    lobeB.position.set(x - 8, y + 4, z - 6);
+    lobeB.scale.setScalar(1.2);
+    scene.add(lobeB);
+    balls.push({ mesh: lobeB, life: 0, maxLife: 2.4, from: 1.2, to: 16 });
     // v16: flame tongues — five stretched additive fire spikes jutting
     // out of the core at random angles, so the blast reads as licking
     // flame, not one smooth ball. They live in their own list because
@@ -180,9 +234,11 @@ export function createEffects(THREE, scene) {
     ring.scale.setScalar(2);
     scene.add(ring);
     rings.push({ mesh: ring, life: 0, maxLife: 1.0, from: 2, to: 22, baseOpacity: 0.5 });
-    // Debris: twenty dark shards and twelve burning ones at 8-22 m/s
+    // Debris: twenty dark shards and twelve burning ones at 10-26 m/s
     // (Gemini's fix prompt: 24-36 outward-streaking ember/flame chunks),
-    // so the blast reads as shrapnel, not a clean puff.
+    // so the blast reads as shrapnel, not a clean puff. The shards are
+    // ELONGATED (2.0 x 0.45 x 0.45) and fly outward fast, so they streak
+    // instead of tumbling as cubes.
     for (let d = 0; d < 32; d += 1) {
       const burning = d < 12;
       const mat = new THREE.MeshBasicMaterial({
@@ -191,13 +247,13 @@ export function createEffects(THREE, scene) {
       });
       const piece = new THREE.Mesh(debrisGeo, mat);
       const s = 0.5 + Math.random() * 1.1;
-      piece.scale.set(s, s * 0.6, s * 0.8);
+      piece.scale.set(s * 2.0, s * 0.45, s * 0.45);
       piece.position.set(x, y, z);
       piece.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
       scene.add(piece);
       const a = Math.random() * Math.PI * 2;
       const up = 6 + Math.random() * 12;
-      const out = 8 + Math.random() * 14;
+      const out = 10 + Math.random() * 16;
       debris.push({
         mesh: piece,
         life: 0,
@@ -211,16 +267,18 @@ export function createEffects(THREE, scene) {
       });
     }
     // Smoke: fourteen DARK puffs in an irregular billowing cluster
-    // (#26292E-#3E434B, 0.7 opacity) that frames the fire instead of
-    // swallowing it — NOT a narrow vertical column. Falling slowly if
-    // the blast was in the air, rising if it hit the sea or the ground.
+    // (#26292E-#3E434B) that frames the fire instead of swallowing it
+    // — NOT a narrow vertical column. Falling slowly if the blast was
+    // in the air, rising if it hit the sea or the ground. v17: the
+    // puffs are smaller, thinner (0.55) and spread wider (±30 m) with
+    // the soft texture, so the fire shows through them.
     const smokeColors = [0x26292e, 0x2e3138, 0x3e434b];
     for (let p = 0; p < 14; p += 1) {
       smokePuff(
-        x + (Math.random() - 0.5) * 24,
-        y + (Math.random() - 0.5) * 16,
-        z + (Math.random() - 0.5) * 24,
-        3 + Math.random() * 2,
+        x + (Math.random() - 0.5) * 60,
+        y + (Math.random() - 0.5) * 40,
+        z + (Math.random() - 0.5) * 60,
+        2.5 + Math.random() * 1.5,
         {
           color: smokeColors[p % smokeColors.length],
           life: 8 + Math.random() * 4,
@@ -230,7 +288,7 @@ export function createEffects(THREE, scene) {
             y: air ? -2 - Math.random() * 1.5 : 2 + Math.random() * 2,
             z: (Math.random() - 0.5) * 5,
           },
-          opacity: 0.7,
+          opacity: 0.55,
         },
       );
     }

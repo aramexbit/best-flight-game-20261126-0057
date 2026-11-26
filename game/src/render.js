@@ -39,8 +39,11 @@ export function createRenderer(canvas, THREE, groups) {
   shadowCanvas.height = 128;
   const sctx = shadowCanvas.getContext('2d');
   const grad = sctx.createRadialGradient(64, 64, 4, 64, 64, 62);
-  grad.addColorStop(0, 'rgba(0,0,0,0.85)');
-  grad.addColorStop(0.6, 'rgba(0,0,0,0.45)');
+  // v17: a harder-edged gradient (solid core to 50%, then a fast falloff)
+  // so the shadow reads as a dark disc, not a faint haze — the v16 live
+  // playtest saw at most one soft grey oval.
+  grad.addColorStop(0, 'rgba(0,0,0,0.95)');
+  grad.addColorStop(0.5, 'rgba(0,0,0,0.7)');
   grad.addColorStop(1, 'rgba(0,0,0,0)');
   sctx.fillStyle = grad;
   sctx.fillRect(0, 0, 128, 128);
@@ -82,16 +85,22 @@ export function createRenderer(canvas, THREE, groups) {
     const sunH = sunDir ? Math.hypot(sunDir.x, sunDir.z) : 1;
     const groundY0 = terrainApi && terrainApi.groundAt ? terrainApi.groundAt(x, z) : 0;
     const altRough = Math.max(0, y - Math.max(groundY0, 0.6));
-    const offLen = altRough / Math.tan(sunElev);
+    // v17: the sun offset is CAPPED at 120 m — at cruise altitude the
+    // uncapped offset (~260 m) put the shadow out of the frame, so the
+    // plane looked shadowless. A capped offset keeps it ahead of the
+    // plane where the camera can see it.
+    const offLen = Math.min(120, altRough / Math.tan(sunElev));
     const shadowX = x + (sunDir ? -sunDir.x / sunH * offLen : 0);
     const shadowZ = z + (sunDir ? -sunDir.z / sunH * offLen : 0);
     const floorY = Math.max(terrainApi && terrainApi.groundAt ? terrainApi.groundAt(shadowX, shadowZ) : 0, 0.6);
     const altAbove = Math.max(0, y - floorY);
-    const shadowScale = 1 + altAbove * 0.0025;
+    const shadowScale = 1 + altAbove * 0.004;
     group.position.set(shadowX, floorY + 0.5, shadowZ);
     group.rotation.y = -yaw;
-    mesh.scale.set(7.5 * shadowScale, 5.5 * shadowScale, 1);
-    mesh.material.opacity = Math.max(0.15, Math.min(0.6, 0.6 - altAbove * 0.0013));
+    mesh.scale.set(9 * shadowScale, 6.5 * shadowScale, 1);
+    // v17: darker (0.75 max) and a 0.3 floor, fading slower (0.0008/m)
+    // — the v16 shadow (0.6 max, 0.405 at 150 m) was invisible live.
+    mesh.material.opacity = Math.max(0.3, Math.min(0.75, 0.75 - altAbove * 0.0008));
   }
 
   const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 9000);
@@ -107,6 +116,10 @@ export function createRenderer(canvas, THREE, groups) {
   let chaseDist = 15;
   let chaseLateral = 0;
   let chaseHeight = 4.5;
+  // v17: how far ahead the chase camera looks (metres). The title
+  // keeps 34 m; live flight uses 22 m, so the plane sits bigger and
+  // the world ahead stays in frame.
+  let chaseLookAhead = 34;
 
   // v13: camera shake amplitude in metres — set by triggerShake (a
   // near-miss flyby jolts the camera), decaying fast in draw so it reads
@@ -122,11 +135,14 @@ export function createRenderer(canvas, THREE, groups) {
     camera.updateProjectionMatrix();
   }
 
-  /** Chase camera geometry: metres behind, sideways and above the plane. */
-  function setChase(dist, lateral, height) {
+  /** Chase camera geometry: metres behind, sideways and above the plane.
+   * `lookAhead` (v17) is how far ahead the camera looks — shorter pulls
+   * the plane bigger in frame and keeps the world ahead visible. */
+  function setChase(dist, lateral, height, lookAhead = 34) {
     chaseDist = dist;
     chaseLateral = lateral;
     chaseHeight = height;
+    chaseLookAhead = lookAhead;
     firstFrame = true;
   }
 
@@ -203,15 +219,24 @@ export function createRenderer(canvas, THREE, groups) {
         chasePos.copy(want);
         firstFrame = false;
       } else {
-        const k = 1 - Math.exp(-dt * 4.5);
+        // v17: tighter tracking (6.5, was 4.5) — the camera stays glued
+        // to the plane in turns instead of lagging behind and letting
+        // the plane drift out of frame.
+        const k = 1 - Math.exp(-dt * 6.5);
         chasePos.lerp(want, k);
       }
       camera.position.copy(chasePos);
-      lookTarget.set(s.x + tmpForward.x * 34, s.y + tmpForward.y * 34, s.z + tmpForward.z * 34);
+      lookTarget.set(
+        s.x + tmpForward.x * chaseLookAhead,
+        s.y + tmpForward.y * chaseLookAhead,
+        s.z + tmpForward.z * chaseLookAhead,
+      );
       camera.up.set(0, 1, 0);
       camera.lookAt(lookTarget);
-      // Lean a third of the bank into the camera so turns feel banked, not flat.
-      camera.rotateZ(-s.roll * 0.35);
+      // v17: only 15% of the bank reaches the camera (was 35%) — the
+      // world tilted diagonally on every sharp bank in the v16 live
+      // playtest, and the plane slid out of frame with it.
+      camera.rotateZ(-s.roll * 0.15);
     }
 
     // v5: blob shadow, placed where the sun actually puts it — offset from the
@@ -250,5 +275,7 @@ export function createRenderer(canvas, THREE, groups) {
     renderer.render(scene, camera);
   }
 
-  return { draw, setCameraMode, setFov, setChase, triggerShake, scene, get mode() { return mode; } };
+  // v17: the live probes project the next ring through this camera to
+  // check the HUD arrow points where the ring actually is on screen.
+  return { draw, setCameraMode, setFov, setChase, triggerShake, scene, get mode() { return mode; }, get camera() { return camera; } };
 }

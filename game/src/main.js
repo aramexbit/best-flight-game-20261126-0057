@@ -61,7 +61,10 @@ renderer.scene.add(storm.group);
 // v14: debug handles for the probe (probe-v14.mjs) — the live world, the
 // autopilot helper and a log of race events (collisions, with time and
 // position), so a full run can be verified from outside the page.
-window.__debug = { flight, course, terrain, rivals, effects, storm };
+// v17: the renderer is exposed so the probes can project the next ring
+// through the chase camera and check the HUD arrow points where the
+// ring actually is on screen.
+window.__debug = { flight, course, terrain, rivals, effects, storm, renderer };
 window.__autopilotTo = autopilotTo;
 window.__raceEvents = [];
 window.__scene = renderer.scene;
@@ -84,16 +87,45 @@ function saveBest(value) {
 
 function hudView() {
   const s = flight.state;
-  // v16: bearing to the next ring (degrees, 0 = straight ahead) for
-  // the HUD ring pointer; null once the course is done.
+  // v17: the ring pointer is computed in the CAMERA's frame (screen
+  // space) — the old version used the horizontal bearing only, so the
+  // arrow said 'up' while the ring sat at the left edge of the frame
+  // (the chase camera's yaw lags the plane's in a turn, and elevation
+  // was ignored). The first v17 try used the PLANE's frame instead,
+  // which tilts with pitch: the probe measured the arrow 67° off the
+  // ring's screen position (ring up-left, arrow down-left). The camera
+  // is what the player sees, so the arrow is the ring's direction
+  // decomposed into the camera's forward/right/up axes (from its
+  // quaternion). If the ring is behind the camera (fwd < 0) the arrow
+  // points down (180°); otherwise the angle is atan2(right, up) — 0°
+  // is straight up on screen, +90° is hard right, -90° hard left.
   const next = course.nextRing();
   let ringDir = null;
   if (next) {
-    const desired = Math.atan2(next.x - s.x, -(next.z - s.z));
-    let diff = (desired - s.yaw) * 180 / Math.PI;
-    while (diff > 180) diff -= 360;
-    while (diff < -180) diff += 360;
-    ringDir = diff;
+    const cam = renderer.camera;
+    const q = cam.quaternion;
+    // Rotate a vector by the camera quaternion (three.js formula).
+    const applyQ = (vx, vy, vz) => {
+      const tx = 2 * (q.y * vz - q.z * vy);
+      const ty = 2 * (q.z * vx - q.x * vz);
+      const tz = 2 * (q.x * vy - q.y * vx);
+      return {
+        x: vx + q.w * tx + (q.y * tz - q.z * ty),
+        y: vy + q.w * ty + (q.z * tx - q.x * tz),
+        z: vz + q.w * tz + (q.x * ty - q.y * tx),
+      };
+    };
+    const fwd = applyQ(0, 0, -1);
+    const up = applyQ(0, 1, 0);
+    const right = applyQ(1, 0, 0);
+    const dx = next.x - cam.position.x;
+    const dy = next.y - cam.position.y;
+    const dz = next.z - cam.position.z;
+    const dist = Math.hypot(dx, dy, dz) || 1;
+    const f = (dx * fwd.x + dy * fwd.y + dz * fwd.z) / dist;
+    const r = (dx * right.x + dy * right.y + dz * right.z) / dist;
+    const u = (dx * up.x + dy * up.y + dz * up.z) / dist;
+    ringDir = f < 0 ? 180 : Math.atan2(r, u) * 180 / Math.PI;
   }
   return {
     heading: headingOf(s.yaw),
@@ -142,6 +174,9 @@ function runShot(name) {
   // under its belly (Gemini v7). The freeze window is untouched
   // (300 m / +50 m, proven in v6) — only the camera moves, not the
   // approach.
+  // v17: lateral -2 (was -4) — the v16 live playtest found the plane
+  // sliding out of frame in banks; pulling it toward centre keeps it
+  // in frame on final.
   // v12: lateral -2.0 (was -4.5) — the v11 plane still sat offset to the
   // right and slightly banked in the landing frame; closer to centre it
   // reads as on the centreline with level wings, and "09" still shows
@@ -159,7 +194,7 @@ function runShot(name) {
   // 12 m / 2.2 m) and closer to centre (lateral -4, was -5) — in v13 the
   // player's plane sat too big and too close in the landing frame and
   // covered part of the runway; a step back shows the whole strip.
-  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(14, -4, 2.6); }
+  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(14, -2, 2.6); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;
@@ -180,6 +215,11 @@ function runShot(name) {
     renderer.draw(flight, planeApi, ringMeshes, terrain, 1 / 60, performance.now() / 1000,
       rivals.group.visible ? rivals.debug() : []);
     painted += 1;
+    // v17: refresh the HUD after the first draw — hudView's ring
+    // pointer is computed from the chase camera, and the camera is
+    // only positioned by draw(). The hud.update above ran before any
+    // draw, so its arrow came from the camera's initial pose.
+    if (painted === 1) hud.update(hudView(), 0);
     if (painted < 2) requestAnimationFrame(paint);
     else window.__shotReady = true;
   }
@@ -240,9 +280,13 @@ function runGame() {
     accumulator = 0;
     screen = 'play';
     hud.hidePanels();
-    // v3: back to the flight framing (wide chase) once the player starts.
-    renderer.setFov(65);
-    renderer.setChase(16, 0, 4.5);
+    // v3: back to the flight framing once the player starts.
+    // v17: closer and lower (11 m back, 4.2 m up, lateral -3.5, FOV 62,
+    // look-ahead 22 m) — the v16 live playtest found the plane small
+    // and lost in the frame at 16 m / FOV 65, and the chase camera
+    // facing the nose was a misread of that small, drifting plane.
+    renderer.setFov(62);
+    renderer.setChase(11, -3.5, 4.2, 22);
     audio.start();
     // v16: focus the canvas, so Space (restart) works without a click
     // even after the Start button was clicked.
@@ -363,13 +407,57 @@ function runGame() {
     const prev = { x: s.x, y: s.y, z: s.z };
     // v16: storm gusts buffet the stick in live play only (the staged
     // sim never passes through here, so sim scores do not move).
+    // v17: the gust is added to the stick ONLY when the player is
+    // actually holding it — the RAW stick value (input.roll() with no
+    // gust) is what flight.js uses to decide whether to auto-level.
+    // The v16 bug: the gust was folded into input.roll, so the raw
+    // value was never 0 in live play, auto-level never engaged, and
+    // the gust's DC bias banked the plane right ~10°/s with no input
+    // (v16 live playtest: 360° of uncommanded right turn in 36 s).
+    // The gust itself is zero-mean since v17 (cosines in storm.js).
     const gust = storm.gustAt(s.elapsed);
     const clamp1 = (v) => Math.max(-1, Math.min(1, v));
+    const rawRoll = input.roll();
+    // v17: FINAL-APPROACH ASSIST (cross-track fix). Once all 12 rings
+    // are passed and the plane is within 700 m of the runway below
+    // 200 m AGL, a gentle helper steers the wings level and the nose
+    // onto the centreline: roll toward level (-roll * 0.9), off the
+    // centreline (-lat * 0.004) and onto the runway heading
+    // (+herr * 0.5). It is blended at 0.6 with the player's own input,
+    // and the gust is scaled to 0.2 — the player still flies the
+    // landing, but the v16 drift (92 m off-centreline, crash at the
+    // threshold) no longer ends the run. The flight model has no wind
+    // drift; the "wind" that pushed players off was the gust bias.
+    const runway = course.runway;
+    const dxR = runway.x - s.x;
+    const dzR = runway.z - s.z;
+    const distR = Math.hypot(dxR, dzR);
+    const agl = s.y - Math.max(terrain.groundAt(s.x, s.z), 0.6);
+    const onFinal = s.ringsPassed >= COURSE.ringCount && distR < 700 && agl < 200;
+    let rollInput = rawRoll;
+    let gustScale = 1;
+    if (onFinal) {
+      // Steer at a point 500 m beyond the runway centre along its
+      // direction (the probe's land driver proved steering at the
+      // centre itself goes hypersensitive at close range).
+      const farX = runway.x + runway.dirX * 500;
+      const farZ = runway.z + runway.dirZ * 500;
+      const targetYaw = Math.atan2(farX - s.x, -(farZ - s.z));
+      let herr = targetYaw - s.yaw;
+      herr = Math.atan2(Math.sin(herr), Math.cos(herr));
+      // Lateral offset from the centreline (metres, + = right of the
+      // approach direction): right = (-dirZ, dirX).
+      const lat = -(s.x - runway.x) * runway.dirZ + (s.z - runway.z) * runway.dirX;
+      const assistRoll = Math.max(-0.5, Math.min(0.5, -s.roll * 0.9 - lat * 0.004 + herr * 0.5));
+      rollInput = clamp1(rawRoll + assistRoll * 0.6);
+      gustScale = 0.2;
+    }
     const events = flight.step(STEP, {
       pitch: clamp1(input.pitch() + gust.pitch),
-      roll: clamp1(input.roll() + gust.roll),
+      roll: clamp1(rollInput + gust.roll * gustScale),
       yaw: input.yaw(),
       throttle: input.throttle(),
+      stickRoll: onFinal ? rollInput : rawRoll,
     }, terrain.groundAt, course.runway);
     const pass = course.checkPass(prev, s);
     if (pass && pass.passed) {
@@ -386,7 +474,15 @@ function runGame() {
     }
     if (events & EVENT_FUEL_EMPTY) hud.showMessage('FUEL EMPTY — GLIDING', 3);
     if (events & EVENT_LAND) endGame(true);
-    else if (events & EVENT_CRASH) endGame(false);
+    else if (events & EVENT_CRASH) {
+      // v17: the player's own crash finally explodes — a fireball at
+      // the wreck, boom and shake (v16 live playtest: two crashes
+      // showed only a 'Crashed!' panel over an intact plane).
+      effects.explode(s.x, s.y + 3, s.z, false);
+      audio.boom();
+      renderer.triggerShake(0.6);
+      endGame(false);
+    }
     // v13: the race flies with the player — rivals step on the player's
     // clock, and the explosion smoke advances on the same fixed step.
     // v14: the collision callback — when rivals.js fires the mid-air

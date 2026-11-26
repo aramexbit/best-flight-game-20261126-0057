@@ -78,10 +78,19 @@
   #title-hero { position: absolute; left: 4%; top: 11%; pointer-events: none; }
   #title-hero .hero-title { font-size: clamp(48px, 6.6vw, 84px); font-weight: 900; letter-spacing: 0.01em; line-height: 0.95; background: linear-gradient(#FFE65C, #FFB800); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.6)); }
   #title-hero .hero-sub { font-size: clamp(26px, 3.3vw, 42px); font-weight: 900; letter-spacing: 0.16em; color: #FFD52A; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.6); margin-top: 6px; }
-  /* v15: the three rules float as white shadowed text, no panel behind. */
-  #title-rules { position: absolute; left: 4%; top: 47%; max-width: 540px; pointer-events: none; }
-  #title-rules .rule { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; font-size: 18px; font-weight: 600; line-height: 1.4; color: #ffffff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 10px rgba(0, 0, 0, 0.6); }
-  #title-rules .rule-icon { flex: 0 0 auto; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)); }
+  /* v17: the three rules sit on a LIGHT translucent pill (warm white
+     0.66 + white border + blur + soft shadow) with DARK NAVY text
+     #132238 — the user's direct instruction (26 Nov 23:49 WIB): the
+     white text was unreadable against the bright sky. Navy alone
+     would vanish under a dark storm cloud, so the light pill is what
+     keeps the rules readable in every sky condition. */
+  #title-rules { position: absolute; left: 4%; top: 47%; max-width: 540px; pointer-events: none; background: rgba(255, 253, 245, 0.66); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 10px 18px 10px 14px; backdrop-filter: blur(6px); box-shadow: 0 4px 18px rgba(10, 30, 60, 0.18); }
+  #title-rules .rule { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; font-size: 18px; font-weight: 600; line-height: 1.4; color: #132238; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5); }
+  #title-rules .rule-icon { flex: 0 0 auto; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 1px 2px rgba(19, 34, 56, 0.35)); }
+  /* v17: the pill's first/last rules hug its edges — the 14px rule
+     margins would leave a dead band inside the pill. */
+  #title-rules .rule:first-child { margin-top: 4px; }
+  #title-rules .rule:last-child { margin-bottom: 4px; }
   /* v15: the key-caps float in one row at bottom-left, no box around them.
      bottom 34px (was 22): the key-labels ("Pitch" ... "Pause") sit under
      the badges, and at 22px the last label's descenders were clipped by

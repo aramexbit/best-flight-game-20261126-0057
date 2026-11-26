@@ -46,6 +46,11 @@ export function createFlight(spawn) {
     speed: spawn.speed,
     throttle: spawn.throttle,
     fuel: 1,
+    // v17: chase boost for the collision pair (rivals.js) — a boosted
+    // rival flies ~120 m/s and can catch a fast straight player. The
+    // sim never sets these, so the flight model is untouched there.
+    maxSpeedBoost: 0,
+    thrustBoost: 1,
     status: 'flying',
     stalled: false,
     verticalSpeed: 0,
@@ -68,6 +73,8 @@ export function createFlight(spawn) {
     state.speed = spawnPoint.speed;
     state.throttle = spawnPoint.throttle;
     state.fuel = 1;
+    state.maxSpeedBoost = 0;
+    state.thrustBoost = 1;
     state.status = 'flying';
     state.stalled = false;
     state.verticalSpeed = 0;
@@ -99,13 +106,22 @@ export function createFlight(spawn) {
         events |= EVENT_FUEL_EMPTY;
       }
     }
-    const thrust = state.fuel > 0 ? state.throttle * PLANE.thrust : 0;
+    const thrust = state.fuel > 0 ? state.throttle * PLANE.thrust * (state.thrustBoost || 1) : 0;
 
     // How much authority the stick has: mushy below stall speed, full above it.
     const authority = clamp(state.speed / PLANE.stallSpeed, 0.35, 1);
     state.pitch = clamp(state.pitch + input.pitch * PLANE.pitchRate * authority * dt, -1.1, 1.1);
     state.roll = clamp(state.roll + input.roll * PLANE.rollRate * authority * dt, -1.35, 1.35);
-    if (input.roll === 0) {
+    // v17: the auto-level gate reads the RAW stick (stickRoll), not the
+    // gust-augmented roll. The live-play gust (main.js) adds a small
+    // roll offset to the stick, so input.roll was never exactly 0 in
+    // live play — the wings never levelled, the gust's integral banked
+    // the plane ~4-8° right on average, and it turned right ~10°/s with
+    // no input at all (v16 live playtest: a full 360° in ~36 s, 0/12
+    // rings). main.js passes stickRoll; the sim never sets it, so the
+    // sim keeps the exact old check (input.roll === 0).
+    const stickRoll = input.stickRoll !== undefined ? input.stickRoll : input.roll;
+    if (stickRoll === 0) {
       // Hands off the stick and the wings ease back toward level.
       const level = PLANE.autoLevel * dt;
       state.roll = Math.abs(state.roll) <= level ? 0 : state.roll - Math.sign(state.roll) * level;
@@ -118,7 +134,8 @@ export function createFlight(spawn) {
 
     // Speed: thrust minus drag, minus the cost of climbing, plus the gift of diving.
     let accel = thrust - PLANE.drag * state.speed * state.speed - PLANE.climbCost * Math.sin(state.pitch);
-    if (state.speed > PLANE.maxSpeed) accel -= (state.speed - PLANE.maxSpeed) * 0.8;
+    const speedCap = PLANE.maxSpeed + (state.maxSpeedBoost || 0);
+    if (state.speed > speedCap) accel -= (state.speed - speedCap) * 0.8;
     state.speed = Math.max(0, state.speed + accel * dt);
 
     // Stall: below the magic number the wing quits, the nose drops and the plane sinks.

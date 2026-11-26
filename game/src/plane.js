@@ -378,12 +378,15 @@ export function buildPlane(THREE, livery = null) {
   // v11: thicker pillars (0.07 m wide, 0.95 m tall, was 0.05 / 0.87) — the
   // canopy frame needs to read as solid structure from the pilot's seat,
   // not thin posts, so the windshield framing is unmistakable.
+  // v17: slimmer pillars (0.07 m, was 0.11; base 0.09, was 0.13) —
+  // the v16 live playtest found the thick pillars eating the
+  // windshield; the frame still reads as solid structure.
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.11, 1.0, 0.09), shellMat);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.0, 0.09), shellMat);
     pillar.position.set(side * 0.97, -0.02, 0.02);
     pillar.rotation.z = -side * 0.12;
     dash.add(pillar);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.10), shellMat);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.10), shellMat);
     base.position.set(side * 0.95, -0.48, 0.03);
     dash.add(base);
   }
@@ -414,12 +417,14 @@ export function buildPlane(THREE, livery = null) {
   // instead of the "thin floating wire" Gemini v10 saw. Two canopy struts
   // divide the windshield into three panes, and a headliner slab runs back
   // from the bow — the top of the frame is now a cabin roof, not open sky.
-  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.05, 8, 28, Math.PI), shellMat);
+  // v17: the arch tube is slimmer (0.04, was 0.05) with the pillars.
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.04, 8, 28, Math.PI), shellMat);
   arch.scale.set(1, 0.24, 1);
   arch.position.set(0, 0.42, 0.0);
   dash.add(arch);
   for (const side of [-1, 1]) {
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.05), shellMat);
+    // v17: slimmer struts (0.04, was 0.05) with the pillars.
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.26, 0.04), shellMat);
     strut.position.set(side * 0.5, 0.31, 0.0);
     dash.add(strut);
   }
@@ -503,7 +508,8 @@ export function buildPlane(THREE, livery = null) {
     rail.position.set(side * 0.98, 0.47, 0.42);
     rail.rotation.x = -0.12;
     dash.add(rail);
-    const rearPost = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.05), shellMat);
+    // v17: slimmer rear posts (0.04, was 0.05) with the pillars.
+    const rearPost = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), shellMat);
     rearPost.position.set(side * 0.98, 0.27, 0.80);
     dash.add(rearPost);
     // v12: the wall is a door frame, not a plate. A solid lower door panel
@@ -684,13 +690,17 @@ export function buildPlane(THREE, livery = null) {
     // for each instrument at 11-14% of viewport height with markings
     // unmistakable at a glance; the canvas stays 512 px, the ink gets
     // bigger on it.
-    x.font = 'bold 112px system-ui, sans-serif';
+    // v17: numbers 120 px (was 112) and the label moved up to y 296
+    // (was 336) — the label sat on top of the '6' (the '6' spans
+    // y 352-464 on the 512 px face). The needle never sweeps the
+    // bottom of the dial, so the label is clear there.
+    x.font = 'bold 120px system-ui, sans-serif';
     x.fillText('12', 256, 104);
     x.fillText('3', 408, 256);
     x.fillText('6', 256, 408);
     x.fillText('9', 104, 256);
     x.font = 'bold 72px system-ui, sans-serif';
-    x.fillText(label, 256, 336);
+    x.fillText(label, 256, 296);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     // Gemini's fix prompt: high-DPI canvas textures with anisotropy so
@@ -744,7 +754,9 @@ export function buildPlane(THREE, livery = null) {
     // prompt), thicker and longer than the old dark ones — the v14
     // cockpit shot's dials read small and low-contrast, and a needle
     // must read at a glance against the cream face at screenshot distance.
-    const needleGeo = new THREE.BoxGeometry(0.042, 0.17, 0.006);
+    // v17: longer needle (0.185, was 0.17) — it reaches further toward
+    // the rim, so the reading is easier at a glance.
+    const needleGeo = new THREE.BoxGeometry(0.042, 0.185, 0.006);
     needleGeo.translate(0, 0.065, 0);
     const needle = new THREE.Mesh(
       needleGeo,

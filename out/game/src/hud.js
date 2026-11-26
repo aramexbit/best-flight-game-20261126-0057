@@ -168,7 +168,10 @@ export function createHud() {
     const secs = Math.floor(view.time % 60);
     setText(timeEl, 'time', `${mins}:${String(secs).padStart(2, '0')}`);
     setText(scoreEl, 'score', `${view.score}`);
-    setText(ringsEl, 'rings', `RING ${view.rings}/${view.ringTotal} · ${Math.round(view.nextDist)} m`);
+    // v17: the chip shows the count only — the old chip duplicated the
+    // pointer pill's "RING n · XXX m" (Gemini v17: the double ring info
+    // reads as two different rings). The distance lives in the pill.
+    setText(ringsEl, 'rings', `RING ${view.rings}/${view.ringTotal}`);
     setText(posEl, 'pos', view.pos || '–');
     // v16: the ring pointer — a chevron pill under the objective that
     // always points at the next ring (rotation = bearing error, 0 =
@@ -176,6 +179,11 @@ export function createHud() {
     // loses the thread can find the gate without guessing (v15
     // playtest: after ring 1 the distance to ring 2 GREW with no
     // direction cue at all). Hidden once the course is done.
+    // v17: ringDir is now a SCREEN-space angle from main.js (0 = up /
+    // ahead, +90 = hard right, 180 = behind / down) — the old
+    // horizontal bearing pointed 'up' while the ring sat at the frame
+    // edge. The pill's text is the only place the distance shows now
+    // (the chip above shows the count only).
     if (ringPtr) {
       if (view.ringDir === null || view.ringDir === undefined) {
         ringPtr.style.display = 'none';

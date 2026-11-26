@@ -79,6 +79,47 @@ export function islandHeightAt(islands, seed, x, z) {
   return islandHeight(islands, createNoise(createRandom(seed)), x, z);
 }
 
+/**
+ * The runway blend weight at one point (0 = raw island height, 1 = flat
+ * runway height). OpenGame layer 2: the same function buildTerrain uses
+ * internally, lifted to module level so a headless sim can use it.
+ * The flat zone spans the strip plus a 60 m shoulder each side, then
+ * fades over 250 m along and across — so the strip sits in a wide
+ * airfield clearing with a gentle transition to the hills, instead of a
+ * shelf with an abrupt cut at its edges (v14). The flat zone runs 60 m
+ * PAST each strip end (v16), then fades over 300 m — the plateau now
+ * carries the strip into the clearing instead of ending under it. The
+ * flat zone spans the full strip width (v3); the shoulders sit on the
+ * blend just outside the strip.
+ */
+export function runwayBlendAt(runway, x, z) {
+  const dirX = runway.dirX;
+  const dirZ = runway.dirZ;
+  const perpX = -dirZ;
+  const perpZ = dirX;
+  const rx = x - runway.x;
+  const rz = z - runway.z;
+  const along = rx * dirX + rz * dirZ;
+  const across = rx * perpX + rz * perpZ;
+  const a = 1 - smoothstep(COURSE.runwayLength / 2 + 60, COURSE.runwayLength / 2 + 360, Math.abs(along));
+  const c = 1 - smoothstep(COURSE.runwayWidth / 2 + 60, COURSE.runwayWidth / 2 + 250, Math.abs(across));
+  return a * c;
+}
+
+/**
+ * A ground-height function rebuilt from the seed alone (single source of
+ * truth for the mesh, the sim and the tests): the same blend buildTerrain
+ * uses, over the same island height. Returns a (x, z) => height function.
+ */
+export function createGroundAt(islands, seed, runway) {
+  const fbm = createNoise(createRandom(seed));
+  return (x, z) => {
+    const h = islandHeight(islands, fbm, x, z);
+    const b = runwayBlendAt(runway, x, z);
+    return b > 0 ? h * (1 - b) + runway.height * b : h;
+  };
+}
+
 // A 3x5 block font for runway numbers: each digit is 3 columns by 5 rows of
 // small white slabs, laid out flat with the digit tops toward local -Z, so the
 // caller rotates the group to face the approach that uses that threshold.
@@ -126,29 +167,10 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const dirZ = runway.dirZ;
   const perpX = -dirZ;
   const perpZ = dirX;
+  // OpenGame layer 2: the blend is the module-level runwayBlendAt
+  // (single source of truth, shared with the headless sim).
   function runwayBlend(x, z) {
-    const rx = x - runway.x;
-    const rz = z - runway.z;
-    const along = rx * dirX + rz * dirZ;
-    const across = rx * perpX + rz * perpZ;
-    // v14: a WIDER graded plateau, not a narrow shelf. The flat zone
-    // spans the strip plus a 60 m shoulder each side, then fades over
-    // 250 m along and across — so the strip sits in a wide airfield
-    // clearing with a gentle transition to the hills, instead of a shelf
-    // with an abrupt cut at its edges (Gemini v13: the runway's edges
-    // still read as raised / drop-off). The old fade (150 m) could not
-    // smooth the island's ridge bumps at the strip's sides.
-    // v16: the flat zone runs 60 m PAST each strip end (was ending 30 m
-    // short of it), then fades over 300 m — the v15 landing shot still
-    // showed the far hill rising right at the threshold, reading as a
-    // step at the runway's end. The plateau now carries the strip into
-    // the clearing instead of ending under it.
-    const a = 1 - smoothstep(COURSE.runwayLength / 2 + 60, COURSE.runwayLength / 2 + 360, Math.abs(along));
-    // v3: the flat zone spans the full strip width (it used to start fading
-    // 6 m inside the edge, so the terrain poked through the strip's edges by
-    // a hair); the shoulders sit on the blend just outside the strip.
-    const c = 1 - smoothstep(COURSE.runwayWidth / 2 + 60, COURSE.runwayWidth / 2 + 250, Math.abs(across));
-    return a * c;
+    return runwayBlendAt(runway, x, z);
   }
 
   // v7: the runway clear zone — nothing planted may stand inside it. The
@@ -249,9 +271,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // with a soft grass transition instead of a dirt scar cut into wild
     // grass (Gemini v12: blend the runway's ground colour into the
     // surrounding grass, no hard cut line).
+    // v17: 0.7 (was 0.55) — a stronger mown-grass pad, so the runway
+    // sits in a maintained clearing with a softer grass transition.
     const rb = runwayBlend(x, z);
     if (rb > 0.04 && h > beachTop) {
-      tmp.lerp(airfield, rb * 0.55);
+      tmp.lerp(airfield, rb * 0.7);
       tmp.lerp(dirt, rb * rb * 0.55);
     }
     if (slope > 22) tmp.lerp(rock, 0.55);
@@ -449,7 +473,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // placeholder balls. Same positions and colours, a tenth of the presence.
   const baseGeo = new THREE.BoxGeometry(0.7, 0.12, 0.7);
   const baseMat = new THREE.MeshStandardMaterial({ color: '#3a3f45', roughness: 0.8 });
-  const domeGeo = new THREE.SphereGeometry(0.22, 10, 8);
+  // v17: dome 0.32 m (was 0.22) — the edge lights were invisible from
+  // the air at 0.22 m; a third bigger reads as a light, not a speck.
+  const domeGeo = new THREE.SphereGeometry(0.32, 10, 8);
   const whiteLight = new THREE.MeshBasicMaterial({ color: 0xfff2d8 });
   const redLight = new THREE.MeshBasicMaterial({ color: 0xff2a1e });
   const greenLight = new THREE.MeshBasicMaterial({ color: 0x2aff5e });
@@ -467,6 +493,22 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       dome.position.set(lx, runway.height + 0.5, lz);
       group.add(dome);
     }
+  }
+  // v17: approach lights — five white fixtures on the extended
+  // centreline west of the threshold (40 m apart), so final approach
+  // has a visible lead-in. (The old approach-light row was removed in
+  // v4 for floating white spheres; these sit on the ground like the
+  // edge-light fixtures above, snapped to the mesh height.)
+  for (let a = 1; a <= 5; a += 1) {
+    const ax = runway.x - dirX * (COURSE.runwayLength / 2 + a * 40);
+    const az = runway.z - dirZ * (COURSE.runwayLength / 2 + a * 40);
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.set(ax, meshHeight(ax, az) + 0.06, az);
+    group.add(base);
+    const dome = new THREE.Mesh(domeGeo, whiteLight);
+    dome.scale.y = 0.6;
+    dome.position.set(ax, meshHeight(ax, az) + 0.2, az);
+    group.add(dome);
   }
   // v5: airport context — a dirt taxiway, an apron and a small hangar, so the
   // strip reads as a working airfield instead of a grey rectangle in an empty
@@ -539,18 +581,20 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // thing a pilot would expect to see.
   const wsx = runway.x + perpX * 78 + dirX * 14;
   const wsz = runway.z + perpZ * 78 + dirZ * 14;
+  // v17: taller pole (8 m, was 6) and a bigger sock (0.7 x 3.0 m, was
+  // 0.5 x 2.2) — the windsock was invisible from the air.
   const wsPole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.08, 0.08, 6, 6),
+    new THREE.CylinderGeometry(0.08, 0.08, 8, 6),
     new THREE.MeshStandardMaterial({ color: '#dddddd', roughness: 0.6 }),
   );
-  wsPole.position.set(wsx, meshHeight(wsx, wsz) + 3, wsz);
+  wsPole.position.set(wsx, meshHeight(wsx, wsz) + 4, wsz);
   group.add(wsPole);
   const wsSock = new THREE.Mesh(
-    new THREE.ConeGeometry(0.5, 2.2, 8),
+    new THREE.ConeGeometry(0.7, 3.0, 8),
     new THREE.MeshStandardMaterial({ color: '#ff7f2a', roughness: 0.7 }),
   );
   wsSock.rotation.z = -Math.PI / 2 - 0.25;
-  wsSock.position.set(wsx + 1.1, meshHeight(wsx, wsz) + 5.7, wsz);
+  wsSock.position.set(wsx + 1.5, meshHeight(wsx, wsz) + 7.6, wsz);
   group.add(wsSock);
   // v6: a fuel shed and a drum cluster beside the hangar, so the airfield
   // has a second building and the hangar is not a lone box on a bare slope
@@ -592,8 +636,13 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // follows the terrain below it — turquoise in the shallows, deep teal
   // offshore — so the coast reads as a shore with a shallow shelf, not a hard
   // dark-green edge (the v2 sea was one flat dark disc). ---
-  const SEA_SEG = 160;
-  const seaGeo = new THREE.PlaneGeometry(WORLD.size, WORLD.size, SEA_SEG, SEA_SEG);
+  // v17: the sea is now 12000 x 12000 m — its edge sits 6000 m out,
+  // past fogFar (5000 m), so it dissolves in the haze instead of
+  // showing a sharp square edge with a cliff behind it (v16 live
+  // playtest: the world's edge was plainly visible). SEG 320 keeps
+  // the depth-colour sampling as fine as before on the bigger plane.
+  const SEA_SEG = 320;
+  const seaGeo = new THREE.PlaneGeometry(12000, 12000, SEA_SEG, SEA_SEG);
   seaGeo.rotateX(-Math.PI / 2);
   const seaPos = seaGeo.attributes.position;
   const seaColors = new Float32Array(seaPos.count * 3);
@@ -1575,7 +1624,10 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       for (let p = 0; p < baseLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
         const rx = cloudRandom.range(70, 110);
-        const ry = rx * cloudRandom.range(0.55, 0.75);
+        // v17: taller base lobes (0.65-0.9, was 0.55-0.75) — the banks
+        // read as flat slabs from the side; more vertical mass makes
+        // them read as towering cumulus.
+        const ry = rx * cloudRandom.range(0.65, 0.9);
         const rz = rx * cloudRandom.range(0.8, 1.1);
         lobe.scale.set(rx, ry, rz);
         lobe.position.set(
@@ -1605,7 +1657,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
         cloud.add(lobe);
       }
-      const topLobes = 5 + cloudRandom.int(0, 2);
+      // v17: more top lobes (7-9, was 5-7) piled higher (40-70 m, was
+      // 34-50 m) — a bumpy, towering top instead of a low cap.
+      const topLobes = 7 + cloudRandom.int(0, 2);
       for (let p = 0; p < topLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
         const rx = cloudRandom.range(40, 65);
@@ -1613,7 +1667,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.0));
         lobe.position.set(
           cloudRandom.range(-25, 25),
-          34 + cloudRandom.range(0, 16),
+          40 + cloudRandom.range(0, 30),
           cloudRandom.range(-22, 22),
         );
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
