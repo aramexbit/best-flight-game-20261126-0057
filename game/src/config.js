@@ -50,13 +50,15 @@ export const COURSE = {
   // Ring centres sit between these altitudes, in metres.
   minRingAlt: 120,
   maxRingAlt: 300,
-  // The glowing ring itself, in metres.
-  ringRadius: 32,
-  ringTube: 1.8,
+  // The glowing ring itself, in metres. v2: smaller (32 -> 26) so the ring
+  // no longer swallows the aircraft in the cover shot.
+  ringRadius: 26,
+  ringTube: 1.5,
   // The runway waits this far past the last ring, along the final heading.
   runwayPastRing: 520,
   runwayLength: 340,
-  runwayWidth: 26,
+  // v2: wider (26 -> 40) so the strip reads as a runway, not a dark line.
+  runwayWidth: 40,
   // Par time for the landing time bonus, in seconds.
   parTime: 240,
 };

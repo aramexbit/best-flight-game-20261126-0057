@@ -2,7 +2,9 @@
 // runway on the big eastern island. The rings are planned backwards from the
 // runway so the last leg is always a clean final approach into the low sun, and
 // the spacing adapts so the course always arrives — it never runs out of sea.
-// A tall light pillar marks each ring so a pilot who loses the thread can find it.
+// The next ring pulses bright and the HUD shows the distance to it, so a pilot
+// who loses the thread can find it; there are no light pillars (v2 removed
+// them — they read as debug graphics).
 
 import { COURSE, PALETTE, SCORE } from './config.js';
 import { islandHeightAt } from './terrain.js';
@@ -152,14 +154,11 @@ export function buildRingMeshes(THREE, course) {
   const nextMat = new THREE.MeshBasicMaterial({ color: PALETTE.ringNext });
   const futureMat = new THREE.MeshBasicMaterial({ color: PALETTE.ring, transparent: true, opacity: 0.55 });
   const doneMat = new THREE.MeshBasicMaterial({ color: PALETTE.hudGood, transparent: true, opacity: 0.5 });
-  const beaconGeo = new THREE.CylinderGeometry(1.4, 1.4, 420, 8, 1, true);
-  const beaconNext = new THREE.MeshBasicMaterial({
-    color: PALETTE.ringNext, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false,
-  });
-  const beaconFuture = new THREE.MeshBasicMaterial({
-    color: PALETTE.ring, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false,
-  });
+  // v2: the light pillars are gone (see below); no beacon geometry is built.
 
+  // v2: no light pillars. The tall beacons read as debug graphics / rendering
+  // artefacts to a fresh eye; the next ring's pulse and the HUD distance are
+  // the wayfinding now.
   const meshes = course.rings.map((ring) => {
     const mesh = new THREE.Mesh(ringGeo, futureMat);
     mesh.position.set(ring.x, ring.y, ring.z);
@@ -168,31 +167,22 @@ export function buildRingMeshes(THREE, course) {
       new THREE.Vector3(ring.axis.x, ring.axis.y, ring.axis.z),
     );
     group.add(mesh);
-    const beacon = new THREE.Mesh(beaconGeo, beaconFuture);
-    beacon.position.set(ring.x, ring.y + 150, ring.z);
-    group.add(beacon);
-    return { mesh, beacon };
+    return { mesh };
   });
 
   /** Recolour rings by state; the next one pulses so it reads at a glance. */
   function refresh(time) {
     for (let i = 0; i < meshes.length; i += 1) {
       const ring = course.rings[i];
-      const { mesh, beacon } = meshes[i];
+      const { mesh } = meshes[i];
       if (ring.passed) {
         mesh.material = doneMat;
-        beacon.material = beaconFuture;
-        beacon.visible = false;
         mesh.scale.setScalar(1);
       } else if (course.nextRing() === ring) {
         mesh.material = nextMat;
-        beacon.material = beaconNext;
-        beacon.visible = true;
         mesh.scale.setScalar(1 + 0.05 * Math.sin(time * 3.2));
       } else {
         mesh.material = futureMat;
-        beacon.material = beaconFuture;
-        beacon.visible = true;
         mesh.scale.setScalar(1);
       }
     }

@@ -31,16 +31,27 @@ try {
     await page.waitForFunction(() => window.__shotReady, null, { timeout: 20000 });
     await page.waitForTimeout(700);
     await page.screenshot({ path: OUT_DIR + '/' + shot.name, type: 'jpeg', quality: 82 });
-    console.log('shot', shot.name, 'ok', statSync(OUT_DIR + '/' + shot.name).size, 'bytes');
+    const hudState = await page.evaluate(() => ({
+      rings: document.getElementById('hud-rings').textContent,
+      score: document.getElementById('hud-score').textContent,
+      time: document.getElementById('hud-time').textContent,
+      msg: document.getElementById('hud-msg').textContent,
+    }));
+    console.log('shot', shot.name, 'ok', statSync(OUT_DIR + '/' + shot.name).size, 'bytes', JSON.stringify(hudState));
   }
 
   // Playtest: title -> Space starts -> hold throttle + roll, HUD must move.
   await page.goto('http://localhost:' + PORT + '/index.html', { waitUntil: 'load', timeout: 20000 });
   await page.waitForTimeout(800);
+  // v2: on the title screen the clock must sit at 0:00 and the HUD must be
+  // dimmed behind the panel; once play starts the clock has to move.
   const before = await page.evaluate(() => ({
     alt: document.getElementById('hud-alt').textContent,
     spd: document.getElementById('hud-spd').textContent,
     rings: document.getElementById('hud-rings').textContent,
+    time: document.getElementById('hud-time').textContent,
+    titleShown: document.getElementById('panel-title').style.display,
+    hudDimmed: document.body.classList.contains('title-open'),
   }));
   await page.keyboard.press('Space');
   await page.waitForTimeout(500);
@@ -53,7 +64,9 @@ try {
     alt: document.getElementById('hud-alt').textContent,
     spd: document.getElementById('hud-spd').textContent,
     rings: document.getElementById('hud-rings').textContent,
+    time: document.getElementById('hud-time').textContent,
     titleHidden: document.getElementById('panel-title').style.display,
+    hudDimmed: document.body.classList.contains('title-open'),
   }));
   console.log('playtest before', JSON.stringify(before));
   console.log('playtest after', JSON.stringify(after));

@@ -83,12 +83,21 @@ export function buildPlane(THREE) {
   }
 
   // Propeller: a hub, two blades and a faint blur disc that appears with throttle.
+  // v2: the hub is smaller and cream with a red tip and a cream base ring, so from
+  // the pilot's seat it reads as a spinner, not the bare red ball v1 showed.
   const prop = new THREE.Group();
   prop.position.set(0, 0, -3.25);
   group.add(prop);
-  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 10), red);
+  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.42, 12), cream);
   hub.rotation.x = -Math.PI / 2;
   prop.add(hub);
+  const hubRing = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.028, 8, 20), red);
+  hubRing.position.set(0, 0, 0.2);
+  prop.add(hubRing);
+  const hubTip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 10), red);
+  hubTip.rotation.x = -Math.PI / 2;
+  hubTip.position.set(0, 0, -0.28);
+  prop.add(hubTip);
   for (const angle of [0, Math.PI]) {
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.7, 0.07), dark);
     blade.rotation.z = angle;
@@ -104,24 +113,96 @@ export function buildPlane(THREE) {
   blur.position.set(0, 0, -3.3);
   group.add(blur);
 
-  // Cockpit dashboard: a low dark panel with three glowing gauges, only seen
-  // from inside. It sits well forward and low so it frames the view instead of
-  // filling it.
+  // Cockpit dashboard, v2: a wide panel that reads as part of the aircraft,
+  // with three real instruments — dark dial faces, pale rims, tick marks and
+  // live needles — plus a red trim strip, toggle switches and a warning lamp.
+  // The v1 panel was three plain coloured circles on a black bar, which a fresh
+  // eye read as a debug object, not a cockpit.
   const dash = new THREE.Group();
-  dash.position.set(0, -0.18, -2.15);
+  dash.position.set(0, -0.22, -2.1);
   dash.visible = false;
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.34, 0.1), dark);
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.44, 0.08), dark);
   dash.add(panel);
-  const gaugeColors = [0x7dff9a, 0xffd94d, 0x4fc3f7];
-  for (let i = 0; i < 3; i += 1) {
-    const gauge = new THREE.Mesh(
-      new THREE.CircleGeometry(0.085, 20),
-      new THREE.MeshBasicMaterial({ color: gaugeColors[i] }),
+  // Red trim along the top edge of the panel, so it is visibly built, not cut out.
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.035, 0.09), red);
+  trim.position.set(0, 0.235, 0);
+  dash.add(trim);
+  // Two toggle switches under the left gauge, one warning lamp under the right.
+  for (const sx of [-0.62, -0.5]) {
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, 0.03), glass);
+    sw.position.set(sx, -0.16, 0.06);
+    sw.rotation.z = 0.25;
+    dash.add(sw);
+  }
+  const lamp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.035, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff5d4d }),
+  );
+  lamp.position.set(0.62, -0.16, 0.06);
+  dash.add(lamp);
+  const gaugeDefs = [
+    { x: -0.5, needle: 0x7dff9a },
+    { x: 0, needle: 0xffd94d },
+    { x: 0.5, needle: 0x4fc3f7 },
+  ];
+  const needles = [];
+  for (const def of gaugeDefs) {
+    const g = new THREE.Group();
+    g.position.set(def.x, 0.04, 0.05);
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.115, 0.014, 8, 28),
+      new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.4, metalness: 0.5 }),
     );
-    gauge.position.set(-0.32 + i * 0.32, 0.03, 0.06);
-    dash.add(gauge);
+    g.add(rim);
+    const face = new THREE.Mesh(
+      new THREE.CircleGeometry(0.108, 24),
+      new THREE.MeshBasicMaterial({ color: 0x10131c }),
+    );
+    face.position.z = 0.005;
+    g.add(face);
+    // Twelve tick marks around the dial, longer at the quarters.
+    for (let t = 0; t < 12; t += 1) {
+      const a = (t / 12) * Math.PI * 2;
+      const tick = new THREE.Mesh(
+        new THREE.BoxGeometry(0.008, t % 3 === 0 ? 0.032 : 0.02, 0.004),
+        new THREE.MeshBasicMaterial({ color: 0xfff7e8 }),
+      );
+      tick.position.set(Math.sin(a) * 0.088, Math.cos(a) * 0.088, 0.01);
+      tick.rotation.z = -a;
+      g.add(tick);
+    }
+    const needlePivot = new THREE.Group();
+    const needleGeo = new THREE.BoxGeometry(0.014, 0.085, 0.006);
+    needleGeo.translate(0, 0.032, 0);
+    const needle = new THREE.Mesh(
+      needleGeo,
+      new THREE.MeshBasicMaterial({ color: def.needle }),
+    );
+    needlePivot.add(needle);
+    needlePivot.position.z = 0.012;
+    g.add(needlePivot);
+    const pin = new THREE.Mesh(
+      new THREE.CircleGeometry(0.016, 12),
+      new THREE.MeshBasicMaterial({ color: 0xfff7e8 }),
+    );
+    pin.position.z = 0.016;
+    g.add(pin);
+    needles.push(needlePivot);
+    dash.add(g);
   }
   group.add(dash);
+
+  /**
+   * Drive the three dashboard needles from the flight state: airspeed (left),
+   * altitude (middle), heading (right). Angles sweep -120..+120 degrees over the
+   * gauge range; the heading needle points like a compass, north straight up.
+   */
+  function setGauges(altM, speedMs, headingDeg) {
+    const sweep = (value, max) => (-120 + 240 * Math.min(1, Math.max(0, value / max))) * Math.PI / 180;
+    needles[0].rotation.z = -sweep(speedMs, 100);
+    needles[1].rotation.z = -sweep(altM, 900);
+    needles[2].rotation.z = -headingDeg * Math.PI / 180;
+  }
 
   let propAngle = 0;
 
@@ -144,5 +225,5 @@ export function buildPlane(THREE) {
     cowl.visible = !on;
   }
 
-  return { group, update, setCockpitMode, prop, cowl, blur };
+  return { group, update, setCockpitMode, setGauges, prop, cowl, blur };
 }

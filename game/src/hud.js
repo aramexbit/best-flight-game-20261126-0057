@@ -37,6 +37,13 @@ export function createHud() {
     msgTimer = seconds;
   }
 
+  /** A message that stays until the run ends: the landing objective. */
+  function showObjective(text) {
+    msgEl.textContent = text;
+    msgEl.style.opacity = '1';
+    msgTimer = 9999;
+  }
+
   function showWarning(text) {
     warnEl.textContent = text;
     warnEl.style.opacity = text ? '1' : '0';
@@ -149,15 +156,19 @@ export function createHud() {
     for (const id of ['panel-title', 'panel-pause', 'panel-over']) {
       el(id).style.display = id === `panel-${name}` ? 'flex' : 'none';
     }
+    // The title screen dims the gameplay HUD behind it (v2): the numbers are
+    // still there, but they stop competing with the panel.
+    document.body.classList.toggle('title-open', name === 'title');
   }
 
   function hidePanels() {
     for (const id of ['panel-title', 'panel-pause', 'panel-over']) el(id).style.display = 'none';
+    document.body.classList.remove('title-open');
   }
 
   function setOverLines(lines) {
     el('over-lines').innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
   }
 
-  return { update, showMessage, showPanel, hidePanels, setOverLines };
+  return { update, showMessage, showObjective, showPanel, hidePanels, setOverLines };
 }

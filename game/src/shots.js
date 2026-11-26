@@ -17,6 +17,7 @@ const SAMPLE = 1 / 60;
 export function autopilotTo(flight, target, throttleTarget, groundAt) {
   const s = flight.state;
   let aim = target;
+  let recovering = false;
   if (target.axis) {
     // Carrot-chasing on the approach line through the ring: aim at a point on
     // the line 150 m ahead of the plane's own projection onto it, so the plane
@@ -28,7 +29,18 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
     const ry = s.y - target.y;
     const rz = s.z - target.z;
     const along = rx * ax.x + ry * ax.y + rz * ax.z;
-    const carrot = along < -80 ? along + 150 : 80;
+    // v2 recovery: if the plane is already past the ring (a miss), the old
+    // fixed carrot 80 m past the ring let it orbit on the far side forever —
+    // the orbit radius is smaller than 80 m, so it never re-crossed the ring
+    // plane. Aim 400 m back down the line instead, so it turns around and gets
+    // a long, slow re-approach to converge onto the line.
+    // v2 tracking: the lookahead shrinks as the ring gets close, so the plane
+    // corrects hard onto the line instead of cruising past it 28 m off. Far
+    // out it is the old 150 m (smooth); inside 80 m it is 40 m. The plain
+    // 150 m lookahead left the first attempt 27.7 m off centre and the
+    // recovery laps diverged from there.
+    recovering = along > 0;
+    const carrot = along > 0 ? -400 : along + Math.min(150, Math.max(40, -along * 0.5));
     aim = {
       x: target.x + ax.x * carrot,
       y: target.y + ax.y * carrot,
@@ -55,7 +67,8 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
     highest = Math.max(highest, groundAt(gx, gz));
   }
   if (highest + 45 > s.y) pitchInput = Math.max(pitchInput, 0.9);
-  const slowTurn = Math.abs(headingError) > 0.6 ? 0.45 : throttleTarget;
+  // Recovering from a miss means a tight turn back: stay slow while doing it.
+  const slowTurn = (Math.abs(headingError) > 0.6 || recovering) ? 0.45 : throttleTarget;
   // Bank with damping: steer by the heading error, but subtract the bank
   // already held, so the wings level the moment the nose is right instead of
   // holding a full bank for seconds after the turn is done and overshooting.

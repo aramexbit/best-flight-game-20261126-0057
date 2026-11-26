@@ -5,6 +5,7 @@
 // groups and this file only moves them.
 
 import { PALETTE, WORLD } from './config.js';
+import { headingOf } from './flight.js';
 
 export const CAMERA_CHASE = 'chase';
 export const CAMERA_COCKPIT = 'cockpit';
@@ -61,6 +62,8 @@ export function createRenderer(canvas, THREE, groups) {
     p.rotation.x = s.pitch;
     p.rotation.z = -s.roll;
     planeApi.update(dt, s.throttle, time);
+    // The dashboard needles follow the flight, every frame, in both views.
+    if (planeApi.setGauges) planeApi.setGauges(s.y, s.speed, headingOf(s.yaw));
 
     tmpForward.set(Math.sin(s.yaw) * Math.cos(s.pitch), Math.sin(s.pitch), -Math.cos(s.yaw) * Math.cos(s.pitch));
 
@@ -70,9 +73,9 @@ export function createRenderer(canvas, THREE, groups) {
       // The camera turns with the plane, so the horizon rolls as the wings do.
       tmpUp.set(0, 1, 0);
       camera.position.set(
-        s.x - tmpForward.x * 0.3,
-        s.y + 1.0,
-        s.z - tmpForward.z * 0.3,
+        s.x - tmpForward.x * 0.45,
+        s.y + 1.08,
+        s.z - tmpForward.z * 0.45,
       );
       lookTarget.set(s.x + tmpForward.x * 60, s.y + tmpForward.y * 60, s.z + tmpForward.z * 60);
       camera.up.copy(tmpUp);

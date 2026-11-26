@@ -85,6 +85,13 @@ function runShot(name) {
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
   hud.hidePanels();
+  // The title shot is a frozen moment, not a running game: the clock reads 0:00.
+  if (scene.screen === 'title') flight.state.elapsed = 0;
+  // The landing shot is the end of the run: say so, so the frame reads as an
+  // objective and not just another ring.
+  if (name === 'landing' && flight.state.ringsPassed >= COURSE.ringCount) {
+    hud.showObjective('LAND ON THE RUNWAY');
+  }
   // The instruments always show the staged flight, even behind the title panel.
   hud.update(hudView(), 0);
   if (scene.screen === 'title') {
@@ -103,6 +110,7 @@ function runShot(name) {
 function runGame() {
   const input = createInput(canvas);
   let screen = 'title';
+  let titleTime = 0;
   let best = readBest();
   let accumulator = 0;
   let last = performance.now();
@@ -185,15 +193,16 @@ function runGame() {
   function step() {
     if (screen === 'title') {
       // The title screen flies itself: a slow autopilot orbit so the world is alive
-      // behind the panel.
+      // behind the panel. v2: the flight clock stays frozen at 0:00 until the
+      // player starts — the title orbit runs on its own clock instead.
       const s = flight.state;
       const prev = { x: s.x, y: s.y, z: s.z };
       s.yaw += 0.12 * STEP;
       const fwd = { x: Math.sin(s.yaw), y: 0, z: -Math.cos(s.yaw) };
       s.x += fwd.x * 42 * STEP;
       s.z += fwd.z * 42 * STEP;
-      s.y = 190 + Math.sin(s.elapsed * 0.25) * 12;
-      s.elapsed += STEP;
+      titleTime += STEP;
+      s.y = 190 + Math.sin(titleTime * 0.25) * 12;
       s.speed = 42;
       void prev;
       return;
@@ -213,7 +222,8 @@ function runGame() {
       s.lastBonus = pass.bonus;
       audio.chime();
       const left = COURSE.ringCount - s.ringsPassed;
-      hud.showMessage(left === 0 ? 'ALL RINGS — LAND ON THE RUNWAY' : `RING ${s.ringsPassed}/${COURSE.ringCount}  +${pass.bonus}`, 2.2);
+      if (left === 0) hud.showObjective('ALL RINGS — LAND ON THE RUNWAY');
+      else hud.showMessage(`RING ${s.ringsPassed}/${COURSE.ringCount}  +${pass.bonus}`, 2.2);
     } else if (pass && pass.nearMiss) {
       s.score += pass.bonus;
       hud.showMessage('NEAR MISS +10', 1.2);
