@@ -138,7 +138,12 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // with an abrupt cut at its edges (Gemini v13: the runway's edges
     // still read as raised / drop-off). The old fade (150 m) could not
     // smooth the island's ridge bumps at the strip's sides.
-    const a = 1 - smoothstep(COURSE.runwayLength / 2 - 30, COURSE.runwayLength / 2 + 250, Math.abs(along));
+    // v16: the flat zone runs 60 m PAST each strip end (was ending 30 m
+    // short of it), then fades over 300 m — the v15 landing shot still
+    // showed the far hill rising right at the threshold, reading as a
+    // step at the runway's end. The plateau now carries the strip into
+    // the clearing instead of ending under it.
+    const a = 1 - smoothstep(COURSE.runwayLength / 2 + 60, COURSE.runwayLength / 2 + 360, Math.abs(along));
     // v3: the flat zone spans the full strip width (it used to start fading
     // 6 m inside the edge, so the terrain poked through the strip's edges by
     // a hair); the shoulders sit on the blend just outside the strip.
@@ -751,6 +756,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   }
   let treesPlanted = 0;
   let palmsPlanted = 0;
+  // v16: palms registered for the wind-sway pass in update() — each palm
+  // leans with the storm wind on its own phase, so the foliage moves in
+  // a gale instead of standing still.
+  const swayPalms = [];
+  let swayTime = 0;
   let rocksPlanted = 0;
   let bushesPlanted = 0;
   let junglePlanted = 0;
@@ -855,6 +865,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     palm.position.set(px, meshHeight(px, pz), pz);
     palm.rotation.y = vegRandom.range(0, Math.PI * 2);
     group.add(palm);
+    // v16: register for the wind-sway pass in update().
+    swayPalms.push({ g: palm, phase: vegRandom.range(0, 6.28), amp: vegRandom.range(0.02, 0.045) });
     // v8: a grounding disc under the trunk, so the palm reads as rooted.
     plantGroundDisc(px, pz, 2.0 * s);
     palmsPlanted += 1;
@@ -1834,6 +1846,12 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   }
 
   function update(dt) {
+    // v16: palms bend with the storm wind — a slow lean along the wind,
+    // each palm on its own phase, so the foliage moves in a gale.
+    swayTime += dt;
+    for (const p of swayPalms) {
+      p.g.rotation.z = Math.sin(swayTime * 1.1 + p.phase) * p.amp;
+    }
     for (const cloud of clouds) {
       cloud.position.x += cloud.userData.speed * dt;
       if (cloud.position.x > WORLD.size / 2 + 200) cloud.position.x = -WORLD.size / 2 - 200;

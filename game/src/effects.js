@@ -12,10 +12,13 @@
 //          RACE.smokeColumnSeconds, so the crash is still visible minutes
 //          later in the landing shot.
 
-import { RACE } from './config.js';
+import { RACE, STORM } from './config.js';
 
 export function createEffects(THREE, scene) {
-  const puffGeo = new THREE.IcosahedronGeometry(1, 0);
+  // v16: SMOOTH smoke balls (SphereGeometry, was detail-0 icosahedron) —
+  // the flat facets of the old puffs are exactly the "flat dark
+  // hexagonal/octagonal polygons" Gemini saw around every v15 blast.
+  const puffGeo = new THREE.SphereGeometry(1, 12, 9);
   const ballGeo = new THREE.SphereGeometry(1, 12, 8);
   const ringGeo = new THREE.TorusGeometry(1, 0.07, 8, 40);
   const debrisGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -32,6 +35,15 @@ export function createEffects(THREE, scene) {
   const sparks = [];
   const confettiParts = [];
   const shows = [];
+  // v16: flame tongues (stretched additive fire), chained follow-up
+  // blasts, burning oil slicks, and one orange flash light that pops
+  // on every explosion and lights the clouds/sea/terrain around it.
+  const tongues = [];
+  const pending = [];
+  const slicks = [];
+  const flash = new THREE.PointLight(0xff8c1a, 0, 900, 1);
+  scene.add(flash);
+  let flashLevel = 0;
   // v15: 140 (was 90) — the longer fireball, flame puffs, split-half flame
   // trails and the four coloured slipstream trails all draw from the same
   // pool; 90 evicted fresh explosion smoke mid-blast.
@@ -129,13 +141,34 @@ export function createEffects(THREE, scene) {
     scene.add(core);
     balls.push({ mesh: core, life: 0, maxLife: 1.8, from: 1.2, to: 18 });
     const innerMat = new THREE.MeshBasicMaterial({
-      color: 0xfff6a8, transparent: true, opacity: 0.95, depthWrite: false,
+      color: 0xffffff, transparent: true, opacity: 0.98, depthWrite: false,
     });
     const inner = new THREE.Mesh(ballGeo, innerMat);
     inner.position.set(x, y, z);
     inner.scale.setScalar(1);
     scene.add(inner);
     balls.push({ mesh: inner, life: 0, maxLife: 1.2, from: 1, to: 10 });
+    // v16: flame tongues — five stretched additive fire spikes jutting
+    // out of the core at random angles, so the blast reads as licking
+    // flame, not one smooth ball. They live in their own list because
+    // they scale non-uniformly (long, thin) unlike the round balls.
+    for (let f = 0; f < 5; f += 1) {
+      const tMat = new THREE.MeshBasicMaterial({
+        color: f % 2 ? 0xff8c1a : 0xffb52e, transparent: true, opacity: 0.95,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      const tongue = new THREE.Mesh(ballGeo, tMat);
+      tongue.position.set(x, y, z);
+      tongue.scale.set(2, 6, 2);
+      tongue.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+      scene.add(tongue);
+      tongues.push({ mesh: tongue, life: 0, maxLife: 0.7 + Math.random() * 0.4 });
+    }
+    // v16: the orange flash — a point light that pops with the blast
+    // and decays over ~1 s, so nearby clouds, sea and terrain catch a
+    // warm bounce (Gemini's fix prompt: light flash on clouds/terrain).
+    flash.position.set(x, y, z);
+    flashLevel = 900;
     // Shockwave, demoted (v14): one small faint ring, half the old size,
     // gone in a second — the dark smoke and the fire are the explosion now.
     const mat = new THREE.MeshBasicMaterial({
@@ -226,6 +259,128 @@ export function createEffects(THREE, scene) {
   }
 
   /**
+   * v16: a CHAIN explosion — the first blast plus two staggered
+   * follow-ups 0.15-0.35 s later, offset 15-30 m in different
+   * directions, so the blast blooms as 2-3 distinct fireballs across
+   * depth instead of one merged blob (Gemini's v16 build prompt).
+   * The pending list is drained in update(dt).
+   */
+  function explodeChain(x, y, z, air) {
+    explode(x, y, z, air);
+    pending.push({
+      t: 0, at: 0.18,
+      x: x + 18 + Math.random() * 12, y: y - 6 + Math.random() * 12, z: z + 14 + Math.random() * 10,
+      air,
+    });
+    pending.push({
+      t: 0, at: 0.36,
+      x: x - 20 - Math.random() * 10, y: y + 4 + Math.random() * 10, z: z - 16 - Math.random() * 12,
+      air,
+    });
+  }
+
+  /**
+   * v16: FLAK — one small dark-orange burst for the storm battle's
+   * outer corridors: a short orange ball, four dark puffs and a few
+   * embers, no wreck, no column. Half the size of a full explosion,
+   * so it reads as distant anti-aircraft fire, not a second crash.
+   */
+  function flak(x, y, z) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xff7a00, transparent: true, opacity: 0.9, depthWrite: false,
+    });
+    const ball = new THREE.Mesh(ballGeo, mat);
+    ball.position.set(x, y, z);
+    ball.scale.setScalar(1);
+    scene.add(ball);
+    balls.push({ mesh: ball, life: 0, maxLife: 0.9, from: 1, to: 9 });
+    for (let p = 0; p < 4; p += 1) {
+      smokePuff(
+        x + (Math.random() - 0.5) * 8,
+        y + (Math.random() - 0.5) * 6,
+        z + (Math.random() - 0.5) * 8,
+        2 + Math.random() * 1.5,
+        {
+          color: p % 2 ? 0x2e3138 : 0x1f2126, life: 3 + Math.random() * 2,
+          grow: 1.1, vel: { x: (Math.random() - 0.5) * 3, y: 1, z: (Math.random() - 0.5) * 3 },
+          opacity: 0.65,
+        },
+      );
+    }
+    for (let d = 0; d < 5; d += 1) {
+      const ember = new THREE.Mesh(debrisGeo, new THREE.MeshBasicMaterial({
+        color: 0xff9e1b, transparent: true, opacity: 1, depthWrite: false,
+      }));
+      ember.scale.setScalar(0.4 + Math.random() * 0.5);
+      ember.position.set(x, y, z);
+      scene.add(ember);
+      const a = Math.random() * Math.PI * 2;
+      debris.push({
+        mesh: ember, life: 0, maxLife: 1.2,
+        vel: { x: Math.cos(a) * (4 + Math.random() * 6), y: 2 + Math.random() * 6, z: Math.sin(a) * (4 + Math.random() * 6) },
+        spin: { x: 4, y: 4, z: 4 },
+      });
+    }
+    flash.position.set(x, y, z);
+    flashLevel = Math.max(flashLevel, 300);
+  }
+
+  /**
+   * v16: a SEA SPLASH — a white crown where a diving rival hits the
+   * water: rising white puffs plus a flat expanding ring on the
+   * surface, so the impact reads as water, not just fire.
+   */
+  function splash(x, z) {
+    for (let p = 0; p < 8; p += 1) {
+      smokePuff(
+        x + (Math.random() - 0.5) * 6,
+        2 + Math.random() * 3,
+        z + (Math.random() - 0.5) * 6,
+        1.5 + Math.random(),
+        {
+          color: 0xf4feff, life: 1.2 + Math.random() * 0.6, grow: 2.2,
+          vel: { x: (Math.random() - 0.5) * 4, y: 6 + Math.random() * 6, z: (Math.random() - 0.5) * 4 },
+          opacity: 0.85,
+        },
+      );
+    }
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(ringGeo, mat);
+    ring.position.set(x, 1.2, z);
+    ring.rotation.x = -Math.PI / 2;
+    ring.scale.setScalar(2);
+    scene.add(ring);
+    rings.push({ mesh: ring, life: 0, maxLife: 1.4, from: 2, to: 26, baseOpacity: 0.7 });
+  }
+
+  /**
+   * v16: a BURNING OIL SLICK — a dark disc with a flickering orange
+   * rim floating on the sea where the wreck went down, drifting
+   * slowly with the wind for STORM.slickSeconds.
+   */
+  function oilSlick(x, z) {
+    const g = new THREE.Group();
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(11, 20),
+      new THREE.MeshBasicMaterial({ color: 0x14161c, transparent: true, opacity: 0.85, depthWrite: false }),
+    );
+    disc.rotation.x = -Math.PI / 2;
+    g.add(disc);
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(10, 0.5, 6, 28),
+      new THREE.MeshBasicMaterial({ color: 0xff7f1a, transparent: true, opacity: 0.9, depthWrite: false }),
+    );
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.y = 0.2;
+    g.add(rim);
+    g.position.set(x, 1.0, z);
+    scene.add(g);
+    slicks.push({ group: g, rim, life: 0, maxLife: STORM.slickSeconds });
+  }
+
+  /**
    * v14: a collided plane TORN IN TWO. The front half (nose + cabin +
    * wing + spinner) and the rear half (tail taper + fin + stabiliser) fly
    * apart at ~30 m/s along the plane's own axis, tumbling end over end,
@@ -278,14 +433,20 @@ export function createEffects(THREE, scene) {
       group.position.set(x, y, z);
       group.rotation.y = yaw;
       scene.add(group);
+      // v16: the halves fly apart HARDER (36 m/s, was 30) and split
+      // SIDEWAYS too (±10 m/s perpendicular) — in v15 they separated
+      // along the camera's view axis, so from the chase camera they
+      // stacked into one shape and Gemini could not read two halves.
+      const perpX = Math.cos(yaw);
+      const perpZ = Math.sin(yaw);
       halves.push({
         group,
         life: 0,
         maxLife: 8,
         vel: {
-          x: dirX * 30 * sign + (Math.random() - 0.5) * 6,
+          x: dirX * 36 * sign + perpX * 10 * sign + (Math.random() - 0.5) * 6,
           y: 6 + Math.random() * 6,
-          z: dirZ * 30 * sign + (Math.random() - 0.5) * 6,
+          z: dirZ * 36 * sign + perpZ * 10 * sign + (Math.random() - 0.5) * 6,
         },
         spin: {
           x: (Math.random() - 0.5) * 5,
@@ -376,6 +537,22 @@ export function createEffects(THREE, scene) {
 
   /** Advance every particle one fixed step, and retire the dead. */
   function update(dt) {
+    // v16: chained follow-up blasts fire on their schedule.
+    for (let i = pending.length - 1; i >= 0; i -= 1) {
+      pending[i].t += dt;
+      if (pending[i].t >= pending[i].at) {
+        const p = pending[i];
+        pending.splice(i, 1);
+        explode(p.x, p.y, p.z, p.air);
+      }
+    }
+    // v16: the orange flash decays fast (~1 s) — a pop, not a lamp.
+    if (flashLevel > 0.5) {
+      flashLevel *= Math.exp(-dt * 4.5);
+      flash.intensity = flashLevel;
+    } else {
+      flash.intensity = 0;
+    }
     for (let i = puffs.length - 1; i >= 0; i -= 1) {
       const p = puffs[i];
       p.life += dt;
@@ -386,11 +563,49 @@ export function createEffects(THREE, scene) {
         continue;
       }
       const k = p.life / p.maxLife;
-      p.mesh.position.x += p.vel.x * dt;
+      // v16: smoke drifts with the storm wind, so the blast smoke
+      // trails downwind instead of hanging in a still column.
+      p.mesh.position.x += (p.vel.x + STORM.windX * 0.5) * dt;
       p.mesh.position.y += p.vel.y * dt;
-      p.mesh.position.z += p.vel.z * dt;
+      p.mesh.position.z += (p.vel.z + STORM.windZ * 0.5) * dt;
       p.mesh.scale.setScalar(p.mesh.scale.x + p.grow * dt);
       p.mesh.material.opacity = p.baseOpacity * (1 - k);
+    }
+    // v16: flame tongues stretch out, then shrink and die fast.
+    for (let i = tongues.length - 1; i >= 0; i -= 1) {
+      const t = tongues[i];
+      t.life += dt;
+      if (t.life >= t.maxLife) {
+        scene.remove(t.mesh);
+        t.mesh.material.dispose();
+        tongues.splice(i, 1);
+        continue;
+      }
+      const k = t.life / t.maxLife;
+      const s = 2 + k * 14;
+      t.mesh.scale.set(s * 0.5, s, s * 0.5);
+      t.mesh.material.opacity = 0.95 * (1 - k);
+    }
+    // v16: oil slicks drift with the wind, flicker, and fade out.
+    for (let i = slicks.length - 1; i >= 0; i -= 1) {
+      const s = slicks[i];
+      s.life += dt;
+      if (s.life >= s.maxLife) {
+        scene.remove(s.group);
+        s.group.traverse((child) => {
+          if (child.material) child.material.dispose();
+        });
+        slicks.splice(i, 1);
+        continue;
+      }
+      s.group.position.x += STORM.windX * 0.4 * dt;
+      s.group.position.z += STORM.windZ * 0.4 * dt;
+      s.rim.material.opacity = 0.55 + Math.sin(s.life * 9) * 0.35;
+      if (s.life > s.maxLife - 5) {
+        s.group.traverse((child) => {
+          if (child.material) child.material.opacity = Math.max(0, (s.maxLife - s.life) / 5) * 0.85;
+        });
+      }
     }
     for (let i = balls.length - 1; i >= 0; i -= 1) {
       const b = balls[i];
@@ -565,6 +780,13 @@ export function createEffects(THREE, scene) {
     for (const r of rings) { scene.remove(r.mesh); r.mesh.material.dispose(); }
     for (const d of debris) { scene.remove(d.mesh); d.mesh.material.dispose(); }
     for (const f of flames) { scene.remove(f.mesh); f.mesh.material.dispose(); }
+    for (const t of tongues) { scene.remove(t.mesh); t.mesh.material.dispose(); }
+    for (const s of slicks) {
+      scene.remove(s.group);
+      s.group.traverse((child) => {
+        if (child.material) child.material.dispose();
+      });
+    }
     for (const h of halves) {
       scene.remove(h.group);
       h.group.traverse((child) => {
@@ -590,7 +812,12 @@ export function createEffects(THREE, scene) {
     confettiParts.length = 0;
     shows.length = 0;
     wrecks.length = 0;
+    tongues.length = 0;
+    pending.length = 0;
+    slicks.length = 0;
+    flashLevel = 0;
+    flash.intensity = 0;
   }
 
-  return { smokePuff, explode, explodeSplit, fireworkShow, confetti, update, clear };
+  return { smokePuff, explode, explodeSplit, explodeChain, flak, splash, oilSlick, fireworkShow, confetti, update, clear };
 }

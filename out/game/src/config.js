@@ -128,6 +128,14 @@ export const RACE = {
   // v15: 350 m (was 800) — an 800 m blast is invisible; the backstop
   // only fires when the player is close enough to actually see it.
   collisionCloseDist: 350,
+  // v16: 55 s — from here the collision stops waiting for the player
+  // to come to the meeting point and RE-ANCHORS the point 220 m ahead
+  // of the player instead (rivals.js 'holding' branch). A human who
+  // flies straight off-course never closes to 250 m of a course-tied
+  // point, so without this the blast never fires for them at all —
+  // the v15 live playtest's core complaint. The staged cover (blast
+  // ~33.8 s) and the normal 45 s second-chance window are untouched.
+  collisionPlayerRelAt: 55,
   // R1 blue: near-miss flyby down the player's left side, 39-42 s.
   flybyAt: 39,
   // Seconds a crashed rival stays out before rejoining. 3 s (was 6):
@@ -154,6 +162,21 @@ export const SCORE = {
   landing: 500,
   smoothLanding: 250,
   timeBonusPerSecond: 10,
+};
+
+// v16: the storm battle — ONE localised daytime storm cell, never night.
+// windX/windZ is the mean wind (m/s): rain slants along it, smoke drifts
+// with it, palms bend with it. gustAmp is the extra roll/pitch the gusts
+// feed the player's stick in live play only (main.js) — the staged sim
+// never sees it, so sim scores do not move.
+export const STORM = {
+  windX: 6,
+  windZ: -3,
+  gustAmp: 0.07,
+  // Seconds between flak bursts along the outer island corridors.
+  flakEvery: 7,
+  // How long a burning oil slick stays on the sea after a dive impact.
+  slickSeconds: 25,
 };
 
 export const PALETTE = {

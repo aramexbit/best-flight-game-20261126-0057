@@ -18,6 +18,11 @@ export function createHud() {
   const thrFill = el('thr-fill');
   const msgEl = el('hud-msg');
   const warnEl = el('hud-warn');
+  // v16: the ring pointer — a chevron pill that always points at the
+  // next ring (see update()).
+  const ringPtr = el('hud-ring-pointer');
+  const ringPtrArrow = el('hud-ring-arrow');
+  const ringPtrText = el('hud-ring-text');
   const compass = el('compass');
   const attitude = el('attitude');
   const compassCtx = compass.getContext('2d');
@@ -165,6 +170,21 @@ export function createHud() {
     setText(scoreEl, 'score', `${view.score}`);
     setText(ringsEl, 'rings', `RING ${view.rings}/${view.ringTotal} · ${Math.round(view.nextDist)} m`);
     setText(posEl, 'pos', view.pos || '–');
+    // v16: the ring pointer — a chevron pill under the objective that
+    // always points at the next ring (rotation = bearing error, 0 =
+    // straight ahead) with its number and distance, so a player who
+    // loses the thread can find the gate without guessing (v15
+    // playtest: after ring 1 the distance to ring 2 GREW with no
+    // direction cue at all). Hidden once the course is done.
+    if (ringPtr) {
+      if (view.ringDir === null || view.ringDir === undefined) {
+        ringPtr.style.display = 'none';
+      } else {
+        ringPtr.style.display = 'flex';
+        ringPtrArrow.style.transform = `rotate(${Math.round(view.ringDir)}deg)`;
+        ringPtrText.textContent = `RING ${view.ringNum} · ${Math.round(view.nextDist)} m`;
+      }
+    }
     fuelFill.style.width = `${Math.round(view.fuel * 100)}%`;
     fuelFill.style.background = view.fuel < 0.2 ? PALETTE.hudWarn : PALETTE.hudGood;
     thrFill.style.width = `${Math.round(view.throttle * 100)}%`;

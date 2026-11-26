@@ -20,9 +20,9 @@
 //              behind the player, so it is NOT in the cover frame (the
 //              chase camera looks forward). The cover's visible crashes
 //              are BIRU's dive (cockpit shot) and the mid-air collision.
-//   R2 KUNING + R3 HIJAU converge from ~30.8 s on a point tied to the
-//              player's live progress (player's ring + 2), HOLD there
-//              orbiting, and collide mid-air once the player closes to
+//   R2 KUNING + R3 HIJAU converge from ~26.8 s on a point tied to the
+//              player's live progress (player's ring + LEAD: 3 when the
+//              player faces ring + 3, 1 otherwise), HOLD there orbiting, and
 //              RACE.collisionTriggerDist (backstop: 60 s / 600 m) — the
 //              cover shot catches the fireball, the dark smoke and both
 //              airframes TORN IN TWO, tumbling and burning. v13 fired
@@ -100,10 +100,57 @@ export function createRivals(THREE, seed, islands, effects) {
   // in the probe). The first rival to converge fixes the point for the
   // run; the partner reuses it, however late it arrives.
   let sharedMeetPoint = null;
+  // v16: when the player-relative re-anchor last fired (see 'holding').
+  let lastRelAnchorAt = -999;
 
   function forwardOf(yaw) {
     return { x: Math.sin(yaw), y: 0, z: -Math.cos(yaw) };
   }
+
+  // v16 (fix, live probe run 6): the collision lead from the player's
+  // BEARING, not their ring count. Lead 3 only when the player faces
+  // ring + 3 within ~30° (facing > 0.85) — then the pair waits where
+  // the player is LOOKING and the fire gates can align. Otherwise
+  // lead 1: the pair waits at the ring the player is actually flying
+  // toward. A ring-count rule gave lead 3 to a weaving live player
+  // (9 rings in 75 s) whose course bent away from ring + 3, so the
+  // blast sat behind them and never fired.
+  function leadFor(ps, pf, rings) {
+    const idx = Math.min(rings.length - 1, ps.ringsPassed + 3);
+    const r = rings[idx];
+    const dx = r.x - ps.x;
+    const dz = r.z - ps.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const facing = (dx * pf.x + dz * pf.z) / d;
+    return facing > 0.85 ? 3 : 1;
+  }
+
+  // v16 (fix, live probe run 8): true when the player is within 600 m
+  // of the collision anchor (ring + LEAD, 60 m past it) — the pair
+  // converges early, while it is still near the player, instead of
+  // waiting for the 26.8 s clock while the player flies away.
+  function nearAnchor(ps, pf, course) {
+    const lead = leadFor(ps, pf, course.rings);
+    const idx = Math.min(course.rings.length - 1, ps.ringsPassed + lead);
+    const ring = course.rings[idx];
+    const ax = ring.axis;
+    const axx = ring.x + ax.x * 60;
+    const ay = ring.y + 25;
+    const az = ring.z + ax.z * 60;
+    return Math.hypot(ps.x - axx, ps.y - ay, ps.z - az) < 600;
+  }
+
+  // v16: lane separation — each rival owns an altitude band and a
+  // lateral offset corridor, so the pack spreads across the sky
+  // instead of bunching on one line (Gemini v15: #3 stacked behind
+  // #5). The offset fades to zero near the ring (see the racing
+  // branch), so every rival still crosses its gate dead centre.
+  const LANES = [
+    { lat: -28, alt: 14 },
+    { lat: 24, alt: -10 },
+    { lat: -12, alt: 26 },
+    { lat: 34, alt: 6 },
+  ];
 
   const rivals = LIVERIES.map((liv, i) => {
     const api = buildPlane(THREE, { main: liv.main, accent: liv.accent });
@@ -147,7 +194,10 @@ export function createRivals(THREE, seed, islands, effects) {
     r.api.group.position.set(s.x, s.y, s.z);
     r.api.group.rotation.y = -s.yaw;
     r.api.group.rotation.x = s.pitch;
-    r.api.group.rotation.z = -s.roll;
+    // v16: the DISPLAYED bank caps at ~52° — the flight model's full
+    // 77° bank read as a plane on its side in the cockpit shot. The
+    // flight state is untouched; only the mesh leans less.
+    r.api.group.rotation.z = -Math.max(-0.9, Math.min(0.9, s.roll));
     // v15: the race-number marker floats 4.5 m above the plane in world
     // space (not rolled with the airframe) and hides with its plane.
     // (4.5 m, was 5.5 — with the smaller 3.5 m badge the marker sits
@@ -300,24 +350,31 @@ export function createRivals(THREE, seed, islands, effects) {
         } else if (r.name === 'ORANYE' && !r.crashed.clip && time >= RACE.clipCrashAt) {
           startSpin(r);
         } else if ((r.name === 'KUNING' || r.name === 'HIJAU') && !r.crashed.collision
-          && time >= RACE.collisionAt - 14) {
+          && (time >= RACE.collisionAt - 14 || (time >= 20 && nearAnchor(ps, pf, playerCourse)))) {
           // Converge on a point on the course AHEAD OF THE PLAYER, not a
-          // fixed ring: the player's ring + 3, 60 m past it, 25 m up.
+          // fixed ring: the player's ring + LEAD, 60 m past it, 25 m up.
           // v13 used fixed ring 11, so on a slow player line the blast
           // went off kilometres ahead (or behind) — the user never saw
           // it. A point tied to the player's live progress stays in
           // front of the player, wherever the player actually is.
           // The point is SHARED (see sharedMeetPoint above): the first
           // rival to converge fixes it, the partner reuses it.
-          // v14 fix 2: the converge starts at collisionAt - 14 (was -10)
-          // and the point is one ring further out (+3, was +2) — the diag
-          // showed the second rival arriving ~7 s after the player had
-          // already passed the point, so the pair needs the extra seconds
-          // and the extra ring of lead.
+          // v16 (fix, live probe run 8): the converge is PROXIMITY-
+          // triggered, not purely time-triggered. The pair stays
+          // 'racing' (rubber-banded near the player) until the player
+          // is within 600 m of the anchor, then converges — a short
+          // flight, so they are HOLDING when the player closes in. The
+          // 26.8 s time trigger stays as a backstop (the sim blast at
+          // ~34 s is unchanged: the sim player is not within 600 m of
+          // the anchor before 26.8 s). A pure time trigger stranded the
+          // pair: a fast straight player (A2, 83 m/s) passed ring 3 at
+          // ~22 s, but the pair only started converging at 26.8 s and
+          // arrived after the player had flown 2 km past the point.
           r.state = 'converging';
           r.stateT = 0;
           if (!sharedMeetPoint) {
-            const idx = Math.min(playerCourse.rings.length - 1, ps.ringsPassed + 3);
+            const lead = leadFor(ps, pf, playerCourse.rings);
+            const idx = Math.min(playerCourse.rings.length - 1, ps.ringsPassed + lead);
             const ring = playerCourse.rings[idx];
             const ax = ring.axis;
             sharedMeetPoint = { x: ring.x + ax.x * 60, y: ring.y + 25, z: ring.z + ax.z * 60 };
@@ -360,18 +417,24 @@ export function createRivals(THREE, seed, islands, effects) {
       } else if (r.state === 'holding') {
         // v15: keep the meeting point AHEAD of the player. If the player
         // has flown past it (behind them) or is still more than 400 m
-        // away, re-anchor it to the player's ring + 3 and send both
-        // rivals converging again — the blast waits for the player, it
-        // never goes off behind them or a kilometre away. In the clamped
-        // case (ring + 3 past the last ring) the anchor is 400 m ahead
-        // of the player instead — see the fix note below — because
-        // re-anchoring to ring 12 again would freeze the point behind a
-        // player who has already flown past it (seed 11: no blast in
-        // 120 s).
+        // away, re-anchor it to the player's ring + LEAD (bearing-based:
+        // 3 when the player faces ring + 3, 1 otherwise — see the
+        // converge note) and send both rivals converging again — the
+        // the anchor is 400 m ahead of the player instead — see the fix
+        // note below — because re-anchoring to ring 12 again would
+        // freeze the point behind a player who has already flown past
+        // it (seed 11: no blast in 120 s).
         const alongMp = (r.meetPoint.x - ps.x) * pf.x + (r.meetPoint.z - ps.z) * pf.z;
         const distMp = Math.hypot(ps.x - r.meetPoint.x, ps.y - r.meetPoint.y, ps.z - r.meetPoint.z);
-        // v15 (fix, seed 11): when the player's ring + 3 is past the last
-        // ring (ringsPassed >= 9), the ring index CLAMPS to ring 12 — so
+        // v16 (fix, live probe run 2): the player-relative re-anchor fires
+        // ONCE (lastRelAnchorAt < 0). Re-anchoring it every 10 s yanked
+        // the point away faster than the pair could fly to it, so a
+        // straight-flying player never saw the blast. After the one
+        // rel-anchor, the point moves only when it goes stale (player
+        // flew past it / >400 m away).
+        const needRel = time >= RACE.collisionPlayerRelAt && lastRelAnchorAt < 0;
+        // v15 (fix, seed 11): when the player's ring + LEAD is past the
+        // last ring (ringsPassed >= 12 - LEAD), the ring index CLAMPS
         // the re-anchor re-anchored to the SAME point the player had
         // just flown past, the rivals converged on a point behind the
         // player, and the blast could never fire in view (facing < 0,
@@ -382,12 +445,43 @@ export function createRivals(THREE, seed, islands, effects) {
         // in-view gates (100-400 m, facing > 0.6) can align during the
         // final approach. 400 m gives the rivals (~5 s to converge from
         // ~440 m) time to arrive before the player covers it (~6 s).
-        if ((distMp > 400 || alongMp < -50) && time < RACE.collisionFallbackAt) {
-          const clamped = ps.ringsPassed + 3 >= playerCourse.rings.length;
-          if (clamped) {
-            sharedMeetPoint = { x: ps.x + pf.x * 400, y: ps.y + 10, z: ps.z + pf.z * 400 };
+        // v16 (fix, live probe run 2): the 60 s re-anchor cap is GONE.
+        // A slow player passes their first ring after 60 s; with the cap
+        // the anchor froze behind them and the pair waited at a dead
+        // point forever. The re-anchor is bounded by player progress
+        // (12 rings) and by staleness, not by the clock.
+        if (distMp > 400 || alongMp < -50 || needRel) {
+          // v16: the player-relative anchor. From collisionPlayerRelAt
+          // on, the point is put 350 m AHEAD of the player (not on the
+          // course) — a human who flies straight off-course never comes
+          // within 250 m of a course-tied point, so the blast must come
+          // to them. 350 m (was 220 m): the player covers 220 m in ~4 s
+          // but the pair needs ~5 s to arrive from their holding point,
+          // so at 220 m the player had already passed the point when the
+          // pair got there. At 350 m the player needs ~6 s to reach it
+          // and the pair ~2-3 s, so the pair is holding, in view, when
+          // the player closes in.
+          // v16: bearing-based lead (same rule as the converge): 3 when
+          // the player faces ring + 3, 1 otherwise.
+          const lead = leadFor(ps, pf, playerCourse.rings);
+          const clamped = ps.ringsPassed + lead >= playerCourse.rings.length;
+          // v16 (fix): the player-relative anchor's altitude is CLAMPED
+          // to the course band (next ring + 80 m, or runway + 80 m when
+          // the course is done). Anchoring at the player's own altitude
+          // stranded the blast when a straight-flying player climbed
+          // (A2: player at 618 m, anchor at 633 m — the pair could never
+          // climb 480 m to it, so no blast in 85 s). The pair flies the
+          // course; the point must stay where they can reach it.
+          const nextRing = playerCourse.nextRing();
+          const courseY = nextRing ? nextRing.y : runway.height + 60;
+          const anchorY = Math.min(ps.y + 15, courseY + 80);
+          if (needRel) {
+            sharedMeetPoint = { x: ps.x + pf.x * 350, y: anchorY, z: ps.z + pf.z * 350 };
+            lastRelAnchorAt = time;
+          } else if (clamped) {
+            sharedMeetPoint = { x: ps.x + pf.x * 400, y: anchorY, z: ps.z + pf.z * 400 };
           } else {
-            const idx = Math.min(playerCourse.rings.length - 1, ps.ringsPassed + 3);
+            const idx = Math.min(playerCourse.rings.length - 1, ps.ringsPassed + lead);
             const ring = playerCourse.rings[idx];
             const ax = ring.axis;
             sharedMeetPoint = { x: ring.x + ax.x * 60, y: ring.y + 25, z: ring.z + ax.z * 60 };
@@ -437,6 +531,12 @@ export function createRivals(THREE, seed, islands, effects) {
         // kilometre away (the user's live playtest: the blast fired at
         // the 60 s / 800 m backstop, invisible). The backstop now needs
         // the player within 350 m AND roughly facing the blast.
+        // v16 (fix, live probe run 4): facing > 0.6 (≈53°) is WIDER
+        // than the chase camera's half-FOV (~35°), so the blast passed
+        // the gate at facing 0.7 (45° off-axis) and the fireball was
+        // OFF-FRAME — only a smoke wisp at the frame edge, 188 m away.
+        // The gates now need facing > 0.85 (≈32°), inside the frame,
+        // so the fireball is ON SCREEN when it fires.
         let blastDist = Infinity;
         let facing = -1;
         if (other) {
@@ -448,10 +548,10 @@ export function createRivals(THREE, seed, islands, effects) {
             facing = ((mx - ps.x) * pf.x + (mz - ps.z) * pf.z) / blastDist;
           }
         }
-        const inView = blastDist >= 100 && blastDist <= 400 && facing > 0.6;
+        const inView = blastDist >= 100 && blastDist <= 400 && facing > 0.85;
         const fire = other && rNear && oNear && inView
           && ((playerDist < RACE.collisionTriggerDist)
-            || (time >= RACE.collisionFallbackAt && playerDist < RACE.collisionCloseDist && facing > 0.5));
+            || (time >= RACE.collisionFallbackAt && playerDist < RACE.collisionCloseDist && facing > 0.85));
         // v15 (fix, seed 11): second-chance window. The normal gates
         // (both rivals within 80 m, blast 100-400 m ahead) assume the
         // pair settles at the meeting point before the player arrives.
@@ -468,8 +568,15 @@ export function createRivals(THREE, seed, islands, effects) {
         const oNearLate = other
           && Math.hypot(other.flight.state.x - r.meetPoint.x, other.flight.state.y - r.meetPoint.y, other.flight.state.z - r.meetPoint.z) < 130;
         const lateFire = other && rNearLate && oNearLate && time >= 45
-          && blastDist >= 50 && blastDist <= 400 && facing > 0.6 && playerDist < 350;
-        if (fire || lateFire) {
+          && blastDist >= 50 && blastDist <= 400 && facing > 0.85 && playerDist < 350;
+        // v16: the player-relative fire. The point was anchored 350 m
+        // ahead of the player, so no playerDist gate is needed — the
+        // in-view gates (50-400 m ahead, facing the blast) ARE the
+        // guarantee the fireball fills the windshield. This is what
+        // makes the blast visible to a human who flies straight.
+        const relFire = other && rNearLate && oNearLate && time >= RACE.collisionPlayerRelAt
+          && blastDist >= 50 && blastDist <= 400 && facing > 0.85;
+        if (fire || lateFire || relFire) {
           // The collision: big dark-smoke fireball at the midpoint, and
           // BOTH airframes torn in two, tumbling away burning. The other
           // rival is switched to tumbling here too, so the blast only
@@ -479,7 +586,9 @@ export function createRivals(THREE, seed, islands, effects) {
           const mx = (s.x + os.x) / 2;
           const my = (s.y + os.y) / 2;
           const mz = (s.z + os.z) / 2;
-          effects.explode(mx, my, mz, true);
+          // v16: a CHAIN blast — two staggered follow-up fireballs, so
+          // the collision blooms as 2-3 distinct fireballs in depth.
+          effects.explodeChain(mx, my, mz, true);
           for (const [rv, st] of [[r, s], [other, os]]) {
             effects.explodeSplit(st.x, st.y, st.z, st.yaw, { body: rv.livery.main, accent: rv.livery.accent });
             const f = forwardOf(st.yaw);
@@ -526,7 +635,16 @@ export function createRivals(THREE, seed, islands, effects) {
         s.y += r.vel.y * dt;
         emitSmoke(r, dt);
         if (s.y <= groundAt(s.x, s.z) + 2) {
-          effects.explode(s.x, Math.max(1, groundAt(s.x, s.z) + 1), s.z, false);
+          const g = groundAt(s.x, s.z);
+          effects.explode(s.x, Math.max(1, g + 1), s.z, false);
+          // v16: a sea impact throws a splash crown and leaves a
+          // burning oil slick drifting on the waves (Gemini's v16
+          // build prompt) — the wreck, the smoke column, the splash
+          // and the slick together mark where the rival went down.
+          if (g <= 2) {
+            effects.splash(s.x, s.z);
+            effects.oilSlick(s.x, s.z);
+          }
           hide(r, RACE.respawnDelay);
         }
       } else if (r.state === 'tumbling') {
@@ -566,6 +684,19 @@ export function createRivals(THREE, seed, islands, effects) {
           if (onShake) onShake(0.18);
         }
         r.prevAlong = along;
+        // v16: the ace's slipstream — white streak puffs off the tail
+        // while BIRU cuts across, so the flyby reads as speed, not a
+        // teleport. (The racing branch's coloured trail is 0.25 s; the
+        // flyby streaks every 0.1 s, brighter and white.)
+        r.trailT += dt;
+        if (r.trailT >= 0.1) {
+          r.trailT = 0;
+          const f2 = forwardOf(s.yaw);
+          effects.smokePuff(s.x - f2.x * 4, s.y - 0.1, s.z - f2.z * 4, 1.2, {
+            color: 0xffffff, life: 0.9, grow: 0.8,
+            vel: { x: -f2.x * 8, y: 0.2, z: -f2.z * 8 }, opacity: 0.45,
+          });
+        }
         const ev = r.flight.step(dt, autopilotTo(r.flight, target, distToTarget < 60 ? 0.7 : 0.95, groundAt), groundAt, runway);
         if (time > RACE.flybyAt + 3) {
           // Back to racing — but the flyby flew BIRU off its course, so
@@ -613,7 +744,20 @@ export function createRivals(THREE, seed, islands, effects) {
           // passes its rings and keeps up with the player.
           const weaveAmp = Math.min(12, distRing * 0.05);
           const weave = Math.sin(time * 0.6 + r.weavePhase) * weaveAmp;
-          target = { x: next.x + px * weave, y: next.y, z: next.z + pz * weave, axis: next.axis };
+          // v16: lane separation — the rival's altitude band and lateral
+          // corridor, scaled by distance so it is full 300 m out and
+          // zero at the gate (a 26 m altitude offset at the ring would
+          // miss the 13 m gate entirely). Mid-leg the pack reads spread
+          // across the sky; on final every rival aims dead centre.
+          const lane = LANES[rivals.indexOf(r)];
+          const laneScale = Math.min(1, distRing / 300);
+          const laneOff = lane.lat * laneScale;
+          target = {
+            x: next.x + px * (weave + laneOff),
+            y: next.y + lane.alt * laneScale,
+            z: next.z + pz * (weave + laneOff),
+            axis: next.axis,
+          };
         } else {
           // Course finished: hold in a wide orbit around the runway.
           // Rivals never land — the player's landing is the only one
@@ -732,7 +876,9 @@ export function createRivals(THREE, seed, islands, effects) {
       syncMesh(r);
     }
     // v14: the shared collision point resets with the pack.
+    // v16: the player-relative re-anchor clock resets too.
     sharedMeetPoint = null;
+    lastRelAnchorAt = -999;
   }
 
   for (const r of rivals) syncMesh(r);

@@ -18,6 +18,7 @@ import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
 import { createRivals } from './rivals.js';
 import { createEffects } from './effects.js';
+import { createStorm } from './storm.js';
 import { ACTION_CAMERA, ACTION_CONFIRM, ACTION_MUTE, ACTION_PAUSE, ACTION_RESTART, createInput } from './input.js';
 import { stageShot, autopilotTo } from './shots.js';
 
@@ -53,11 +54,14 @@ const audio = createAudio();
 const effects = createEffects(THREE, renderer.scene);
 const rivals = createRivals(THREE, seed, islands, effects);
 renderer.scene.add(rivals.group);
+// v16: the storm battle — tornado, storm wall, rain, lightning, flak.
+const storm = createStorm(THREE, seed, course, islands, terrain.groundAt, effects);
+renderer.scene.add(storm.group);
 
 // v14: debug handles for the probe (probe-v14.mjs) — the live world, the
 // autopilot helper and a log of race events (collisions, with time and
 // position), so a full run can be verified from outside the page.
-window.__debug = { flight, course, terrain, rivals, effects };
+window.__debug = { flight, course, terrain, rivals, effects, storm };
 window.__autopilotTo = autopilotTo;
 window.__raceEvents = [];
 window.__scene = renderer.scene;
@@ -80,6 +84,17 @@ function saveBest(value) {
 
 function hudView() {
   const s = flight.state;
+  // v16: bearing to the next ring (degrees, 0 = straight ahead) for
+  // the HUD ring pointer; null once the course is done.
+  const next = course.nextRing();
+  let ringDir = null;
+  if (next) {
+    const desired = Math.atan2(next.x - s.x, -(next.z - s.z));
+    let diff = (desired - s.yaw) * 180 / Math.PI;
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+    ringDir = diff;
+  }
   return {
     heading: headingOf(s.yaw),
     pitch: s.pitch,
@@ -95,6 +110,8 @@ function hudView() {
     pos: rivals.playerPosition(flight, course),
     nextDist: course.distanceToNext(s.x, s.y, s.z),
     stalled: s.stalled,
+    ringDir,
+    ringNum: s.ringsPassed + 1,
   };
 }
 
@@ -106,6 +123,9 @@ function runShot(name) {
     rivals.update(dt, t, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp),
       (kind, detail) => window.__raceEvents.push({ kind, time: t, ...detail }));
     effects.update(dt);
+    // v16: the storm lives on the same staged clock — the cover
+    // catches the tornado, the rain and the flak at the right age.
+    storm.update(dt, t);
   });
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
@@ -168,6 +188,12 @@ function runShot(name) {
 
 function runGame() {
   const input = createInput(canvas);
+  // v16: the canvas takes keyboard focus at boot, so Space restarts the
+  // run without a canvas click first (v15 playtest: Space sometimes did
+  // nothing until the canvas was clicked — the Start button kept the
+  // focus). Focus returns to the canvas on every start and game over
+  // too (see startGame/endGame).
+  canvas.focus();
   // v15: expose the live input for the probe — the deterministic W/S key
   // test dispatches real keydown events and reads pitch() back, so the
   // key mapping itself (not just the flight model) is verified end to end.
@@ -218,6 +244,9 @@ function runGame() {
     renderer.setFov(65);
     renderer.setChase(16, 0, 4.5);
     audio.start();
+    // v16: focus the canvas, so Space (restart) works without a click
+    // even after the Start button was clicked.
+    canvas.focus();
     announce('Flying. Twelve rings, then land on the runway.');
     hud.showMessage('FLY THROUGH RING 1', 3);
   }
@@ -276,6 +305,8 @@ function runGame() {
     }
     hud.setOverLines(lines);
     hud.showPanel('over');
+    // v16: focus the canvas, so Space restarts without a click first.
+    canvas.focus();
   }
 
   function handleActions() {
@@ -313,6 +344,9 @@ function runGame() {
       // start line in the air behind the panel).
       rivals.group.visible = false;
       effects.update(STEP);
+      // v16: the storm drifts behind the title too, so the title screen
+      // shows the tornado and the rain while the plane orbits.
+      storm.update(STEP, titleTime);
       const s = flight.state;
       const prev = { x: s.x, y: s.y, z: s.z };
       s.yaw += 0.12 * STEP;
@@ -327,9 +361,13 @@ function runGame() {
     }
     const s = flight.state;
     const prev = { x: s.x, y: s.y, z: s.z };
+    // v16: storm gusts buffet the stick in live play only (the staged
+    // sim never passes through here, so sim scores do not move).
+    const gust = storm.gustAt(s.elapsed);
+    const clamp1 = (v) => Math.max(-1, Math.min(1, v));
     const events = flight.step(STEP, {
-      pitch: input.pitch(),
-      roll: input.roll(),
+      pitch: clamp1(input.pitch() + gust.pitch),
+      roll: clamp1(input.roll() + gust.roll),
       yaw: input.yaw(),
       throttle: input.throttle(),
     }, terrain.groundAt, course.runway);
@@ -365,6 +403,7 @@ function runGame() {
         }
       });
     effects.update(STEP);
+    storm.update(STEP, s.elapsed);
     audio.update(s.throttle, s.speed);
   }
 
@@ -383,7 +422,11 @@ function runGame() {
       // v14: the effects keep advancing on the game-over screen, so the
       // finish fireworks and confetti animate behind the results panel
       // instead of freezing on their first frame.
-      if (screen === 'over') effects.update(1 / 60);
+      // v16: the storm keeps moving there too.
+      if (screen === 'over') {
+        effects.update(1 / 60);
+        storm.update(1 / 60, flight.state.elapsed);
+      }
     }
     hud.update(hudView(), 1 / 60);
     // v15: the live draw gets the rivals too, so their blob shadows track

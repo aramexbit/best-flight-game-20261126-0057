@@ -107,6 +107,33 @@ export function createCourse(random, seed, islands) {
     throttle: 0.7,
   };
 
+  // v16: leg clearance — the v15 live playtest crashed into a hill 4 s
+  // after start: the spawn-to-ring-1 straight line crossed a ridge
+  // higher than both endpoints (the ring floor only clears the ground
+  // AT the ring, and the spawn sits 10 m above ring 1). Sample every
+  // leg; if the terrain under the straight line rises within 45 m of
+  // it, lift the destination ring so the line clears. The spawn follows
+  // ring 1 up, so the first leg starts above the ridge too. Capped at
+  // +120 m per ring, so no ring floats absurdly high.
+  {
+    const pts = [{ x: spawn.x, y: spawn.y, z: spawn.z }, ...rings];
+    for (let i = 1; i < pts.length; i += 1) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      let lift = 0;
+      for (let k = 1; k < 8; k += 1) {
+        const t = k / 8;
+        const gx = a.x + (b.x - a.x) * t;
+        const gz = a.z + (b.z - a.z) * t;
+        const lineY = a.y + (b.y - a.y) * t;
+        const need = islandHeightAt(islands, seed, gx, gz) + 45 - lineY;
+        if (need > lift) lift = need;
+      }
+      if (lift > 0) rings[i - 1].y += Math.min(120, lift);
+    }
+    spawn.y = rings[0].y + 10;
+  }
+
   // Face every ring along the leg that flies into it, so the opening is square
   // to the approach instead of tilted away from it.
   for (let i = 0; i < rings.length; i += 1) {

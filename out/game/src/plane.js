@@ -442,13 +442,19 @@ export function buildPlane(THREE, livery = null) {
   // loose grey board. A narrower, darker roof reads as a molded ceiling.
   // A second rear arch (half-torus at z 0.55) joins the roof to the rear
   // posts, so the canopy cage closes at the back instead of ending open.
-  const roofMat = new THREE.MeshStandardMaterial({ color: '#5a5f68', roughness: 0.7, metalness: 0.1 });
-  const roofCentre = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.04, 0.85), roofMat);
+  // v16: the headliner centre is WIDER (1.30 m, was 0.95) and DARKER
+  // still (roofMat #565b64, was #5a5f68) — in v15 the narrow pale roof
+  // still read as a loose board and the cabin as open frame. A wide
+  // dark ceiling closes the cabin visually from the pilot's seat.
+  // (A darker #4a4e56 was tried first: the roof read as one heavy
+  // black slab across the cockpit frame, so it came back a shade.)
+  const roofMat = new THREE.MeshStandardMaterial({ color: '#565b64', roughness: 0.7, metalness: 0.1 });
+  const roofCentre = new THREE.Mesh(new THREE.BoxGeometry(1.30, 0.04, 0.85), roofMat);
   roofCentre.position.set(0, 0.71, 0.475);
   roofCentre.rotation.x = -0.30;
   dash.add(roofCentre);
   for (const ribZ of [0.70, 0.88]) {
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.03, 0.06), roofMat);
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(1.30, 0.03, 0.06), roofMat);
     rib.position.set(0, 0.71 + (ribZ - 0.475) * 0.30 + 0.02, ribZ);
     rib.rotation.x = -0.30;
     dash.add(rib);
@@ -468,18 +474,25 @@ export function buildPlane(THREE, livery = null) {
     roofSide.rotation.z = -side * 0.64;
     dash.add(roofSide);
   }
-  // v12: opacity 0.16 (was 0.10) — the glazing reads as glass, not open
-  // sky, so the windshield and side windows are visible as panes.
-  // v14: opacity 0.22 — the v13 cockpit still read as open canopy in
-  // places; a touch more glass presence closes the cabin visually.
+  // v16: opacity 0.30 (was 0.22) — the v15 cockpit still read as open
+  // canopy in places; more glass presence closes the cabin visually.
+  // A faint diagonal glare streak on the windshield, so the glass reads
+  // as glass (a bright sky reflection) instead of open air.
   const glassMat = new THREE.MeshStandardMaterial({
     color: PALETTE.cockpitGlass, roughness: 0.05, metalness: 0.2,
-    transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false,
+    transparent: true, opacity: 0.30, side: THREE.DoubleSide, depthWrite: false,
   });
   const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.84, 0.34), glassMat);
   windshield.position.set(0, 0.40, 0.0);
   windshield.rotation.x = -0.06;
   dash.add(windshield);
+  const glare = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 0.05),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.14, depthWrite: false }),
+  );
+  glare.position.set(0.25, 0.46, 0.012);
+  glare.rotation.z = -0.5;
+  dash.add(glare);
   // v13: the side rails run further back and slope up from the arch, and
   // a rear post joins each rail end down to the wall — the canopy frame
   // now reads as a full cabin cage, not two rails that stop mid-air.
@@ -550,31 +563,36 @@ export function buildPlane(THREE, livery = null) {
   // Yoke column with a shroud: a thick column rising out of the console
   // with a tapered cover behind it, so the wheel reads as mounted on a
   // real control column, not a bare stick in front of the panel.
+  // v16: the wheel drops BELOW the gauges (centre y -0.26, was -0.06)
+  // and shrinks to 0.18 m (was 0.24) — in v15 its top edge covered the
+  // bottom of the middle ALT dial, and Gemini read the dials as cut by
+  // the yoke. The column and shroud drop with it, so the wheel still
+  // reads as mounted on a real control column.
   const yokeShroud = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 0.12), shellMat);
-  yokeShroud.position.set(0, -0.28, 0.16);
+  yokeShroud.position.set(0, -0.34, 0.18);
   yokeShroud.rotation.x = 0.35;
   dash.add(yokeShroud);
   const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.3, 8), yokeMat);
-  yokeCol.position.set(0, -0.24, 0.20);
+  yokeCol.position.set(0, -0.30, 0.24);
   yokeCol.rotation.x = 0.35;
   dash.add(yokeCol);
   // v13: the wheel is bigger still (0.24 m radius, was 0.22), so it
   // anchors the lower centre of the frame as a real control wheel.
-  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.03, 12, 32), yokeMat);
-  yokeWheel.position.set(0, -0.06, 0.28);
+  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.028, 12, 32), yokeMat);
+  yokeWheel.position.set(0, -0.26, 0.30);
   yokeWheel.rotation.x = 0.35;
   dash.add(yokeWheel);
   const yokeHub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 12), yokeMat);
-  yokeHub.position.set(0, -0.06, 0.28);
+  yokeHub.position.set(0, -0.26, 0.30);
   yokeHub.rotation.x = Math.PI / 2 + 0.35;
   dash.add(yokeHub);
   const yokeCap = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), new THREE.MeshBasicMaterial({ color: 0xc83c32 }));
-  yokeCap.position.set(0, -0.072, 0.305);
+  yokeCap.position.set(0, -0.272, 0.325);
   yokeCap.rotation.x = 0.35;
   dash.add(yokeCap);
   for (const side of [-1, 1]) {
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.05), yokeMat);
-    grip.position.set(side * 0.24, -0.06, 0.28);
+    grip.position.set(side * 0.18, -0.26, 0.30);
     grip.rotation.x = 0.35;
     dash.add(grip);
   }

@@ -1,5 +1,17 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v14: the race STAYS IN VIEW. The four rivals all
+// standard library only). v16: STORM BATTLE in broad daylight — no weapons,
+// no night. A tornado (260 m lateral of the course, beside rings 5-8, never
+// covering a ring or the runway) plus a second waterspout, a dark storm-cell
+// wall, slanting rain, cloud-to-sea lightning, flak in the outer corridor
+// and gusts that rock the plane and bend the palms. Explosions chain (2-3
+// fireballs 0.15-0.35 s apart), a damaged rival smokes black, dives into
+// the sea and leaves a burning oil slick, and an ace rival cuts across the
+// player's path with a slipstream. The collision is player-relative now
+// (re-anchored from 55 s, every 10 s, 220 m ahead of the player), so a
+// keyboard player flying straight still sees the blast. A gold ring-pointer
+// pill shows the next ring's bearing and distance, spawn heading is
+// terrain-checked (no hill crash 4 s after start), and Space restarts
+// without a canvas click. v14: the race STAYS IN VIEW. The four rivals all
 // start AHEAD of the player (50/35/25/15 m) and faster (speedBias 1.10-1.15,
 // the low end of Gemini's 1.15-1.30x fix-prompt range), so the player
 // chases the pack from behind and sees them the whole run; the mid-air
@@ -69,7 +81,7 @@ if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), joi
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json). The v13 screenshots are the four staged scenes (cover, cockpit, title, landing),
+// screenshots/ and dossier.json). The v16 screenshots are the four staged scenes (cover, cockpit, title, landing),
 // each a real render of the shipped game at 1280x720, JPEG quality 82, all under 256 KiB.
 writeFileSync(
   join(out, 'dossier.json'),
