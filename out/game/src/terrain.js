@@ -53,7 +53,9 @@ function islandHeight(islands, fbm, x, z) {
     const detail = 0.62 + 0.38 * fbm(x * 0.0016 + i * 7.3, z * 0.0016 - i * 3.1, 3);
     // v3: a second, higher-frequency detail term, so the big smooth bump breaks
     // into distinct low-poly hills instead of one unbroken green dome.
-    const detail2 = 0.85 + 0.15 * fbm(x * 0.006 + i * 3.7, z * 0.006 - i * 5.9, 2);
+    // v11: a touch softer (0.88 + 0.12, was 0.85 + 0.15) — the hills stay
+    // smooth and rolling with texture, not lumpy noise.
+    const detail2 = 0.88 + 0.12 * fbm(x * 0.006 + i * 3.7, z * 0.006 - i * 5.9, 2);
     // v4: a ridged term, so the hills grow real crests and valleys instead of
     // smooth domes — the skyline reads as terrain with shape, not a coloured
     // mound. Kept small (±10%) so the course and the runway stay valid.
@@ -190,18 +192,24 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // sooner, so they no longer sit as flat dark-green slabs in the foreground.
     // v4: the sand band's upper edge wavers with the noise, so the beach is a
     // wavy shoreline instead of a straight contour line.
+    // v11: layered coastline — a darker wet-sand band right at the waterline,
+    // then dry sand, then a wider 16 m sand-to-grass blend, so the shore
+    // reads as stacked beach tiers instead of one flat sand ring.
     const beachTop = 8 + 5 * fbm(x * 0.008 + 9.1, z * 0.008 - 4.4, 2);
-    if (h < 2.5) tmp.copy(sand).offsetHSL(0, 0.05, -0.08);
+    if (h < 1.2) tmp.copy(sand).offsetHSL(0, 0.08, -0.14);
+    else if (h < 2.5) tmp.copy(sand).offsetHSL(0, 0.05, -0.08);
     else if (h < beachTop) tmp.copy(sand);
     // v5: a sand-to-grass gradient band above the beach, so the beach-to-grass
     // edge is a soft blend instead of the abrupt hard line the v4 shots showed.
-    else if (h < beachTop + 10) tmp.copy(sand).lerp(grass, (h - beachTop) / 10);
+    else if (h < beachTop + 16) tmp.copy(sand).lerp(grass, (h - beachTop) / 16);
     else if (h < 150) {
       // v3: light-grass patches break the flat green, then forest in the folds.
       // v6: a finer patchwork on top — dry-grass patches at ~25 m scale and a
       // high-frequency mottle with a hue shift, so the ground reads as
       // textured island grass from the air instead of one smooth green wash
       // (Gemini v5: "a bare heightmap test").
+      // v11: the high-frequency detail is a touch softer, so the hills read
+      // as smooth rolling green with texture, not lumpy noise.
       tmp.copy(grass).lerp(grassLight, Math.max(0, fbm(x * 0.006 + 4.2, z * 0.006 - 2.8, 2)) * 0.6);
       tmp.lerp(forest, Math.max(0, fbm(x * 0.004, z * 0.004, 2)) * 0.7);
       const dry = Math.max(0, fbm(x * 0.018 + 11.7, z * 0.018 - 6.3, 2));
@@ -543,16 +551,25 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   for (let i = 0; i < seaPos.count; i += 1) {
     const sx = seaPos.getX(i);
     const sz = seaPos.getZ(i);
-    const depth = -groundAt(sx, sz); // positive where the land is below sea level
-    if (depth < 3) seaTmp.copy(seaShallow);
-    else if (depth < 12) seaTmp.copy(seaShallow).lerp(seaMid, (depth - 3) / 9);
-    else if (depth < 40) seaTmp.copy(seaMid).lerp(seaDeep, (depth - 12) / 28);
+    // v11: real depth from shore distance. The old depth (-groundAt) could
+    // never go positive — the terrain never dips below sea level — so the
+    // mid/deep branches were dead code and the whole sea was one flat
+    // turquoise wash. Shore distance gives a true gradient: bright
+    // turquoise at the beach, deeper azure offshore, like the mockup.
+    let dShore = Infinity;
+    for (const isl of islands) {
+      dShore = Math.min(dShore, Math.hypot(sx - isl.x, sz - isl.z) - isl.radius);
+    }
+    const depth = Math.max(0, dShore);
+    if (depth < 40) seaTmp.copy(seaShallow);
+    else if (depth < 160) seaTmp.copy(seaShallow).lerp(seaMid, (depth - 40) / 120);
+    else if (depth < 450) seaTmp.copy(seaMid).lerp(seaDeep, (depth - 160) / 290);
     else seaTmp.copy(seaDeep);
-    // v5: reef lines — a darker teal band at 4-9 m depth, following the depth
-    // contour, so the shallows show reef stripes running parallel to the shore
-    // instead of one flat turquoise wash.
-    if (depth >= 4 && depth <= 9) {
-      const band = 1 - Math.abs(depth - 6.5) / 2.5;
+    // v5: reef lines — a darker teal band 60-140 m offshore, following the
+    // shore, so the shallows show reef stripes running parallel to the
+    // coast instead of one flat turquoise wash.
+    if (depth >= 60 && depth <= 140) {
+      const band = 1 - Math.abs(depth - 100) / 40;
       seaTmp.lerp(reefColor, band * 0.65);
     }
     seaColors[i * 3] = seaTmp.r;
@@ -564,6 +581,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // depth colours and only adds grain. The v5 sea was one flat turquoise
   // wash (Gemini: "flat, untextured teal water"); the speckle gives the
   // water a surface instead of a solid fill.
+  // v11: soft wave arcs over the speckle — faint white and teal curves, so
+  // the sea carries subtle wave patterns and visual depth instead of only
+  // grain (the redesign prompt's "subtle wave patterns and visual depth").
   const seaTex = (() => {
     const c = document.createElement('canvas');
     c.width = 128;
@@ -577,6 +597,17 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       ctx.fillStyle = v > 0 ? `rgba(255,255,255,${v})` : `rgba(0,0,0,${-v})`;
       ctx.fillRect(rnd.int(0, 128), rnd.int(0, 128), 1, 1);
     }
+    for (let w = 0; w < 42; w += 1) {
+      const wx = rnd.range(0, 128);
+      const wy = rnd.range(0, 128);
+      const wr = rnd.range(6, 22);
+      const wa = rnd.range(0.04, 0.09);
+      ctx.strokeStyle = rnd.next() < 0.6 ? `rgba(255,255,255,${wa})` : `rgba(10,90,120,${wa})`;
+      ctx.lineWidth = rnd.range(1.5, 3);
+      ctx.beginPath();
+      ctx.arc(wx, wy, wr, rnd.range(0, 3), rnd.range(3.2, 6.2));
+      ctx.stroke();
+    }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.RepeatWrapping;
@@ -585,7 +616,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     return tex;
   })();
   const sea = new THREE.Mesh(seaGeo, new THREE.MeshStandardMaterial({
-    vertexColors: true, map: seaTex, roughness: 0.3, metalness: 0.12, transparent: true, opacity: 0.92,
+    vertexColors: true, map: seaTex, roughness: 0.22, metalness: 0.2, transparent: true, opacity: 0.92,
   }));
   sea.position.y = 0.6;
   group.add(sea);
@@ -602,11 +633,14 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const palmTrunkGeo = new THREE.CylinderGeometry(0.09, 0.16, 2.4, 6);
   const canopyGeo = new THREE.IcosahedronGeometry(1, 0);
   const canopyMats = [
-    new THREE.MeshStandardMaterial({ color: '#2f7a38', roughness: 0.9 }),
-    new THREE.MeshStandardMaterial({ color: '#3f9142', roughness: 0.9 }),
-    new THREE.MeshStandardMaterial({ color: '#57a04a', roughness: 0.9 }),
+    // v11: more vivid greens (#35A03C, #4CB84A, #6BCB55) to match the
+    // redesign prompt's fresh vivid green — the old canopy greens were
+    // muted against the new bright grass.
+    new THREE.MeshStandardMaterial({ color: '#35A03C', roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: '#4CB84A', roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: '#6BCB55', roughness: 0.9 }),
     // v5: a dark jungle green for the dense canopy clusters.
-    new THREE.MeshStandardMaterial({ color: '#1f5c28', roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: '#24803A', roughness: 0.9 }),
   ];
   // A palm frond: a long tapered leaf with a droop curve baked into the
   // vertices, so it hangs from the crown instead of lying flat like a fan.
@@ -626,10 +660,17 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const frondMat = new THREE.MeshStandardMaterial({
     color: '#3f9142', roughness: 0.9, side: THREE.DoubleSide,
   });
+  // v11: a second, brighter frond material for the upper crown, so the palm
+  // reads as layered tropical foliage instead of one flat green fan.
+  const frondMat2 = new THREE.MeshStandardMaterial({
+    color: '#57b25a', roughness: 0.9, side: THREE.DoubleSide,
+  });
   const rockGeo = new THREE.IcosahedronGeometry(1, 0);
   const rockMats = [
     new THREE.MeshStandardMaterial({ color: '#8a8378', roughness: 0.95 }),
     new THREE.MeshStandardMaterial({ color: '#7a6a5e', roughness: 0.95 }),
+    // v11: a warm sandstone for varied low-poly rock formations.
+    new THREE.MeshStandardMaterial({ color: '#9a8f7a', roughness: 0.95 }),
   ];
   const bushGeo = new THREE.IcosahedronGeometry(1, 0);
   const bushMat = new THREE.MeshStandardMaterial({ color: '#2a6b32', roughness: 0.95 });
@@ -735,6 +776,23 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       frond.rotation.z = -0.28;
       arm.add(frond);
     }
+    // v11: a second, upper tier of shorter, brighter fronds with a steeper
+    // droop, so the palm crown reads as a full layered tropical canopy
+    // instead of one flat ring of leaves.
+    const crown2 = new THREE.Group();
+    crown2.position.set(lean * 0.4 * s, 4.85 * s, 0);
+    palm.add(crown2);
+    for (let f = 0; f < 5; f += 1) {
+      const a = (f / 5) * Math.PI * 2 + vegRandom.range(-0.3, 0.3) + 0.4;
+      const arm = new THREE.Group();
+      arm.rotation.y = -a;
+      crown2.add(arm);
+      const frond = new THREE.Mesh(frondGeo, frondMat2);
+      frond.scale.setScalar(s * 0.72);
+      frond.position.set(0.95 * s, 0.1 * s, 0);
+      frond.rotation.z = -0.55;
+      arm.add(frond);
+    }
     // A small coconut bunch under the crown.
     const nuts = new THREE.Mesh(
       new THREE.SphereGeometry(0.22, 8, 6),
@@ -754,10 +812,14 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
 
   /** An angular low-poly boulder, grey or brown, half-sunk into the ground. */
   function plantRock(px, pz, ph, s) {
-    const rock = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+    // v11: one in five rocks stands tall (up to 1.6x height) — a standing
+    // stone among the low boulders, so rock formations vary instead of
+    // every stone reading as the same squashed lump.
+    const tall = vegRandom.range(0, 1) < 0.2;
+    const rock = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 2)]);
     rock.scale.set(
       s * vegRandom.range(0.8, 1.6),
-      s * vegRandom.range(0.55, 1.1),
+      s * vegRandom.range(0.55, tall ? 1.6 : 1.1),
       s * vegRandom.range(0.8, 1.6),
     );
     rock.position.set(px, meshHeight(px, pz) + 0.08 * s, pz);
@@ -767,7 +829,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // v7: half the boulders grow a smaller satellite stone leaning on them,
     // so a rock reads as a textured cluster instead of one lone faceted lump.
     if (vegRandom.range(0, 1) < 0.5) {
-      const sat = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+      const sat = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 2)]);
       const ss = s * vegRandom.range(0.35, 0.6);
       sat.scale.set(ss, ss * vegRandom.range(0.6, 0.9), ss);
       sat.position.set(px + vegRandom.range(-1.2, 1.2) * s, meshHeight(px, pz) + 0.15 * s, pz + vegRandom.range(-1.2, 1.2) * s);
@@ -1030,7 +1092,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         shoreRocks += 1;
       } else if (ph >= -6 && ph < 0) {
         // Reef rock: pokes out of the shallows just offshore.
-        const reef = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+        const reef = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 2)]);
         const s = vegRandom.range(2, 4);
         reef.scale.set(s * vegRandom.range(0.8, 1.4), s * vegRandom.range(0.5, 0.9), s * vegRandom.range(0.8, 1.4));
         reef.position.set(px, 1.6, pz);
@@ -1093,7 +1155,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const ph = groundAt(px, pz);
       if (ph < 2 || ph > 25) continue;
       if (!clearOfRunway(px, pz)) continue;
-      const cliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+      const cliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 2)]);
       cliff.scale.set(
         vegRandom.range(6, 14),
         vegRandom.range(8, 18),
@@ -1110,7 +1172,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         const nz = isl.z + Math.sin(na) * cr + vegRandom.range(-10, 10);
         const nph = groundAt(nx, nz);
         if (nph >= 2 && nph <= 25 && clearOfRunway(nx, nz)) {
-          const ncliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+          const ncliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 2)]);
           ncliff.scale.set(
             vegRandom.range(4, 9),
             vegRandom.range(6, 13),
@@ -1301,10 +1363,14 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   sun.position.copy(sunDir).multiplyScalar(3900);
   sun.lookAt(0, 0, 0);
   group.add(sun);
-  const sunLight = new THREE.DirectionalLight(0xfff2dd, 2.4);
+  const sunLight = new THREE.DirectionalLight(0xfff2dd, 2.6);
   sunLight.position.copy(sunDir).multiplyScalar(1200);
   group.add(sunLight);
-  group.add(new THREE.HemisphereLight(0xbfd9ff, 0x4a8a4a, 1.0));
+  // v11: a warmer, less green bounce from the ground (was #4a8a4a) — the
+  // old green hemisphere tinted the cloud undersides green in the cockpit
+  // shot — and a touch more sky light (1.1, was 1.0) for the bright
+  // premium daytime grade.
+  group.add(new THREE.HemisphereLight(0xbfd9ff, 0x6f7f5e, 1.1));
 
   // --- Clouds (v10): stylised cumulus clusters, rebuilt from scratch.
   // The v9 clouds were smooth flattened ellipsoids (detail-2 icosahedra
@@ -1357,23 +1423,33 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const cloud = new THREE.Group();
     // Base lobes: bottoms all on the same plane (y = ry), so the
     // underside is flat by construction; tops at different heights.
-    const baseLobes = 4 + cloudRandom.int(0, 2);
+    // v11: rounder, fluffier lobes (0.75-0.95 tall, was 0.6-0.85) and one
+    // more base lobe per cloud — soft, fluffy, rounded low-poly masses,
+    // not flattened pills. The multi-lobe cluster structure stays.
+    // v11 (iterasi 2): the lobes spread wider (±18 m, was ±14) — the first
+    // v11 shots still showed the distant clouds as isolated round puffs;
+    // a wider, flatter cluster reads as a cumulus at distance, while the
+    // rounder lobes keep it soft up close.
+    const baseLobes = 5 + cloudRandom.int(0, 2);
     for (let p = 0; p < baseLobes; p += 1) {
       const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
       const rx = cloudRandom.range(45, 75);
-      const ry = rx * cloudRandom.range(0.6, 0.85);
+      const ry = rx * cloudRandom.range(0.75, 0.95);
       const rz = rx * cloudRandom.range(0.8, 1.1);
       lobe.scale.set(rx, ry, rz);
       lobe.position.set(
-        cloudRandom.range(-14, 14),
+        cloudRandom.range(-18, 18),
         ry * cloudRandom.range(0.9, 1.1),
-        cloudRandom.range(-10, 10),
+        cloudRandom.range(-12, 12),
       );
       lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
       cloud.add(lobe);
     }
     // Top lobes: smaller, piled on the base layer for a bumpy skyline.
-    const topLobes = 2 + cloudRandom.int(0, 1);
+    // v11: 3-4 top lobes (was 2-3) — fuller secondary puffs, so even the
+    // small distant clouds read as multi-lobe clusters instead of lone
+    // puffs (Gemini v10 fix 3).
+    const topLobes = 3 + cloudRandom.int(0, 2);
     for (let p = 0; p < topLobes; p += 1) {
       const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
       const rx = cloudRandom.range(25, 45);
@@ -1423,10 +1499,152 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     group.add(cloud);
   }
 
+  // v11: scene props from the title mockup — white sailboats gliding on
+  // the bay, a red-and-white lighthouse on the farthest island's shore,
+  // and two low beach houses near the spawn beach. All on their own random
+  // stream (seed + 777), so the vegetation RNG — and every planted grove —
+  // is untouched. All sit well clear of the course polyline and the runway
+  // clear zone, and none of them enters the flight model: they are pure
+  // scenery, the plane flies 150 m above them.
+  const propRandom = createRandom(seed + 777);
+  const boats = [];
+  let boatTime = 0;
+  {
+    const hullMat = new THREE.MeshStandardMaterial({ color: '#f2ede6', roughness: 0.6 });
+    const mastMat = new THREE.MeshStandardMaterial({ color: '#6b4a2f', roughness: 0.8 });
+    const sailMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.7, side: THREE.DoubleSide });
+    for (let b = 0; b < 3; b += 1) {
+      let bx = 0;
+      let bz = 0;
+      let placed = false;
+      for (let tries = 0; tries < 200 && !placed; tries += 1) {
+        bx = propRandom.range(-1800, 1800);
+        bz = propRandom.range(-1800, 1800);
+        let offshore = true;
+        for (const isl of islands) {
+          if (Math.hypot(bx - isl.x, bz - isl.z) < isl.radius * 1.15) { offshore = false; break; }
+        }
+        if (offshore && distToPath(bx, bz) > 600) placed = true;
+      }
+      if (!placed) continue;
+      const boat = new THREE.Group();
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(7, 1.2, 2.4), hullMat);
+      hull.position.y = 0.6;
+      boat.add(hull);
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 8, 6), mastMat);
+      mast.position.y = 4.6;
+      boat.add(mast);
+      const sailShape = new THREE.Shape();
+      sailShape.moveTo(0, 0);
+      sailShape.lineTo(0, 6.5);
+      sailShape.lineTo(3.4, 0.6);
+      sailShape.lineTo(0, 0);
+      const sail = new THREE.Mesh(new THREE.ShapeGeometry(sailShape), sailMat);
+      sail.position.set(0.1, 1.2, 0);
+      boat.add(sail);
+      const jibShape = new THREE.Shape();
+      jibShape.moveTo(0, 0);
+      jibShape.lineTo(0, 5);
+      jibShape.lineTo(-2.6, 0.6);
+      jibShape.lineTo(0, 0);
+      const jib = new THREE.Mesh(new THREE.ShapeGeometry(jibShape), sailMat);
+      jib.position.set(-0.1, 1.2, 0);
+      boat.add(jib);
+      boat.position.set(bx, 0.6, bz);
+      boat.rotation.y = propRandom.range(0, Math.PI * 2);
+      group.add(boat);
+      boats.push({ group: boat, speed: propRandom.range(1, 2.5), phase: propRandom.range(0, 6.28) });
+    }
+  }
+  // Lighthouse on the shore of the island farthest from the runway.
+  {
+    const whiteMat = new THREE.MeshStandardMaterial({ color: '#f2ede6', roughness: 0.7 });
+    const redMat = new THREE.MeshStandardMaterial({ color: '#C83C32', roughness: 0.7 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: '#2a2f3a', roughness: 0.8 });
+    let lightIsland = islands[1];
+    let lightDist = -1;
+    for (let i = 1; i < islands.length; i += 1) {
+      const d = Math.hypot(islands[i].x - runway.x, islands[i].z - runway.z);
+      if (d > lightDist) { lightDist = d; lightIsland = islands[i]; }
+    }
+    const la = Math.atan2(runway.z - lightIsland.z, runway.x - lightIsland.x);
+    const lx = lightIsland.x + Math.cos(la) * lightIsland.radius * 1.02;
+    const lz = lightIsland.z + Math.sin(la) * lightIsland.radius * 1.02;
+    const lh = meshHeight(lx, lz);
+    if (lh > 2 && lh < 25) {
+      const parts = [];
+      const base = new THREE.Mesh(new THREE.ConeGeometry(4, 3, 8), rockMats[0]);
+      base.position.y = 1.5;
+      parts.push(base);
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.4, 11, 10), whiteMat);
+      tower.position.y = 8.5;
+      parts.push(tower);
+      const band1 = new THREE.Mesh(new THREE.CylinderGeometry(1.18, 1.26, 1.6, 10), redMat);
+      band1.position.y = 6;
+      parts.push(band1);
+      const band2 = new THREE.Mesh(new THREE.CylinderGeometry(1.08, 1.16, 1.6, 10), redMat);
+      band2.position.y = 10.5;
+      parts.push(band2);
+      const lampRoom = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 1.2, 10), darkMat);
+      lampRoom.position.y = 14.3;
+      parts.push(lampRoom);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), new THREE.MeshBasicMaterial({ color: '#fff2d8' }));
+      lamp.position.y = 15.2;
+      parts.push(lamp);
+      for (const part of parts) {
+        part.position.x += lx;
+        part.position.z += lz;
+        part.position.y += lh;
+        group.add(part);
+      }
+    }
+  }
+  // Two low beach houses near the spawn beach.
+  {
+    const creamMat = new THREE.MeshStandardMaterial({ color: '#f2e5c5', roughness: 0.85 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: '#b4552d', roughness: 0.85 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: '#2a2f3a', roughness: 0.85 });
+    let houses = 0;
+    for (let tries = 0; tries < 120 && houses < 2; tries += 1) {
+      const a = propRandom.range(0, Math.PI * 2);
+      const r = propRandom.range(120, 320);
+      const hx = course.spawn.x + Math.cos(a) * r;
+      const hz = course.spawn.z + Math.sin(a) * r;
+      const hh = groundAt(hx, hz);
+      if (hh < 2 || hh > 14) continue;
+      if (!clearOfRunway(hx, hz)) continue;
+      if (distToPath(hx, hz) < 150) continue;
+      const house = new THREE.Group();
+      const walls = new THREE.Mesh(new THREE.BoxGeometry(6, 3.2, 5), creamMat);
+      walls.position.y = 1.6;
+      house.add(walls);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(4.6, 2.2, 4), roofMat);
+      roof.position.y = 4.3;
+      roof.rotation.y = Math.PI / 4;
+      house.add(roof);
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2), darkMat);
+      door.position.set(0, 1, -2.52);
+      door.rotation.y = Math.PI;
+      house.add(door);
+      house.position.set(hx, hh, hz);
+      house.rotation.y = propRandom.range(0, Math.PI * 2);
+      group.add(house);
+      houses += 1;
+    }
+  }
+
   function update(dt) {
     for (const cloud of clouds) {
       cloud.position.x += cloud.userData.speed * dt;
       if (cloud.position.x > WORLD.size / 2 + 200) cloud.position.x = -WORLD.size / 2 - 200;
+    }
+    // v11: the sailboats drift slowly and bob on the swell.
+    boatTime += dt;
+    for (const boat of boats) {
+      boat.group.position.x += boat.speed * dt;
+      if (boat.group.position.x > WORLD.size / 2 + 200) boat.group.position.x = -WORLD.size / 2 - 200;
+      boat.group.position.y = 0.6 + Math.sin(boatTime * 0.7 + boat.phase) * 0.25;
+      boat.group.rotation.z = Math.sin(boatTime * 0.5 + boat.phase) * 0.03;
     }
   }
 

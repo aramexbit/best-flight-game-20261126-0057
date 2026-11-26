@@ -97,7 +97,9 @@ export function createHud() {
     attCtx.rotate(-roll);
     // Pitch shifts the horizon: 90 degrees of pitch moves it by the radius.
     const shift = (pitch / (Math.PI / 2)) * c;
-    attCtx.fillStyle = '#3a6ea8';
+    // v11: the attitude ball's sky is the new bright blue (was #3a6ea8), so
+    // the little gauge matches the vibrant sky instead of a muted steel blue.
+    attCtx.fillStyle = '#2E8FE8';
     attCtx.fillRect(-c, -c + shift, s, c - shift + 2);
     attCtx.fillStyle = '#8a6a45';
     attCtx.fillRect(-c, c + shift - 2, s, c - shift + 2);
@@ -109,7 +111,9 @@ export function createHud() {
     attCtx.stroke();
     attCtx.restore();
     // Fixed wings: the plane symbol never moves, the world turns behind it.
-    attCtx.strokeStyle = '#ffd94d';
+    // v11: the attitude marker is the new gold #FFD52A (was #ffd94d) — same
+    // gold as the rings and the title, so the HUD accents are one colour.
+    attCtx.strokeStyle = '#FFD52A';
     attCtx.lineWidth = 3;
     attCtx.beginPath();
     attCtx.moveTo(c - 26, c);

@@ -12,7 +12,16 @@ const START_SECONDS = 8;
 // camera closer to ring 11 and deeper over the runway island's tree-covered
 // western slopes, so the foreground is planted hills instead of the empty
 // green slope the v6 cover showed.
-const PLAY_SECONDS = 42;
+// v11: back to 40 s — at 42 s the plane is climbing hard toward ring 11 and
+// reads as hanging/stalled in pitch in the cover shot (Gemini v10). At 40 s
+// it is on the same leg but earlier, on a leveler stretch over the same
+// tree-covered western slopes, so the attitude reads as smooth flight.
+// v11 (iterasi 2): 41 s — the 40 s frame is level, but the ring sits small
+// and half behind a hill crest; one second further along brings the plane
+// ~55 m closer to ring 11 (bigger gate, clearer action) while the leg is
+// still level. This is staging only: the flight model and the shot
+// cameras are untouched.
+const PLAY_SECONDS = 41;
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world
@@ -166,11 +175,16 @@ export function stageShot(name, game) {
       // time it drops under 42 m it has overshot the runway centre and is
       // orbiting it at a 77-degree bank instead of landing.)
       const runwayHeading = Math.atan2(runway.dirX, -runway.dirZ);
-      const aligned = Math.abs(wrapAngle(s.yaw - runwayHeading)) < 0.25;
+      // v11: the freeze asks for a straighter final (aligned < 0.18 rad,
+      // was 0.25) — the v10 landing plane read slightly crabbed against the
+      // runway (Gemini v10). The distance and height window stay at the
+      // proven 300 m / +50 m, so the freeze still catches.
+      const aligned = Math.abs(wrapAngle(s.yaw - runwayHeading)) < 0.18;
       // ...and the wings are level. Heading alone is not enough: the plane
       // can be on-heading while still banked mid-turn, and the whole frame
       // tilts with it. The roll settles as the turn finishes.
-      const level = Math.abs(s.roll) < 0.15;
+      // v11: level < 0.12 (was 0.15), same reason — a straighter final.
+      const level = Math.abs(s.roll) < 0.12;
       // v4: freeze closer and lower — inside 300 m and below 50 m above the
       // strip — so the runway fills the frame instead of reading as a narrow
       // distant strip (v3 froze at 400 m / 65 m). The v3 lesson still holds:

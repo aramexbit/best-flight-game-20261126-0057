@@ -81,35 +81,35 @@ export const SCORE = {
 };
 
 export const PALETTE = {
-  // v4: daytime — bright blue sky, white sun, blue sea. The golden-hour
-  // palette is gone: the sunset sky read dark and muddy in screenshots, and
-  // the user asked for a bright daytime scene that is pleasant to look at.
-  // The sea now runs bright turquoise in the shallows to deep blue offshore,
-  // so the coast reads as a tropical shore at a glance.
-  // v6: the ground gets two more colours (grassDry, dirt) because the v5
-  // blind test read the hills as one smooth green heightmap — the patchwork
-  // below is what breaks that up.
-  skyTop: '#2E7FC2',
-  skyHorizon: '#BFE3F2',
+  // v11: the vibrant premium palette from the user's redesign prompt —
+  // bright blue sky #168BFA, tropical turquoise sea #00C5D9, vivid green
+  // grass #42B83C, warm cream sand #E8D39A. The sea keeps its depth
+  // gradient (bright turquoise shallows into deep azure offshore) and the
+  // ground keeps the dry-grass/dirt patchwork, now in more vivid tones.
+  skyTop: '#168BFA',
+  skyHorizon: '#CFEFFF',
   fog: '#cfe8f5',
   sun: '#ffffff',
-  sea: '#1B7FA8',
-  seaDeep: '#0B5A8A',
-  seaMid: '#1B7FA8',
-  seaShallow: '#42A99B',
-  sand: '#e8cf9a',
-  grass: '#58a04e',
-  forest: '#2f7a38',
-  grassLight: '#7cb85c',
+  sea: '#00C5D9',
+  seaDeep: '#0B6FA8',
+  seaMid: '#00C5D9',
+  seaShallow: '#3ED8CF',
+  sand: '#E8D39A',
+  grass: '#42B83C',
+  forest: '#2E9E33',
+  grassLight: '#6FD653',
   // v6: dry grass for the terrain patchwork and dirt for the graded apron
   // around the runway — two more ground colours, so the hills read as
   // worked island ground instead of one flat green wash.
-  grassDry: '#93b45a',
+  // v11: the dry grass goes more vivid too, so the patchwork stays sunny.
+  grassDry: '#A9C94E',
   dirt: '#a98f66',
   rock: '#7a6a5e',
   snow: '#f2ede6',
-  ring: '#FFD477',
-  ringNext: '#FFE98A',
+  // v11: the rings go glossier gold (#FFD52A, next ring #FFE65C) to match
+  // the redesign prompt's golden-yellow glow and the mockup's glowing ring.
+  ring: '#FFD52A',
+  ringNext: '#FFE65C',
   ringDone: '#9DBE6E',
   planeCream: '#F2E5C5',
   planeBelly: '#BCA887',
@@ -127,13 +127,18 @@ export const PALETTE = {
   // v10: faint windshield glazing colour for the curved canopy bow (plane.js).
   cockpitGlass: '#cfe8f5',
   cockpitShield: '#4a4e56',
-  hudText: '#fff7e8',
+  // v11: HUD panels are deep navy #063C85 (the redesign prompt's panel
+  // colour) with clean white text and a bright cyan highlight — the
+  // charcoal panels are gone, so the HUD matches the title screen's navy
+  // glass instead of reading as a separate dark theme.
+  hudText: '#ffffff',
+  hudAccent: '#00E5FF',
   // v10: HUD panels are 0.88 opaque (was 0.55) — the v9 landing shot's
   // ALTITUDE and TIME/SCORE panels washed out milky because a bright white
   // cloud sat behind the translucent glass. The panels must be readable
   // against any sky; the same 0.88 is applied in game/index.html, where
   // the chips and the attitude gauge actually get their background.
-  hudPanel: 'rgba(20, 24, 40, 0.88)',
+  hudPanel: 'rgba(6, 60, 133, 0.88)',
   hudWarn: '#ff5d4d',
   hudGood: '#7dff9a',
 };
