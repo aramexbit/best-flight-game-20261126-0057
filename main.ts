@@ -1,13 +1,14 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v9: the landmark ridges are terrain-hugging
-// heightfield patches (peaks with saddles, a sharp crest spine, long valley
-// slopes, feet fading to zero at the footprint edge, colours baked toward
-// the horizon blue) — the v8 free masses read as flat-roofed floating slabs;
-// the clouds are fewer (14) and each one a single tight volume with a thin
-// flat base; the cockpit is a full cabin (widened panel with five live dials,
-// tall A-pillars, top arch, side walls, wing-root slabs, a lower and closer
-// camera); and the title shot follows the key-art composition (narrower
-// title card, denser palm beach, fuller palm crowns, fewer beach boulders).
+// standard library only). v10: the clouds are stylised cumulus clusters
+// (faceted detail-0 multi-lobe masses in three shades, flat base, bumpy
+// top — no smooth pills, no base slab, kept 450 m clear of the course so
+// none looms over a HUD panel); the cockpit is finished (rounded control
+// wheel, curved canopy bow with faint glazing, shaped wing-root fairings);
+// the mountain ridges are broken up (third crest harmonic, colour blotches,
+// rocky crest tors); the islands are richer (west-slope grove, shoreline
+// and reef rocks). The ridges stay terrain-hugging heightfield patches
+// (peaks with saddles, a sharp crest spine, feet fading to zero) and the
+// title shot keeps the key-art composition.
 // The game is
 // this directory's game/ folder: plain static browser loads offline
 // (game/index.html and its ES modules, plus the vendored Three.js build
@@ -37,7 +38,7 @@ if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), joi
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json). The v9 screenshots are the four staged scenes (cover, cockpit, title, landing),
+// screenshots/ and dossier.json). The v10 screenshots are the four staged scenes (cover, cockpit, title, landing),
 // each a real render of the shipped game at 1280x720, JPEG quality 82, all under 256 KiB.
 writeFileSync(
   join(out, 'dossier.json'),

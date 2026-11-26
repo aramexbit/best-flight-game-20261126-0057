@@ -124,9 +124,16 @@ export const PALETTE = {
   cockpitPanel: '#4b515c',
   cockpitFace: '#5d636e',
   cockpitConsole: '#6b7078',
+  // v10: faint windshield glazing colour for the curved canopy bow (plane.js).
+  cockpitGlass: '#cfe8f5',
   cockpitShield: '#4a4e56',
   hudText: '#fff7e8',
-  hudPanel: 'rgba(20, 24, 40, 0.55)',
+  // v10: HUD panels are 0.88 opaque (was 0.55) — the v9 landing shot's
+  // ALTITUDE and TIME/SCORE panels washed out milky because a bright white
+  // cloud sat behind the translucent glass. The panels must be readable
+  // against any sky; the same 0.88 is applied in game/index.html, where
+  // the chips and the attitude gauge actually get their background.
+  hudPanel: 'rgba(20, 24, 40, 0.88)',
   hudWarn: '#ff5d4d',
   hudGood: '#7dff9a',
 };

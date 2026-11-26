@@ -218,9 +218,11 @@ export function buildPlane(THREE) {
   // above the glareshield — the windshield now has a real frame left and
   // right, instead of two short posts floating on the panel (Gemini v8:
   // the console read as a floating box with no aircraft around it).
+  // v10: the pillars now end at y 0.42, where the curved canopy bow
+  // springs from them — no more posts sticking up past the arch.
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 0.06), dark);
-    pillar.position.set(side * 0.98, 0.05, 0.02);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.87, 0.06), dark);
+    pillar.position.set(side * 0.98, -0.015, 0.02);
     pillar.rotation.z = -side * 0.15;
     dash.add(pillar);
     const base = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.07), dark);
@@ -243,12 +245,27 @@ export function buildPlane(THREE) {
   // across the top, rails running back at the panel ends, and tall side
   // walls reaching down toward the bottom of the frame, so the cockpit
   // reads as an enclosed cabin with sides and a roof, not a lone box.
-  const arch = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.04, 0.06), frameMat);
-  arch.position.set(0, 0.50, 0.0);
+  // v10: the top arch is a curved canopy bow, not a straight bracket bar
+  // with jutting ends — a half-torus whose ends meet the A-pillar tops
+  // (y 0.42), arching up to 0.56, plus a faint windshield glazing pane
+  // between the pillars, so the top of the cockpit reads as a framed
+  // canopy instead of a dark beam (Gemini v9: "a dark bracket bar with
+  // jutting ends").
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.024, 8, 28, Math.PI), frameMat);
+  arch.scale.set(1, 0.14, 1);
+  arch.position.set(0, 0.42, 0.0);
   dash.add(arch);
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: PALETTE.cockpitGlass, roughness: 0.05, metalness: 0.2,
+    transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false,
+  });
+  const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.84, 0.24), glassMat);
+  windshield.position.set(0, 0.36, 0.0);
+  windshield.rotation.x = -0.06;
+  dash.add(windshield);
   for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.55), frameMat);
-    rail.position.set(side * 0.98, 0.48, 0.28);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.55), frameMat);
+    rail.position.set(side * 0.98, 0.42, 0.28);
     dash.add(rail);
     // Side wall: an angled interior panel at the dash end, with a dark sill
     // on top — the cockpit now has sides, not just a front face.
@@ -265,17 +282,30 @@ export function buildPlane(THREE) {
   // with a crossbar handle and two grips, sitting just below the panel's
   // bottom edge. It anchors the bottom of the cockpit view as part of the
   // aircraft, and it does not cover the gauges or the indicator dots.
-  const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.26, 8), frameMat);
-  yokeCol.position.set(0, -0.27, 0.14);
+  // v10: the control yoke is a rounded wheel, not a dark T — a torus
+  // wheel on a short column with a hub, a red centre cap and grip sleeves
+  // at 9 and 3 o'clock, so it reads as a control wheel at a glance
+  // instead of a stiff black bracket (Gemini v9).
+  const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.24, 8), frameMat);
+  yokeCol.position.set(0, -0.28, 0.14);
   yokeCol.rotation.x = 0.4;
   dash.add(yokeCol);
-  const yokeBar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.045, 0.045), frameMat);
-  yokeBar.position.set(0, -0.18, 0.21);
-  dash.add(yokeBar);
+  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 10, 28), frameMat);
+  yokeWheel.position.set(0, -0.155, 0.215);
+  yokeWheel.rotation.x = 0.45;
+  dash.add(yokeWheel);
+  const yokeHub = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 10), frameMat);
+  yokeHub.position.set(0, -0.155, 0.215);
+  yokeHub.rotation.x = Math.PI / 2 + 0.45;
+  dash.add(yokeHub);
+  const yokeCap = new THREE.Mesh(new THREE.CircleGeometry(0.02, 12), new THREE.MeshBasicMaterial({ color: 0xc83c32 }));
+  yokeCap.position.set(0, -0.167, 0.24);
+  yokeCap.rotation.x = 0.45;
+  dash.add(yokeCap);
   for (const side of [-1, 1]) {
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.13, 0.05), frameMat);
-    grip.position.set(side * 0.14, -0.16, 0.21);
-    grip.rotation.z = -side * 0.12;
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.10, 0.045), frameMat);
+    grip.position.set(side * 0.15, -0.155, 0.215);
+    grip.rotation.x = 0.45;
     dash.add(grip);
   }
   // Three small indicator dots, FLUSH on the panel face below the middle
@@ -406,17 +436,16 @@ export function buildPlane(THREE) {
     needles.push(needlePivot);
     dash.add(g);
   }
-  // v9: wing-root slabs at the bottom corners of the frame — the cream
-  // trailing edge of the high wing passing beside the cockpit — so the
-  // bottom of the view reads as aircraft structure, not empty frame.
-  // v9 (iterasi 2): smaller (0.38 x 0.5, was 0.5 x 0.7), lower (-0.31, was
-  // -0.25) and tilted harder (-0.22, was -0.1) — the v9 cockpit shot showed
-  // them as flat cream cards pasted in the bottom corners; now they peek
-  // in at an angle, like a wing surface passing beside the cabin.
+  // v10: wing-root fairings are smooth curved bumps, not flat cream
+  // cards — a flattened ellipsoid half-sunk into the side wall at each
+  // bottom corner, so the wing root reads as a fairing that blends into
+  // the cabin instead of a pasted plate (Gemini v9: the slabs read as
+  // flat grey plates in the bottom corners).
   for (const side of [-1, 1]) {
-    const root = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.5), cream);
-    root.position.set(side * 1.02, -0.31, 0.35);
-    root.rotation.z = -side * 0.22;
+    const root = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), cream);
+    root.scale.set(0.17, 0.10, 0.32);
+    root.position.set(side * 1.0, -0.30, 0.35);
+    root.rotation.z = -side * 0.15;
     root.rotation.y = -side * 0.2;
     dash.add(root);
   }
