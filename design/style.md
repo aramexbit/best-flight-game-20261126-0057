@@ -1,4 +1,4 @@
-# Langit Nusantara — Ring Run: Style Guide (v11 palette, v18)
+# Langit Nusantara — Ring Run: Style Guide (v11 palette, v19)
 
 The look is "premium tropical daytime": saturated, sunny, readable at a
 glance. One hero per frame (the plane, the ring, the blast, the runway) —
@@ -11,7 +11,7 @@ the subject must read in one second.
 |---|---|---|
 | Sky top | `#168BFA` | Bright blue, daytime only — never night |
 | Sky horizon | `#CFEFFF` | Pale horizon, matches fog |
-| Fog | `#cfe8f5` | Swallows far islands by 5000 m |
+| Fog | `#9CC8E8` | Darker than the horizon (v19, was `#cfe8f5` ≈ horizon — the horizon vanished low over the sea) |
 | Sea | `#00C5D9` | Tropical turquoise |
 | Sea deep | `#0284C7` | Offshore depth (v18, was `#0B6FA8`) |
 | Sea mid | `#06A8D8` | Mid-depth band (v18, was `#00C5D9`) |
@@ -34,7 +34,8 @@ the subject must read in one second.
 | Cockpit face | `#F8FAFC` | Dial face, light (v18, was `#5d636e`) |
 | Cockpit console | `#6b7078` | Console |
 | Cockpit shield | `#1E293B` | Glareshield, dark (v18, was `#4a4e56`) |
-| Cockpit trim | `#273244` | Pillar/frame trim (v18) |
+| Cockpit trim | `#242B35` | Pillar/frame trim (v19, was `#273244`) |
+| Cockpit shield accent | `#C93B2B` | Glareshield red accent stripe (v19) |
 | HUD panel | `rgba(6, 60, 133, 0.88)` | Deep navy `#063C85` |
 | HUD text | `#ffffff` | White on navy panels |
 | HUD accent | `#00E5FF` | Bright cyan highlight |
@@ -80,7 +81,10 @@ the subject must read in one second.
   "09"/"27" numbers from a 512×256 canvas texture (bold 180 px,
   anisotropy 8), white edge lines, 5 approach lights on the extended
   centreline, windsock, hangar, fuel shed + drums, fuel truck on the
-  apron, taxiway + apron slabs. The strip sits on a graded plateau
+  apron, taxiway + apron slabs. v19: turnaround pads (asphalt disc
+  r 20 m + white ring, both strip ends) + PAPI (4 boxes by the west
+  threshold: 2 red inner + 2 white outer) + a red-white striped
+  windsock (animated yaw + flutter). The strip sits on a graded plateau
   that fades 250–360 m into the hills — no step at the edge.
 
 ## Aircraft & rivals
@@ -104,24 +108,40 @@ the subject must read in one second.
   total), contrasted enough to read at 150 m altitude (v17: harder
   gradient, opacity up to 0.75 with a 0.3 floor, base 9×6.5 m growing
   0.004/m, sun offset capped at 120 m — live probe Phase C counts 5,
-  all visible).
+  all visible). v19: a second CONTACT shadow directly under each plane
+  (opacity 0.55→0 below 120 m AGL, scale 8 m + agl×0.02) + the
+  sun-offset cap 120 → 50 m, so the height above the runway reads in
+  the chase/landing shots.
 
 ## Effects
 
 - **Explosion:** 3-layer faceted fireball — core `#FFF3B0` /
   `#FF9F1C` / `#E63946` (icosahedron/dodecahedron, flatShading), slate
   smoke `#475569 / #64748B / #CBD5E1`, chunky debris `#334155 /
-  #C82828` with gravity. 45 m to the side of the ring line so the ring
-  stays visible; never under the HUD.
+  #C82828` with gravity. v19: shell 42 m / 3.5 s (was 34 m / 2.8 s),
+  no shockwave ring (deleted — it read as a giant bubble), blast smoke
+  capped (life 6–8 s, grow 0.5, max ~8 m), debris 0.4–1.0 m × 24.
+  45 m to the side of the ring line so the ring stays visible; never
+  under the HUD.
 - **Crash (player):** fireball at the wreck + boom + camera shake.
+  v19: the camera pulls wide on crash (`setChase(45, -10, 20, 40)`)
+  and the wreck stays visible for 1.5 s before the over panel.
 - **Storm:** tornado (dark, textured, spray ring at the base), rain
-  slanted by the wind (`#E0F2FE`, opacity 0.45, v18), lightning every
-  4–9 s, flak bursts along the outer corridors. Multi-tier anvil
+  slanted by the wind (`#E6F4FF`, opacity 0.35, v19 — was `#E0F2FE`
+  0.45), lightning every 4–9 s, flak bursts along the outer corridors.
+  v19 tornado: 12 segments, taper 4 m → 46 m, dark slate `#3B4652 /
+  #586675`, 18 rotating debris flecks, faceted anvil. Multi-tier anvil
   (second tier: 5 lobes, y 360–430, `#334155 / #475569`, v18).
-- **Cockpit:** 5 dials on light faces (`#F8FAFC`, 96 px numbers at
-  radius 138, sub-label in a separate navy badge clear of the "6" and
-  the needle pivot), pillars 0.05 m, trim `#273244`, glareshield
-  `#1E293B`, red trim strip `#C82828`. ≥72% forward viewport free.
+  Clouds are FULLY OPAQUE in v19 (no transparent pass — the
+  transparency read as grey bubbles) with smaller lobes (base 40–60 m,
+  lower 30–50 m, top 25–40 m).
+- **Cockpit:** 5 dials on light faces (`#F8FAFC`, 84 px numbers at
+  radius 120, v19 — was 96 px at 138, glyphs hit the tick ring;
+  sub-label in a separate navy badge clear of the "6" and the needle
+  pivot; ticks long 180 / major 190 / minor 200, all to 216; needle
+  `#E53935`; labels IAS/ALT/HDG/VSI/RPM), pillars 0.05 m, trim
+  `#242B35`, glareshield `#1E293B` with a `#C93B2B` accent stripe,
+  red trim strip `#C82828`. ≥72% forward viewport free.
 - **Rings:** gold torus + inner glow disc, next ring pulsing brighter.
   Passed rings turn muted green.
 

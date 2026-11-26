@@ -324,26 +324,36 @@ export function createRivals(THREE, seed, islands, effects) {
     // 77° bank read as a plane on its side in the cockpit shot. The
     // flight state is untouched; only the mesh leans less.
     r.api.group.rotation.z = -Math.max(-0.9, Math.min(0.9, s.roll));
-    // v15: the race-number marker floats 4.5 m above the plane in world
+    // v15: the race-number marker floats above the plane in world
     // space (not rolled with the airframe) and hides with its plane.
-    // (4.5 m, was 5.5 — with the smaller 3.5 m badge the marker sits
-    // closer to the airframe instead of floating high above it.)
+    // v19 (Gemini v18 #6): 3.2 m (was 4.5) — the fin top sits ~2.2 m
+    // above the plane's centre, so 4.5 m left the pill floating a
+    // metre and a half above the tail, reading as a detached label.
+    // At 3.2 m the pill's lower edge just kisses the fin.
     if (r.marker) {
-      r.marker.position.set(s.x, s.y + 4.5, s.z);
+      r.marker.position.set(s.x, s.y + 3.2, s.z);
       r.marker.visible = r.api.group.visible;
     }
   }
 
   /** A smoke puff from the rival's tail, every 0.1 s while it is in trouble. */
+  // v19b: the damaged-rival smoke trail — THIN now (was 2.2 m / grow
+  // 1.8 / life 2.8 s / opacity 0.65). A 2.2 m puff growing 1.8/s for
+  // 2.8 s reaches ~13 m, and one is emitted every 0.1 s (5-7 m apart),
+  // so the trail read as a chain of giant translucent grey bubbles —
+  // the "gelembung raksasa" Gemini flagged in v18, still present in
+  // the v19 cockpit + cover shots. A 1.2 m puff growing 0.9/s for 2 s
+  // tops out near 4 m, smaller than the puff spacing, so the trail
+  // reads as a dotted dark wisp marking the dying rival, not bubbles.
   function emitSmoke(r, dt) {
     r.smokeT += dt;
     if (r.smokeT < 0.1) return;
     r.smokeT = 0;
     const s = r.flight.state;
     const f = forwardOf(s.yaw);
-    effects.smokePuff(s.x - f.x * 3, s.y - 0.2, s.z - f.z * 3, 2.2, {
-      color: 0x4a4a4a, life: 2.8, grow: 1.8,
-      vel: { x: -f.x * 4, y: 0.8, z: -f.z * 4 }, opacity: 0.65,
+    effects.smokePuff(s.x - f.x * 3, s.y - 0.2, s.z - f.z * 3, 1.2, {
+      color: 0x4a4a4a, life: 2.0, grow: 0.9,
+      vel: { x: -f.x * 4, y: 0.8, z: -f.z * 4 }, opacity: 0.45,
     });
   }
 
@@ -820,13 +830,16 @@ export function createRivals(THREE, seed, islands, effects) {
         // while BIRU cuts across, so the flyby reads as speed, not a
         // teleport. (The racing branch's coloured trail is 0.25 s; the
         // flyby streaks every 0.1 s, brighter and white.)
+        // v19: bigger, softer, fainter (1.8 m / grow 1.4 / 0.25, was
+        // 1.2 / 0.8 / 0.45) — the small dense puffs chained into a
+        // wire-like ribbon behind the rival (Gemini v18 #2).
         r.trailT += dt;
         if (r.trailT >= 0.1) {
           r.trailT = 0;
           const f2 = forwardOf(s.yaw);
-          effects.smokePuff(s.x - f2.x * 4, s.y - 0.1, s.z - f2.z * 4, 1.2, {
-            color: 0xffffff, life: 0.9, grow: 0.8,
-            vel: { x: -f2.x * 8, y: 0.2, z: -f2.z * 8 }, opacity: 0.45,
+          effects.smokePuff(s.x - f2.x * 4, s.y - 0.1, s.z - f2.z * 4, 1.8, {
+            color: 0xffffff, life: 0.9, grow: 1.4,
+            vel: { x: -f2.x * 8, y: 0.2, z: -f2.z * 8 }, opacity: 0.25,
           });
         }
         const ev = r.flight.step(dt, autopilotTo(r.flight, target, distToTarget < 60 ? 0.7 : 0.95, groundAt), groundAt, runway);
@@ -863,9 +876,12 @@ export function createRivals(THREE, seed, islands, effects) {
         if (r.trailT >= 0.25) {
           r.trailT = 0;
           const f = forwardOf(s.yaw);
-          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 0.8, {
-            color: r.trailColor, life: 1.1, grow: 1.0,
-            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.20,
+          // v19: the showcase trail is bigger, softer, fainter (1.4 m /
+          // grow 1.8 / 0.12, was 0.8 / 1.0 / 0.20) — same wire fix as
+          // the flyby streaks above.
+          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 1.4, {
+            color: r.trailColor, life: 1.1, grow: 1.8,
+            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.12,
           });
         }
         if (r.stateT >= 6) {
@@ -960,14 +976,17 @@ export function createRivals(THREE, seed, islands, effects) {
         // fainter still reads as a motion cue at race distance.
         // v18: size 0.8, opacity 0.20 — the v17 cockpit shot still had
         // a pink wash low-centre from the trail.
+        // v19: size 1.4, grow 1.8, opacity 0.12 — the v18 blind test
+        // read the small dense puffs as a wire/ribbon behind the
+        // rivals; bigger, softer, fainter puffs merge into a ribbon.
         r.trailT += dt;
         if (r.trailT >= 0.25) {
           r.trailT = 0;
           const f = forwardOf(s.yaw);
-          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 0.8, {
+          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 1.4, {
             color: r.trailColor,
-            life: 1.1, grow: 1.0,
-            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.20,
+            life: 1.1, grow: 1.8,
+            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.12,
           });
         }
         if (ev & EVENT_CRASH) {

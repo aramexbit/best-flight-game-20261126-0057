@@ -1,7 +1,9 @@
 // Boot and the one loop: input is read every frame, the world advances in fixed
 // 1/60 s steps (several in a slow frame, none in a fast one), and the renderer
 // paints what is there. The game moves between four screens: title, play, paused
-// and game over. C switches chase/cockpit, M mutes, R restarts a finished run.
+// and game over — plus a transient 'crashing' beat (v19) between the crash and
+// the game-over panel, so the fireball is seen on a wide camera first.
+// C switches chase/cockpit, M mutes, R restarts a finished run.
 //
 // ?seed=N fixes the islands and the course. ?shot=start|play|cockpit|landing
 // (with &seed=N) stages that scene instead of running the loop, paints it twice
@@ -127,6 +129,16 @@ function hudView() {
     const u = (dx * up.x + dy * up.y + dz * up.z) / dist;
     ringDir = f < 0 ? 180 : Math.atan2(r, u) * 180 / Math.PI;
   }
+  // v19 (Gemini v19 #4): the AGL / glide cue for the final approach —
+  // height above ground in feet and the glide alignment against a 3°
+  // slope (ideal height = distance to the threshold x tan(3°)).
+  const rw = course.runway;
+  const groundY = terrain.groundAt(s.x, s.z);
+  const aglM = Math.max(0, s.y - Math.max(groundY, 0.6));
+  const distRwy = Math.hypot(rw.x - s.x, rw.z - s.z);
+  const idealH = distRwy * 0.0524;
+  const dev = (s.y - rw.height) - idealH;
+  const glide = Math.abs(dev) < 15 ? 'ON GLIDE' : dev > 0 ? 'HIGH' : 'LOW';
   return {
     heading: headingOf(s.yaw),
     pitch: s.pitch,
@@ -144,6 +156,9 @@ function hudView() {
     stalled: s.stalled,
     ringDir,
     ringNum: s.ringsPassed + 1,
+    aglFt: aglM * 3.28084,
+    distRwy,
+    glide,
   };
 }
 
@@ -248,6 +263,9 @@ function runGame() {
   let last = performance.now();
   let cameraMode = CAMERA_CHASE;
   let muted = false;
+  // v19 (c): the crash beat — seconds left on the wide camera before
+  // the "Crashed!" panel appears.
+  let crashTimer = 0;
 
   // v11: the title screen's Start button and settings gear are real buttons
   // on the overlay, not the canvas — the canvas pointerdown listener in
@@ -489,10 +507,18 @@ function runGame() {
       // v17: the player's own crash finally explodes — a fireball at
       // the wreck, boom and shake (v16 live playtest: two crashes
       // showed only a 'Crashed!' panel over an intact plane).
+      // v19 (c): the crash camera pulls WIDE (45 m back, 20 m up) and
+      // the "Crashed!" panel waits 1.5 s — the v18 live playtest saw
+      // no fireball at all: the chase camera sat 11 m behind the plane
+      // and flew INTO the fireball/terrain, so the screen filled with
+      // orange polygons. A wide camera sees the fireball as an object.
       effects.explode(s.x, s.y + 3, s.z, false);
       audio.boom();
       renderer.triggerShake(0.6);
-      endGame(false);
+      renderer.setChase(45, -10, 20, 40);
+      screen = 'crashing';
+      crashTimer = 1.5;
+      announce('Crashed.');
     }
     // v13: the race flies with the player — rivals step on the player's
     // clock, and the explosion smoke advances on the same fixed step.
@@ -537,6 +563,14 @@ function runGame() {
       if (screen === 'over') {
         effects.update(1 / 60);
         storm.update(1 / 60, flight.state.elapsed);
+      }
+      // v19 (c): the crash beat — the fireball burns for 1.5 s on the
+      // wide camera before the "Crashed!" panel appears.
+      if (screen === 'crashing') {
+        crashTimer -= frameDt;
+        effects.update(1 / 60);
+        storm.update(1 / 60, flight.state.elapsed);
+        if (crashTimer <= 0) endGame(false);
       }
     }
     hud.update(hudView(), frameDt);

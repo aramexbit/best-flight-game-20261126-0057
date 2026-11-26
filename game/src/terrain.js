@@ -4,7 +4,7 @@
 // The runway island is flattened into a strip before the mesh is built, so a
 // landing there is exact rather than approximate.
 
-import { COURSE, PALETTE, WORLD } from './config.js';
+import { COURSE, PALETTE, STORM, WORLD } from './config.js';
 import { createNoise, createRandom } from './random.js';
 
 /** Place the islands: a big one near the centre-east for the runway, the rest spread out. */
@@ -195,7 +195,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
 
   // --- Land: a displaced grid with vertex colours by height and slope. ---
   // v3: 160 segments (was 120), so the hills and the shoreline resolve finer.
-  const SEG = 160;
+  // v19: 192 segments — the v18 blind test saw grid/tiling lines in the
+  // grass: the 0.045 mottle noise (22 m period) was sampled on a 27.5 m
+  // vertex grid, so it aliased into visible tiles. A finer grid + a
+  // lower-frequency mottle (below) removes the tiling.
+  const SEG = 192;
   const geo = new THREE.PlaneGeometry(WORLD.size, WORLD.size, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
@@ -251,8 +255,12 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       tmp.lerp(forest, Math.max(0, fbm(x * 0.004, z * 0.004, 2)) * 0.8);
       const dry = Math.max(0, fbm(x * 0.018 + 11.7, z * 0.018 - 6.3, 2));
       tmp.lerp(grassDry, dry * 0.8);
-      const mottle = fbm(x * 0.045 + 3.3, z * 0.045 - 8.8, 2);
-      tmp.offsetHSL(mottle * 0.03, 0, mottle * 0.07);
+      // v19 (Gemini v18 #3/#11): the mottle was fbm(x * 0.045) — a
+      // 22 m period sampled on a 27.5 m vertex grid, so it aliased
+      // into visible grid/tiling lines across the grass. Now 0.012
+      // (83 m period, well above the grid) at half the amplitude.
+      const mottle = fbm(x * 0.012 + 3.3, z * 0.012 - 8.8, 2);
+      tmp.offsetHSL(mottle * 0.015, 0, mottle * 0.04);
     }
     else if (h < 270) tmp.copy(forest).lerp(rock, Math.min(1, slope / 22));
     else if (h < 350) tmp.copy(rock);
@@ -272,6 +280,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // sits in a maintained clearing with a softer grass transition.
     const rb = runwayBlend(x, z);
     if (rb > 0.04 && h > beachTop) {
+      // v19 (Gemini v19 #1): a sand tint in the runway blend zone, so
+      // the pad edges fade to sand instead of a hard dirt/green cut.
+      tmp.lerp(sand, rb * 0.2);
       tmp.lerp(airfield, rb * 0.7);
       tmp.lerp(dirt, rb * rb * 0.55);
     }
@@ -290,7 +301,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
 
   // v5: the MESH height at (x, z) — bilinear over the displaced grid. The
   // analytic groundAt() and the rendered mesh disagree by metres on steep
-  // slopes (the grid is 27.5 m per cell), which is why v4 trees floated above
+  // slopes (the grid is 22.9 m per cell), which is why v4 trees floated above
   // the grass or sank halfway into it. Vegetation and airport buildings snap
   // to THIS height, so every trunk sits exactly on the ground the camera sees.
   const meshH = new Float32Array(pos.count);
@@ -502,6 +513,45 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       group.add(dome);
     }
   }
+  // v19 (Gemini v19 #1): turnaround pads — a 20 m asphalt disc past
+  // each strip end, so the runway reads as a working strip with room
+  // to turn at both ends, not a floating grey rectangle.
+  const padMat = new THREE.MeshStandardMaterial({ color: '#2B303A', roughness: 0.85 });
+  const padRingMat = new THREE.MeshStandardMaterial({ color: '#f5f0dc', roughness: 0.8 });
+  for (const end of [-1, 1]) {
+    const px = runway.x + dirX * end * (COURSE.runwayLength / 2 + 20);
+    const pz = runway.z + dirZ * end * (COURSE.runwayLength / 2 + 20);
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(20, 24), padMat);
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(px, runway.height + 0.25, pz);
+    group.add(pad);
+    const padRing = new THREE.Mesh(new THREE.RingGeometry(19.2, 20, 32), padRingMat);
+    padRing.rotation.x = -Math.PI / 2;
+    padRing.position.set(px, runway.height + 0.28, pz);
+    group.add(padRing);
+  }
+  // v19 (Gemini v19 #1): PAPI — four light boxes beside the west
+  // threshold (approach side, pilot's left), 2 red inboard + 2 white
+  // outboard, so final approach has a real glide-slope cue on the
+  // ground. Static colours (on-glidepath = 2 red + 2 white).
+  const papiRed = new THREE.MeshBasicMaterial({ color: 0xff2a1e });
+  const papiWhite = new THREE.MeshBasicMaterial({ color: 0xfff2d8 });
+  for (let k = 0; k < 4; k += 1) {
+    const along = -COURSE.runwayLength / 2 + 15;
+    const across = -(COURSE.runwayWidth / 2 + 12 + k * 6);
+    const px = runway.x + dirX * along + perpX * across;
+    const pz = runway.z + dirZ * along + perpZ * across;
+    const py = meshHeight(px, pz);
+    const papiBase = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), baseMat);
+    papiBase.position.set(px, py + 0.25, pz);
+    group.add(papiBase);
+    const papiLens = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.4, 0.9),
+      k < 2 ? papiRed : papiWhite,
+    );
+    papiLens.position.set(px, py + 0.65, pz);
+    group.add(papiLens);
+  }
   // v17: approach lights — five white fixtures on the extended
   // centreline west of the threshold (40 m apart), so final approach
   // has a visible lead-in. (The old approach-light row was removed in
@@ -597,13 +647,34 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   );
   wsPole.position.set(wsx, meshHeight(wsx, wsz) + 4, wsz);
   group.add(wsPole);
+  // v19 (Gemini v19 #1): red-and-white striped sock on a pivot at the
+  // pole top, swinging with the wind (animated in update() below) —
+  // the old sock was a static orange cone.
+  const wsSockTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    const ctx = c.getContext('2d');
+    for (let b = 0; b < 4; b += 1) {
+      ctx.fillStyle = b % 2 ? '#f5f0dc' : '#e53935';
+      ctx.fillRect(0, b * 16, 64, 16);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const wsGroup = new THREE.Group();
   const wsSock = new THREE.Mesh(
     new THREE.ConeGeometry(0.7, 3.0, 8),
-    new THREE.MeshStandardMaterial({ color: '#ff7f2a', roughness: 0.7 }),
+    new THREE.MeshStandardMaterial({ map: wsSockTex, roughness: 0.7 }),
   );
-  wsSock.rotation.z = -Math.PI / 2 - 0.25;
-  wsSock.position.set(wsx + 1.5, meshHeight(wsx, wsz) + 7.6, wsz);
-  group.add(wsSock);
+  // Cone points +Y; lay it horizontal with the tip downwind (+X local),
+  // offset so the wide mouth sits at the pivot.
+  wsSock.rotation.z = -Math.PI / 2;
+  wsSock.position.x = 1.5;
+  wsGroup.add(wsSock);
+  wsGroup.position.set(wsx, meshHeight(wsx, wsz) + 7.6, wsz);
+  group.add(wsGroup);
   // v6: a fuel shed and a drum cluster beside the hangar, so the airfield
   // has a second building and the hangar is not a lone box on a bare slope
   // (Gemini v5: "the red-roofed building off to the right sits isolated on
@@ -753,7 +824,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(28, 28);
+    // v19 (f): repeat 40 (was 28) — a slightly finer wave grain, so the
+    // sea keeps some surface texture at low altitude over the water.
+    tex.repeat.set(40, 40);
     return tex;
   })();
   const sea = new THREE.Mesh(seaGeo, new THREE.MeshStandardMaterial({
@@ -857,6 +930,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
 
   /** An inland shade tree: a brown trunk and a canopy of 4-6 overlapping blobs. */
   function plantShadeTree(px, pz, ph, s) {
+    // v19 (Gemini v19 #1): natural grove variation — each tree's scale
+    // is multiplied 0.8-1.35x and the yaw is already random per tree,
+    // so a grove reads as mixed growth instead of cloned props.
+    const sv = s * vegRandom.range(0.8, 1.35);
+    s = sv;
     const tree = new THREE.Group();
     const trunkH = 2.6 * s;
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
@@ -896,6 +974,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
 
   /** A beach palm: a gently curved trunk, a crown of drooping fronds, coconuts. */
   function plantPalm(px, pz, ph, s) {
+    // v19 (Gemini v19 #1): same grove variation as plantShadeTree.
+    const sv = s * vegRandom.range(0.8, 1.35);
+    s = sv;
     const palm = new THREE.Group();
     const lean = vegRandom.range(-0.14, 0.14);
     // Curved trunk: two segments leaning opposite ways, so the trunk bends.
@@ -1594,19 +1675,33 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // too spread to merge into one mass — so detail-1 geometry with smooth
   // shading, only white + warm white, lobes 45-75 m packed tight, and
   // 4 hero clouds east of the airfield where the cameras look.
+  // v19 (Gemini v19 #2): the clouds are FACETED multi-puff cumulus
+  // again — detail-0 lobes with flatShading, bright tops #F7FBFF,
+  // white #FFFFFF, cool undersides #DCE8F2, lobes ~15% smaller and
+  // banks higher (380-410 m) with bank E2 shifted south, so no cloud
+  // sits in the landing camera's top-right HUD corner. The v10
+  // faceted attempt read as rocks because the lobes were grey-blue
+  // and spread thin; bright two-tone lobes packed tight read as
+  // stylised cumulus.
   const clouds = [];
   const cloudRandom = createRandom(seed + 101);
   const cloudMats = [
-    new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, fog: false }),
-    new THREE.MeshLambertMaterial({ color: '#f6eeda', transparent: true, opacity: 0.95, fog: false }),
+    // v19b: FULLY OPAQUE (was transparent 0.95). The 0.95 transparency
+    // made the distant bank lobes read as giant translucent grey
+    // bubbles — the "gelembung raksasa" Gemini flagged in v18, still
+    // in the v19 cockpit + cover shots (a census of the live scene
+    // proved the right-edge discs are the 75-95 m bank lobes at
+    // 1.5-1.7 km, seen side-on with their shadow faces toward the
+    // camera). Opaque lobes read as solid cloud, never as bubbles.
+    new THREE.MeshStandardMaterial({ color: '#f7fbff', roughness: 1, flatShading: true, fog: false }),
+    new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, fog: false }),
     // Gemini's fix prompt: shaded underside/base puffs in cool blue-grey
-    // #D7E2EE to #C4D2E0, as part of the cloud volume (never a separate
-    // flat disc) — the lower lobes below use this one.
-    new THREE.MeshLambertMaterial({ color: '#d7e2ee', transparent: true, opacity: 0.95, fog: false }),
+    // #DCE8F2, as part of the cloud volume (never a separate flat disc).
+    new THREE.MeshStandardMaterial({ color: '#dce8f2', roughness: 1, flatShading: true, fog: false }),
   ];
-  // detail-1: softly rounded (80 faces), smooth Lambert shading — the
-  // detail-0 faceted lobes of iterasi 1 read as floating rocks.
-  const lobeGeo = new THREE.IcosahedronGeometry(1, 1);
+  // detail-0: faceted lobes — the smooth detail-1 lobes of v10
+  // iterasi 2 read as marshmallow pills in the HUD corner.
+  const lobeGeo = new THREE.IcosahedronGeometry(1, 0);
   // The course polyline (spawn -> rings -> runway): the shot cameras all
   // ride within ~40 m of it, so a cloud near it looms over a HUD panel.
   const cloudPath = [];
@@ -1644,10 +1739,10 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // bank, so a bank reads as one wide flat cumulus mass, not three
   // separate balls stacked in a staircase.
   const banks = [
-    { x0: 1700, x1: 2050, z0: -900, z1: -650, alt: 320 },
-    { x0: 1650, x1: 2000, z0: 600, z1: 850, alt: 340 },
-    { x0: -300, x1: 600, z0: -1400, z1: -1100, alt: 300 },
-    { x0: -1300, x1: -400, z0: 1000, z1: 1400, alt: 310 },
+    { x0: 1700, x1: 2050, z0: -900, z1: -650, alt: 390 },
+    { x0: 1650, x1: 2000, z0: 850, z1: 1100, alt: 410 },
+    { x0: -300, x1: 600, z0: -1400, z1: -1100, alt: 380 },
+    { x0: -1300, x1: -400, z0: 1000, z1: 1400, alt: 390 },
   ];
   // v14: the shared skirt is GONE — deleted outright. The wide flat lobe
   // (170×24×115 m) under each bank read from below as a flat grey disc
@@ -1667,10 +1762,14 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       }
       if (!placed) continue;
       const cloud = new THREE.Group();
-      const baseLobes = 8 + cloudRandom.int(0, 3);
+      // v19b: more, smaller base lobes (10-13 x 40-60 m, was 8-11 x
+      // 60-95) — a bank of many small puffs reads as one cumulus mass;
+      // a few 95 m lobes read as separate giant balls (the bubbles).
+      const baseLobes = 10 + cloudRandom.int(0, 3);
       for (let p = 0; p < baseLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
-        const rx = cloudRandom.range(70, 110);
+        // v19b: radii 40-60 m (was 60-95).
+        const rx = cloudRandom.range(40, 60);
         // v17: taller base lobes (0.65-0.9, was 0.55-0.75) — the banks
         // read as flat slabs from the side; more vertical mass makes
         // them read as towering cumulus.
@@ -1690,10 +1789,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       // base reads as a billowing cumulus bottom, not a flat grey disc.
       // Spread tighter (±35 m) so the bank merges. They use the cool
       // blue-grey underside material (#d7e2ee) from Gemini's fix prompt.
-      const lowerLobes = 3 + cloudRandom.int(0, 1);
+      const lowerLobes = 4 + cloudRandom.int(0, 1);
       for (let p = 0; p < lowerLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[2]);
-        const rx = cloudRandom.range(55, 85);
+        // v19b: radii 30-50 m (was 45-75).
+        const rx = cloudRandom.range(30, 50);
         const ry = rx * cloudRandom.range(0.45, 0.6);
         lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.05));
         lobe.position.set(
@@ -1706,10 +1806,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       }
       // v17: more top lobes (7-9, was 5-7) piled higher (40-70 m, was
       // 34-50 m) — a bumpy, towering top instead of a low cap.
-      const topLobes = 7 + cloudRandom.int(0, 2);
+      const topLobes = 8 + cloudRandom.int(0, 3);
       for (let p = 0; p < topLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
-        const rx = cloudRandom.range(40, 65);
+        // v19b: radii 25-40 m (was 35-55).
+        const rx = cloudRandom.range(25, 40);
         const ry = rx * cloudRandom.range(0.6, 0.85);
         lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.0));
         lobe.position.set(
@@ -1953,6 +2054,12 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     for (const p of swayPalms) {
       p.g.rotation.z = Math.sin(swayTime * 1.1 + p.phase) * p.amp;
     }
+    // v19: the windsock swings with the wind — its pivot yaw tracks the
+    // mean wind direction with a slow flutter, and the tip droops and
+    // lifts a touch, so the sock reads as live cloth, not a static cone.
+    const windYaw = Math.atan2(-STORM.windZ, STORM.windX);
+    wsGroup.rotation.y = windYaw + Math.sin(swayTime * 1.7) * 0.12;
+    wsGroup.rotation.z = -0.08 + Math.sin(swayTime * 2.3) * 0.05;
     for (const cloud of clouds) {
       cloud.position.x += cloud.userData.speed * dt;
       if (cloud.position.x > WORLD.size / 2 + 200) cloud.position.x = -WORLD.size / 2 - 200;

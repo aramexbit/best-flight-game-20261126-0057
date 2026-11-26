@@ -24,7 +24,16 @@ const START_SECONDS = 8;
 // ring 12, so the frame shows the fireball ahead over the runway
 // approach instead of a ring — the blast stays the hero moment. This
 // is staging only: the flight model and the shot cameras are untouched.
-const PLAY_SECONDS = 51.6;
+const PLAY_SECONDS = 49.5;
+// v19b: 51.6 -> 49.5. The mid-air collision fires at ~50.35 s, only
+// ~14 m from the chase camera, and its debris (10-26 m/s) and split
+// airframe halves (36 m/s) fly past the lens in the next second —
+// the cover at 51.6 s caught random giant coloured slabs splashed
+// across the HUD corner (a different slab every run: the debris uses
+// Math.random, so the cover was a lottery). At 49.5 s the cover
+// catches the pre-collision convergence instead: the player on the
+// final leg, the rivals closing on the meet point ahead, the storm
+// in view — the race climax, clean and deterministic every run.
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world

@@ -172,10 +172,12 @@ export function createEffects(THREE, scene) {
     shell.position.set(x, y, z);
     shell.scale.setScalar(2);
     scene.add(shell);
-    // v15 (fix): the shell lives 2.8 s (was 2.2) — the v15 cover froze
-    // the blast 1.7 s old and the linear fade had already washed the
-    // fireball to a faint bubble while the black smoke dominated.
-    balls.push({ mesh: shell, life: 0, maxLife: 2.8, from: 2, to: 34 });
+    // v19 (b): the fireball is BIGGER and LONGER — shell to 42 m over
+    // 3.5 s (was 34 m / 2.8 s), core to 24 m (was 18), inner to 14 m
+    // (was 10), lobes to 26/20 m (was 20/16). The v18 live playtest
+    // never SAW the blast: at 338-400 m a 34 m ball is ~5° wide. A
+    // 42 m ball at ≤300 m (the tightened collision gate) is ~8°.
+    balls.push({ mesh: shell, life: 0, maxLife: 3.5, from: 2, to: 42 });
     const coreMat = new THREE.MeshBasicMaterial({
       color: 0xff9f1c, transparent: true, opacity: 0.95, depthWrite: false,
     });
@@ -183,7 +185,7 @@ export function createEffects(THREE, scene) {
     core.position.set(x + 4, y + 2, z + 2);
     core.scale.setScalar(1.2);
     scene.add(core);
-    balls.push({ mesh: core, life: 0, maxLife: 1.8, from: 1.2, to: 18 });
+    balls.push({ mesh: core, life: 0, maxLife: 2.2, from: 1.2, to: 24 });
     const innerMat = new THREE.MeshBasicMaterial({
       color: 0xfff3b0, transparent: true, opacity: 0.98, depthWrite: false,
     });
@@ -191,7 +193,7 @@ export function createEffects(THREE, scene) {
     inner.position.set(x - 3, y - 1, z - 2);
     inner.scale.setScalar(1);
     scene.add(inner);
-    balls.push({ mesh: inner, life: 0, maxLife: 1.2, from: 1, to: 10 });
+    balls.push({ mesh: inner, life: 0, maxLife: 1.5, from: 1, to: 14 });
     // v17: two extra lobes, offset sideways so the silhouette is
     // lopsided — a fireball with a single centre reads as a balloon.
     const lobeAMat = new THREE.MeshBasicMaterial({
@@ -201,7 +203,7 @@ export function createEffects(THREE, scene) {
     lobeA.position.set(x + 9, y - 3, z + 6);
     lobeA.scale.setScalar(1.5);
     scene.add(lobeA);
-    balls.push({ mesh: lobeA, life: 0, maxLife: 2.2, from: 1.5, to: 20 });
+    balls.push({ mesh: lobeA, life: 0, maxLife: 2.6, from: 1.5, to: 26 });
     const lobeBMat = new THREE.MeshBasicMaterial({
       color: 0xe63946, transparent: true, opacity: 0.95, depthWrite: false,
     });
@@ -209,7 +211,7 @@ export function createEffects(THREE, scene) {
     lobeB.position.set(x - 8, y + 4, z - 6);
     lobeB.scale.setScalar(1.2);
     scene.add(lobeB);
-    balls.push({ mesh: lobeB, life: 0, maxLife: 2.4, from: 1.2, to: 16 });
+    balls.push({ mesh: lobeB, life: 0, maxLife: 2.8, from: 1.2, to: 20 });
     // v16: flame tongues — five stretched additive fire spikes jutting
     // out of the core at random angles, so the blast reads as licking
     // flame, not one smooth ball. They live in their own list because
@@ -231,31 +233,32 @@ export function createEffects(THREE, scene) {
     // warm bounce (Gemini's fix prompt: light flash on clouds/terrain).
     flash.position.set(x, y, z);
     flashLevel = 900;
-    // Shockwave, demoted (v14): one small faint ring, half the old size,
-    // gone in a second — the dark smoke and the fire are the explosion now.
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xffe65c, transparent: true, opacity: 0.5, depthWrite: false,
-    });
-    const ring = new THREE.Mesh(ringGeo, mat);
-    ring.position.set(x, y, z);
-    ring.rotation.x = -Math.PI / 2;
-    ring.scale.setScalar(2);
-    scene.add(ring);
-    rings.push({ mesh: ring, life: 0, maxLife: 1.0, from: 2, to: 22, baseOpacity: 0.5 });
-    // Debris: twenty dark shards and twelve burning ones at 10-26 m/s
+    // v19 (Gemini v18 #1): the shockwave ring is DELETED from the blast
+    // — at distance the 22 m torus read as a giant transparent bubble /
+    // circle in the sky, the single most-named artefact of the v18
+    // blind test. The splash ring on the water surface (splash()) stays:
+    // a flat ring on the sea reads as water, not as a sky bubble.
+    // Debris: sixteen dark shards and eight burning ones at 10-26 m/s
     // (Gemini's fix prompt: 24-36 outward-streaking ember/flame chunks),
     // so the blast reads as shrapnel, not a clean puff. The shards are
     // CHUNKY (v18: 1.2 x 0.8 x 0.8, was elongated 2.0 x 0.45 x 0.45) in
     // slate #334155 and red #C82828, tumbling with gravity — angled
     // fragments, not streaks.
-    for (let d = 0; d < 32; d += 1) {
-      const burning = d < 12;
+    // v19b: SMALLER shards (0.4-1.0 m, was 0.7-2.0) and fewer of them
+    // (24, was 32). The blast sits ~25 m from the player and the chase
+    // camera ~14 m from the blast, so 2 m shards flying outward at
+    // 10-26 m/s reach the camera in under a second and read as giant
+    // coloured slabs splashed across the HUD corner (v19 cover shot).
+    // Sub-metre shards at the same speeds still streak and read as
+    // shrapnel, without filling the frame.
+    for (let d = 0; d < 24; d += 1) {
+      const burning = d < 8;
       const mat = new THREE.MeshBasicMaterial({
         color: burning ? 0xff9e1b : (d % 2 ? 0x334155 : 0xc82828),
         transparent: true, opacity: 1, depthWrite: false,
       });
       const piece = new THREE.Mesh(debrisGeo, mat);
-      const s = 0.7 + Math.random() * 1.3;
+      const s = 0.4 + Math.random() * 0.6;
       piece.scale.set(s * 1.2, s * 0.8, s * 0.8);
       piece.position.set(x, y, z);
       piece.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
@@ -283,6 +286,10 @@ export function createEffects(THREE, scene) {
     // the soft texture, so the fire shows through them.
     // v18: slate smoke (#475569 / #64748B / #CBD5E1, Gemini's spec) —
     // the old near-black puffs read as confetti flecks against the fire.
+    // v19 (Gemini v18 #2): the blast smoke is CAPPED — life 6-8 s
+    // (was 8-12), grow 0.5 (was 0.8). A puff at 2.5-4 m growing
+    // 0.8/s for 12 s reaches ~24 m across; fourteen of those read as
+    // giant clouds piling into the HUD. Capped puffs top out near 8 m.
     const smokeColors = [0x475569, 0x64748b, 0xcbd5e1];
     for (let p = 0; p < 14; p += 1) {
       smokePuff(
@@ -292,8 +299,8 @@ export function createEffects(THREE, scene) {
         2.5 + Math.random() * 1.5,
         {
           color: smokeColors[p % smokeColors.length],
-          life: 8 + Math.random() * 4,
-          grow: 0.8,
+          life: 6 + Math.random() * 2,
+          grow: 0.5,
           vel: {
             x: (Math.random() - 0.5) * 5,
             y: air ? -2 - Math.random() * 1.5 : 2 + Math.random() * 2,
@@ -735,12 +742,15 @@ export function createEffects(THREE, scene) {
       if (c.timer >= 0.25) {
         c.timer = 0;
         const h = (c.t / c.dur) * 42;
+        // v19: the column puffs are spread wider (±6 m, was ±3) and
+        // grow slower (1.0, was 1.4), so the column reads as one thick
+        // rising stack instead of a chain of separate beads.
         smokePuff(
-          c.x + (Math.random() - 0.5) * 3,
+          c.x + (Math.random() - 0.5) * 6,
           c.y + h,
-          c.z + (Math.random() - 0.5) * 3,
+          c.z + (Math.random() - 0.5) * 6,
           2 + Math.random() * 1.5,
-          { color: 0x475569, life: 4, grow: 1.4, vel: { x: 0, y: 2.5, z: 0 }, opacity: 0.7 },
+          { color: 0x475569, life: 4, grow: 1.0, vel: { x: 0, y: 2.5, z: 0 }, opacity: 0.7 },
         );
       }
       if (c.t >= c.dur) columns.splice(i, 1);
@@ -768,9 +778,13 @@ export function createEffects(THREE, scene) {
       if (h.smokeTimer >= 0.25) {
         h.smokeTimer = 0;
         const p = h.group.position;
-        smokePuff(p.x, p.y, p.z, 2 + Math.random(), {
-          color: 0x475569, life: 3, grow: 1.2,
-          vel: { x: 0, y: 0.5, z: 0 }, opacity: 0.8,
+        // v19: the halves' trail puffs are bigger and softer (2.5-4 m,
+        // grow 1.6, opacity 0.6 — was 2-3 m / 1.2 / 0.8), so the two
+        // trails merge into one burning ribbon instead of a bead-chain
+        // that reads as a wire behind each half.
+        smokePuff(p.x, p.y, p.z, 2.5 + Math.random() * 1.5, {
+          color: 0x475569, life: 3, grow: 1.6,
+          vel: { x: 0, y: 0.5, z: 0 }, opacity: 0.6,
         });
       }
       if (h.life >= h.maxLife || h.group.position.y < 1) {

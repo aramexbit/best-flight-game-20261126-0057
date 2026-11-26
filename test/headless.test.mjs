@@ -16,6 +16,12 @@
 //   6. No-input straight flight passes ring 1 (v18: a human flying
 //      straight from spawn must clear ring 1 — the autopilot's 12/12
 //      is not enough on its own).
+//   7. Pitch taps are symmetric and effective (v19: 6x S taps in live
+//      play only lost 41 ft — a tap must move the nose, W and S alike).
+//   8. Ring 1->2 leg is long and gentle (v19: the 250 m leg gave the
+//      player 3-4 s to turn — 0/12 ring 2 in the v18 live playtest).
+//   9. The collision gate refuses a blast beyond 300 m (v19: the
+//      400 m cap let a ~5° fireball fire that nobody could see).
 //
 // Run: node test/headless.test.mjs   (exit 0 = all pass)
 import assert from 'node:assert/strict';
@@ -160,7 +166,7 @@ check('relFire fires on its terms (both <130 m, facing 0.8, t>=40)', () => {
     playerPos: { x: -200, y: 150, z: 0 }, playerFwd: { x: 0.8, z: 0.6 }, meetPoint: M, time: 45,
   });
   console.log(`  blastDist=${g.blastDist.toFixed(0)} m facing=${g.facing.toFixed(2)}`);
-  assert.equal(g.fire, false); // facing 0.8 < 0.85 and rivals >80 m
+  assert.equal(g.fire, false); // facing 0.8 < 0.88 and rivals >80 m
   assert.equal(g.relFire, true);
 });
 
@@ -169,6 +175,21 @@ check('no partner rival: no fire', () => {
     rPos: { x: 10, y: 150, z: 0 }, oPos: null,
     playerPos: { x: -200, y: 150, z: 0 }, playerFwd: FWD_X, meetPoint: M, time: 35,
   });
+  assert.equal(g.fire, false);
+  assert.equal(g.lateFire, false);
+  assert.equal(g.relFire, false);
+});
+
+// --- 9. Collision gate: too far to see, no fire -----------------------
+// v19: the 400 m cap let a blast fire at 338-400 m, where a 34 m
+// fireball is ~5° wide — the v18 live playtest never saw it. A
+// 400 m blast must not fire on ANY branch now.
+check('blast at 400 m does not fire on any branch', () => {
+  const g = collisionGate({
+    rPos: { x: 10, y: 150, z: 0 }, oPos: { x: -10, y: 150, z: 0 },
+    playerPos: { x: -400, y: 150, z: 0 }, playerFwd: FWD_X, meetPoint: M, time: 50,
+  });
+  console.log(`  blastDist=${g.blastDist.toFixed(0)} m facing=${g.facing.toFixed(2)}`);
   assert.equal(g.fire, false);
   assert.equal(g.lateFire, false);
   assert.equal(g.relFire, false);
@@ -246,6 +267,60 @@ check('no-input straight flight passes ring 1', () => {
   assert.ok(rings >= 1, `straight flight passed ${rings} rings in 30 s (expected >= 1)`);
 });
 
-console.log(`\n${passed}/11 headless tests passed`);
+// --- 7. Pitch taps are symmetric and effective -------------------------
+// v19: the v18 live playtest measured 6x S taps = only -41 ft (12x S
+// ~-106 ft) — a 0.1 s tap at pitchRate 0.7 pitches ~0.07 rad and the
+// 0.45 rad/s level decay wipes it in ~0.15 s. A 1 s hold each way
+// must move the nose by a similar amount up and down.
+check('pitch hold 1 s: W and S move altitude symmetrically', () => {
+  function holdAlt(pitchInput) {
+    const course = buildCourse();
+    const flight = createFlight(course.spawn);
+    const s = flight.state;
+    const y0 = s.y;
+    for (let i = 0; i < 1.0 / STEP; i += 1) {
+      flight.step(STEP, { pitch: pitchInput, roll: 0, yaw: 0, throttle: 0 }, FLAT_GROUND, null);
+    }
+    return s.y - y0;
+  }
+  const down = holdAlt(-1);
+  const up = holdAlt(1);
+  console.log(`  S 1s: ${down.toFixed(1)} m, W 1s: +${up.toFixed(1)} m`);
+  assert.ok(down < -8, `S hold only lost ${(-down).toFixed(1)} m (limit 8 m)`);
+  assert.ok(up > 8, `W hold only gained ${up.toFixed(1)} m (limit 8 m)`);
+  const ratio = Math.abs(down) / Math.abs(up);
+  assert.ok(ratio > 0.6 && ratio < 1.4, `pitch taps asymmetric: |S|/|W| = ${ratio.toFixed(2)} (limit 0.6-1.4)`);
+});
+
+// --- 8. Ring 1->2 leg is long and gentle --------------------------------
+// v19: the v18 live playtest passed ring 2 in 0 of 5 flights (closest
+// 212 m, then the gap grew). The leg itself is 206 m by construction —
+// 12 rings across a ~2.5 km course cannot run longer legs without the
+// walk overshooting the approach and snaking back (a 260 m floor was
+// tried and collapsed the final leg to 145 m, failing sim-3tier) —
+// so the v19 fix for ring 2 is the PITCH authority (test 7: a tap now
+// moves ~2x more altitude, enough to correct the ±28 m step between
+// rings in the 2.7 s the leg gives at full throttle), plus the gentler
+// wander (0.22 rad). This test guards the structure: the leg must not
+// get SHORTER than the natural 206 m floor, and the turn into ring 2
+// must stay gentle.
+check('ring 1->2 leg >= 200 m with a gentle turn', () => {
+  const course = buildCourse();
+  const pts = [{ x: course.spawn.x, y: course.spawn.y, z: course.spawn.z }, ...course.rings];
+  const legs = [];
+  for (let i = 1; i < pts.length; i += 1) {
+    legs.push(Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y, pts[i].z - pts[i - 1].z));
+  }
+  const leg12 = legs[1];
+  const h01 = Math.atan2(pts[1].x - pts[0].x, -(pts[1].z - pts[0].z));
+  const h12 = Math.atan2(pts[2].x - pts[1].x, -(pts[2].z - pts[1].z));
+  let turn = Math.abs(h12 - h01);
+  if (turn > Math.PI) turn = Math.PI * 2 - turn;
+  console.log(`  leg1->2=${leg12.toFixed(0)} m turn=${(turn * 180 / Math.PI).toFixed(1)}° legs=[${legs.map((l) => Math.round(l)).join(', ')}]`);
+  assert.ok(leg12 >= 200, `ring 1->2 leg is ${leg12.toFixed(0)} m (limit 200 m)`);
+  assert.ok(turn < 0.5, `turn into ring 2 is ${(turn * 180 / Math.PI).toFixed(1)}° (limit 29°)`);
+});
+
+console.log(`\n${passed}/14 headless tests passed`);
 if (process.exitCode) console.log('HEADLESS TESTS: FAIL');
 else console.log('HEADLESS TESTS: ALL PASS');

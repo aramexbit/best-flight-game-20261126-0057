@@ -18,6 +18,8 @@ export function createHud() {
   const thrFill = el('thr-fill');
   const msgEl = el('hud-msg');
   const warnEl = el('hud-warn');
+  // v19 (Gemini v19 #4): the AGL / glide cue on final approach.
+  const aglEl = el('hud-agl');
   // v16: the ring pointer — a chevron pill that always points at the
   // next ring (see update()).
   const ringPtr = el('hud-ring-pointer');
@@ -209,6 +211,24 @@ export function createHud() {
         // v15: a timed-out message drops the pill styling too, so the
         // next flash message starts from the big gold centre style.
         msgEl.classList.remove('objective');
+        // v19 (b): CLEAR the text too — the v18 live playtest saw the
+        // "MID-AIR COLLISION!" text lingering in the page for >140 s
+        // (including after the "Crashed!" panel), because the timer
+        // only faded the opacity to 0 and never removed the text from
+        // the DOM. A faded-but-present message is still a message.
+        msgEl.textContent = '';
+      }
+    }
+    // v19 (Gemini v19 #4): the AGL / glide cue on final — after ring
+    // 12/12 the pill shows the height above ground and the glide
+    // alignment (ON GLIDE / HIGH / LOW against a 3° slope), so the
+    // landing has a readable cue instead of a bare altitude number.
+    if (aglEl) {
+      if (view.rings >= view.ringTotal && view.glide) {
+        aglEl.style.display = 'flex';
+        aglEl.textContent = `AGL ${Math.round(view.aglFt)} FT · ${view.glide}`;
+      } else {
+        aglEl.style.display = 'none';
       }
     }
   }

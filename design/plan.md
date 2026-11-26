@@ -1,4 +1,4 @@
-# Langit Nusantara — Ring Run: v18 Plan
+# Langit Nusantara — Ring Run: v19 Plan
 
 Competition: make.fun "Make the best flight game", $500 (top 50 share).
 Deadline: **Saturday 28 Nov 2026, 07:57 WIB**. Repo: `best-flight-game-20261126-0057`.
@@ -98,7 +98,98 @@ coarse (1 W tap locked pitch up permanently).
   #FACC15 border, white text), not big round pins. Slipstream trail
   dimmed (opacity 0.20, size 0.8) — the pink wash in the cockpit view.
 
-## What v18 does NOT change
+## Why v19 exists
+
+Blind test v18 (Gemini) verdict NO — Cover 5.2 (flat) / Cockpit 5.8
+(+1.3) / Title 6.4 (+0.6) / Landing 5.5 (−0.5). The criticism: giant
+transparent bubble/circle artefacts in the sky; giant faceted cloud /
+smoke masses colliding with the HUD; the yellow rival + its smoke trail
+reading as a ribbon/wire; grid lines in the grass; dials still cramped;
+the tornado a stack of cylinders; rival pills floating; the instruction
+card covering the action; in-flight HUD counters on the title screen;
+marshmallow clouds without shadows; a landing with no ground shadow;
+an incohesive airfield (no PAPI / glide-slope). Live playtest v18
+(27 Nov 03:58–04:14 WIB) added six P0 findings the seed screenshots
+never showed: (a) ring 2 never passed in 5 flights (closest 212 m —
+the 1→2 window is ~250 m, 3–4 s at 147 kts); (b) the rival blast never
+seen live (message 2×, text surviving >140 s in the DOM, including
+after "Crashed!"); (c) the player crash shows no fireball (the camera
+enters the terrain/flame); (d) only 1 shadow live (v17 saw 5);
+(e) pitch taps very weak (6× S only −41 ft); (f) at 192–77 ft over
+the sea the background is uniform pale blue — no horizon, no sea.
+
+## What v19 changes (patch on v18, never a rebuild)
+
+**Flight / fairness (the P0 fixes)**
+- Pitch authority (finding (e)): pitchRate 0.7 → 0.9, pitchLevel
+  0.45 → 0.30. Headless test 7: 1 s hold, S −26.4 m / W +24.8 m,
+  ratio 1.06 — taps ~2× more effective, symmetric.
+- Ring 1→2 (finding (a)): the honest fix is the pitch authority
+  above, NOT longer legs — the legs are 206 m by construction
+  (course length / 12). A first attempt (ringSpacing 370 + a 260 m
+  floor) collapsed the final leg to 145 m and the Reference sim
+  FAILED (11/12, ring 12 missed by 22.6 m). The fix: `COURSE.legMin
+  120 / legMax 480` replaces ringSpacing + spacingJitter; wander
+  0.30 → 0.22 rad. Legs now [600, 206, 207, 206, 206, 207, 208, 208,
+  209, 208, 208, 208]. New headless test 8 (leg 1→2 ≥ 200 m, turn
+  < 0.5 rad) + live probe phase A8 (ring 2 with HELD keys).
+- Blast gate (finding (b)): blastDist 100–400 → 80–300 m, facing
+  >0.85 → >0.88; lateFire/relFire ≤400 → ≤300, relFire facing >0.7
+  → >0.75. New headless test 9: 400 m fires in NO branch. Fireball
+  bigger (shell 42 m / 3.5 s). The HUD message bug is fixed at the
+  root — hud.js now sets `textContent = ''` when the timer expires
+  (v18 only set opacity 0); the live probe checks the text is ''
+  (strict).
+- Crash camera (finding (c)): on EVENT_CRASH the camera pulls wide
+  (`setChase(45, -10, 20, 40)`) and a transient `crashing` state
+  advances effects/storm for 1.5 s before `endGame(false)` — the
+  fireball reads as an OBJECT. Live proof: probe phase A4 shots.
+- Contact shadows (finding (d)): a dark ellipse directly under the
+  player + each rival, visible below 120 m AGL (opacity 0.55→0,
+  scale 8 m + agl×0.02); sun-offset shadow cap 120 → 50 m.
+- Horizon (finding (f)): fog #cfe8f5 → #9CC8E8 (was ≈ skyHorizon
+  #CFEFFF, so the horizon vanished at low altitude over the sea).
+
+**Visuals (Gemini v19 prompt, per scene)**
+- Bubbles: TWO real sources found. (1) Rival `emitSmoke` — 2.2 m
+  puffs growing 1.8/s for 2.8 s (≈13 m), emitted every 0.1 s, a
+  chain of giant grey bubbles — flattened (size 1.2 m, grow 0.9,
+  life 2.0 s, opacity 0.45). (2) Cloud lobes seen edge-on (75–95 m,
+  1.5–1.7 km, opacity 0.95 + a transparent pass + JPEG) read as
+  grey bubbles — cloud material is now FULLY OPAQUE and lobes are
+  smaller (base 40–60 m, lower 30–50 m, top 25–40 m). The explosion
+  shockwave ring is DELETED; blast smoke capped (life 6–8 s, grow
+  0.5, max ~8 m); explosion debris shrunk (0.4–1.0 m, 32→24).
+- Tornado rebuilt as a vortex: 12 segments, continuous taper 4 m
+  (foot) → 46 m (crown), dark slate #3B4652/#586675, 18 rotating
+  debris flecks, faceted anvil, rain #E6F4FF opacity 0.35.
+- Grass grid: mottle 0.045 → 0.012, offsetHSL amplitude 0.03/0.07
+  → 0.015/0.04, terrain SEG 160 → 192.
+- Runway furniture: turnaround pads (asphalt disc r 20 m + white
+  ring, both strip ends) + PAPI (4 boxes by the west threshold:
+  2 red inner + 2 white outer) + a red-white striped windsock
+  (animated yaw + flutter).
+- Dials redrawn: numbers 84 px at radius 120 (was 96 px at 138 —
+  glyphs hit the tick ring), ticks shorter (long 180 / major 190 /
+  minor 200, all to 216), badge 150×52 at y 300, font 46 px, dial
+  main r 0.20 / outer 0.14, labels IAS/VSI (was KTS/FUEL), needle
+  #E53935, VSI as the 6th gauge, trim #242B35, glareshield accent
+  #C93B2B.
+- Title: `.top-pill` in `#title-top-right` hidden by CSS (Fuel +
+  0/12 gone from the title; the gear button stays). `#title-rules`
+  top 47% → 44%, max-width 540px → 44%.
+- AGL / glide cue: `#hud-agl` pill (top 19%) — `AGL {ft} FT ·
+  {glide}` on approach (rings ≥ ringTotal), glide = dist × 0.0524
+  (3°), ON GLIDE / HIGH / LOW, ±15 m tolerance.
+- Cover framing: `PLAY_SECONDS` 51.6 → 49.5. The staged blast at
+  50.35 s sits ~14 m from the chase camera, so debris and the
+  airframe halves crossed the lens in <1 s and the 51.6 s cover
+  caught a random giant fragment in the HUD corner (different every
+  run — Math.random). The cover now catches the pre-collision
+  convergence (player on the final leg, rivals closing on the meet
+  point, storm visible) — deterministic every run.
+
+## What v19 does NOT change
 
 Caravan shape, 3/4 camera, race system, 12-ring + land mission, yellow
 key-caps, no "Press Space" line, daytime, v11 premium palette, W climbs
@@ -109,15 +200,18 @@ key-caps, no "Press Space" line, daytime, v11 premium palette, W climbs
 1. **3-tier sim** (`sim-3tier.mjs`, pure Node, real game logic):
    Reference (autopilot) must pass 12 rings AND land; Weak (noisy input)
    gets some rings, no finish; Idle (no input) must fail. Must pass before
-   v18 is declared ready. v18 run: Reference 12/12 + landed, score 3385,
-   59.8 s; Weak 9/12, score 1953 (was 6/12 — softer controls + pitch
-   auto-level); Idle 2/12, score 262.
+   v19 is declared ready. v19 run: Reference 12/12 + landed, score 3403,
+   59.7 s; Weak 4/12, score 652 (DOWN from v18's 9/12 — the stronger
+   pitchRate amplifies the noisy pilot's oscillation; the criterion
+   still holds); Idle 2/12, score 277.
 2. **Headless tests** (`test/headless.test.mjs`, Node): heading holds with
    no input (+ gust applied, the v16 regression); ring-centre pass counts;
    crossing rivals fire the collision gate; v18 adds pitch-hold with
    zero stick + gust (test 5) and no-input straight flight passes ring 1
-   (test 6). 11/11 pass. Logic lives in pure modules
-   (`flight.js`, `rings.js`, `collision.js`, `storm.js` gust) — no browser.
+   (test 6); v19 adds pitch-tap symmetry (test 7), ring 1→2 spacing
+   (test 8) and the 400 m no-fire gate (test 9). 14/14 pass. Logic lives
+   in pure modules (`flight.js`, `rings.js`, `collision.js`, `storm.js`
+   gust) — no browser.
 3. **Checklist** (`verification.md`): every item checked only with proof
    (screenshot / sim / test), never a claim.
 4. **This design doc set**: plan + style + asset list, so the direction
@@ -126,4 +220,4 @@ key-caps, no "Press Space" line, daytime, v11 premium palette, W climbs
 ## Submit rule
 
 Submit only on the user's explicit order per version, after screenshots +
-an outside blind test. v18 is not submitted by the builder.
+an outside blind test. v19 is not submitted by the builder.

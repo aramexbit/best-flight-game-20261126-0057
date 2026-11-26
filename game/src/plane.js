@@ -371,7 +371,9 @@ export function buildPlane(THREE, livery = null) {
   // frame elements — pillars, arch, struts, rails, rear posts — so the
   // frame reads as structure, not slabs. The big shell parts (walls,
   // roof, console) keep the lighter shell grey.
-  const trimMat = new THREE.MeshStandardMaterial({ color: '#273244', roughness: 0.6, metalness: 0.2 });
+  // v19: #242B35 (Gemini v19 #3) — a touch darker, so the frame reads
+  // as structure against the bright sky without glare.
+  const trimMat = new THREE.MeshStandardMaterial({ color: '#242B35', roughness: 0.6, metalness: 0.2 });
   // Glareshield: a shaped three-piece brow — a flat centre with two side
   // pieces sloping down to the A-pillars — so the instruments sit under a
   // hood that is part of the cabin, not a floating slab.
@@ -401,7 +403,11 @@ export function buildPlane(THREE, livery = null) {
     shieldSide.rotation.z = -side * 0.10;
     dash.add(shieldSide);
   }
-  const shieldStripe = new THREE.Mesh(new THREE.BoxGeometry(1.71, 0.012, 0.02), red);
+  // v19 (Gemini v19 #3): the glareshield pinstripe is #C93B2B, the
+  // accent red from the fix prompt — the old stripe used the livery
+  // red, which on the rivals read as a random red bar.
+  const stripeMat = new THREE.MeshStandardMaterial({ color: '#C93B2B', roughness: 0.5, metalness: 0.2 });
+  const shieldStripe = new THREE.Mesh(new THREE.BoxGeometry(1.71, 0.012, 0.02), stripeMat);
   shieldStripe.position.set(0, 0.215, -0.035);
   shieldStripe.rotation.x = 0.20;
   dash.add(shieldStripe);
@@ -724,11 +730,15 @@ export function buildPlane(THREE, livery = null) {
     // was 13 / 8 / 5) and the numbers are bigger — at screenshot distance
     // the v7 markings blurred into the cream face, and a hero cockpit
     // shot has to read at a glance (Gemini v7).
+    // v19: the ticks are SHORTER (long 180 / major 190 / minor 200, was
+    // 166 / 184 / 196) — the long ticks reached in to radius 166 and
+    // collided with the numerals, which is why the v18 dials still read
+    // crowded (Gemini v18 #4).
     for (let t = 0; t < 24; t += 1) {
       const a = (t / 24) * Math.PI * 2;
       const major = t % 2 === 0;
       const long = major && (t / 2) % 3 === 0;
-      const r0 = long ? 166 : major ? 184 : 196;
+      const r0 = long ? 180 : major ? 190 : 200;
       x.strokeStyle = '#1a1c22';
       x.lineWidth = long ? 16 : major ? 10 : 6;
       x.beginPath();
@@ -754,21 +764,27 @@ export function buildPlane(THREE, livery = null) {
     // overlapping at screenshot distance; smaller numerals with clear
     // space around them read cleanly. The needle never sweeps the
     // bottom of the dial, so the label badge down there stays uncovered.
-    x.font = 'bold 96px system-ui, sans-serif';
-    x.fillText('12', 256, 106);
-    x.fillText('3', 406, 256);
-    x.fillText('6', 256, 406);
-    x.fillText('9', 106, 256);
+    // v19: numbers 84 px at radius 120 (centres 136/376) — the v18
+    // numerals still overlapped the tick ring: a 96 px glyph at radius
+    // 138 spans radius 90-186, and the long ticks start at 166. At
+    // radius 120 the 84 px glyph spans 78-162, clear of the (now
+    // shorter) ticks at 180+. The badge shrinks to 150x52 at y 300 so
+    // it stays clear of the '6' (now spanning y 334-418).
+    x.font = 'bold 84px system-ui, sans-serif';
+    x.fillText('12', 256, 136);
+    x.fillText('3', 376, 256);
+    x.fillText('6', 256, 376);
+    x.fillText('9', 136, 256);
     // v18: the sub-label sits in its own navy badge, clear of the '6'
     // (which spans y 358-454) and clear of the needle pivot — Gemini's
     // fix: the v17 label read as a decal overlapping the numerals.
-    const badgeW = 170; const badgeH = 64; const badgeY = 315;
+    const badgeW = 150; const badgeH = 52; const badgeY = 300;
     x.fillStyle = '#0f172a';
     x.beginPath();
     x.roundRect(256 - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 16);
     x.fill();
     x.fillStyle = '#ffffff';
-    x.font = 'bold 52px system-ui, sans-serif';
+    x.font = 'bold 46px system-ui, sans-serif';
     x.fillText(label, 256, badgeY + 2);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -787,12 +803,16 @@ export function buildPlane(THREE, livery = null) {
   // gauges 0.13, was 0.11) and sit a touch lower on the panel, so the
   // whole dial — rim to label — stays on the panel face, clear of the
   // glareshield brow above it.
+  // v19 (Gemini v18 #4): main r 0.20, outer r 0.14 — a touch bigger
+  // still; the labels are short (IAS/ALT/HDG/VSI/RPM) and the left
+  // outer gauge is now a VERTICAL SPEED indicator (fuel already shows
+  // in the HUD bar), so the panel reads as a real six-pack fragment.
   const gaugeDefs = [
-    { x: -0.44, pin: 0x7dff9a, label: 'KTS', r: 0.19 },
-    { x: 0, pin: 0xffd94d, label: 'ALT', r: 0.19 },
-    { x: 0.44, pin: 0x4fc3f7, label: 'HDG', r: 0.19 },
-    { x: -0.80, pin: 0x7dff9a, label: 'FUEL', r: 0.13 },
-    { x: 0.80, pin: 0xffd94d, label: 'RPM', r: 0.13 },
+    { x: -0.44, pin: 0x7dff9a, label: 'IAS', r: 0.20 },
+    { x: 0, pin: 0xffd94d, label: 'ALT', r: 0.20 },
+    { x: 0.44, pin: 0x4fc3f7, label: 'HDG', r: 0.20 },
+    { x: -0.80, pin: 0x7dff9a, label: 'VSI', r: 0.14 },
+    { x: 0.80, pin: 0xffd94d, label: 'RPM', r: 0.14 },
   ];
   const needles = [];
   for (const def of gaugeDefs) {
@@ -825,11 +845,13 @@ export function buildPlane(THREE, livery = null) {
     // must read at a glance against the cream face at screenshot distance.
     // v17: longer needle (0.185, was 0.17) — it reaches further toward
     // the rim, so the reading is easier at a glance.
+    // v19: needle colour #E53935 (Gemini v19 #4) — a sharper red that
+    // reads against the near-white face without the orange wash.
     const needleGeo = new THREE.BoxGeometry(0.042, 0.185, 0.006);
     needleGeo.translate(0, 0.065, 0);
     const needle = new THREE.Mesh(
       needleGeo,
-      new THREE.MeshBasicMaterial({ color: 0xff4d1a }),
+      new THREE.MeshBasicMaterial({ color: 0xe53935 }),
     );
     needlePivot.add(needle);
     needlePivot.position.z = 0.012;
@@ -889,14 +911,16 @@ export function buildPlane(THREE, livery = null) {
    * altitude (middle), heading (right). Angles sweep -120..+120 degrees over the
    * gauge range; the heading needle points like a compass, north straight up.
    */
-  // v9: the two outer gauges are live too — FUEL from the tank fraction,
+  // v9: the two outer gauges are live too — VSI from the vertical speed,
   // RPM from the throttle — so all five instruments move with the flight.
-  function setGauges(altM, speedMs, headingDeg, throttle = 0.7, fuelFrac = 1) {
+  // v19: the left outer gauge is VSI (was FUEL — fuel already shows in
+  // the HUD bar); verticalSpeed is the 6th argument, range ±10 m/s.
+  function setGauges(altM, speedMs, headingDeg, throttle = 0.7, fuelFrac = 1, verticalSpeed = 0) {
     const sweep = (value, max) => (-120 + 240 * Math.min(1, Math.max(0, value / max))) * Math.PI / 180;
     needles[0].rotation.z = -sweep(speedMs, 100);
     needles[1].rotation.z = -sweep(altM, 900);
     needles[2].rotation.z = -headingDeg * Math.PI / 180;
-    if (needles[3]) needles[3].rotation.z = -sweep(fuelFrac, 1);
+    if (needles[3]) needles[3].rotation.z = -sweep((verticalSpeed + 10) / 2, 10);
     if (needles[4]) needles[4].rotation.z = -sweep(throttle, 1);
   }
 

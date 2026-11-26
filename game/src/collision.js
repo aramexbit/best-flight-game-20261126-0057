@@ -35,9 +35,13 @@ export function collisionGate({ rPos, oPos, playerPos, playerFwd, meetPoint, tim
   const oNear = hasPartner && Math.hypot(
     oPos.x - meetPoint.x, oPos.y - meetPoint.y, oPos.z - meetPoint.z,
   ) < 80;
-  // The blast must be IN VIEW — 100-400 m ahead of the player, inside
-  // a ~32° forward cone — so the fireball fills the windshield instead
+  // The blast must be IN VIEW — 80-300 m ahead of the player, inside
+  // a ~28° forward cone — so the fireball fills the windshield instead
   // of going off behind the camera or a kilometre away.
+  // v19 (b): was 100-400 m / facing > 0.85. The v18 live playtest saw
+  // the message twice but never the fireball: at 338-400 m a 34 m
+  // fireball is only ~5° wide on screen, and it was easy to miss
+  // entirely. The blast now fires closer and more squarely ahead.
   let blastDist = Infinity;
   let facing = -1;
   if (hasPartner) {
@@ -48,12 +52,13 @@ export function collisionGate({ rPos, oPos, playerPos, playerFwd, meetPoint, tim
       facing = ((mx - playerPos.x) * playerFwd.x + (mz - playerPos.z) * playerFwd.z) / blastDist;
     }
   }
-  const inView = blastDist >= 100 && blastDist <= 400 && facing > 0.85;
+  const inView = blastDist >= 80 && blastDist <= 300 && facing > 0.88;
   const fire = hasPartner && rNear && oNear && inView
     && ((playerDist < RACE.collisionTriggerDist)
-      || (time >= RACE.collisionFallbackAt && playerDist < RACE.collisionCloseDist && facing > 0.85));
+      || (time >= RACE.collisionFallbackAt && playerDist < RACE.collisionCloseDist && facing > 0.88));
   // Second-chance window (from 45 s on): both rivals within 130 m of
-  // the point and the blast midpoint 50-400 m ahead in view.
+  // the point and the blast midpoint 50-300 m ahead in view.
+  // v19 (b): the 400 m cap is now 300 m (same reason as inView above).
   const rNearLate = Math.hypot(
     rPos.x - meetPoint.x, rPos.y - meetPoint.y, rPos.z - meetPoint.z,
   ) < 130;
@@ -61,11 +66,12 @@ export function collisionGate({ rPos, oPos, playerPos, playerFwd, meetPoint, tim
     oPos.x - meetPoint.x, oPos.y - meetPoint.y, oPos.z - meetPoint.z,
   ) < 130;
   const lateFire = hasPartner && rNearLate && oNearLate && time >= 45
-    && blastDist >= 50 && blastDist <= 400 && facing > 0.85 && playerDist < 350;
+    && blastDist >= 50 && blastDist <= 300 && facing > 0.85 && playerDist < 350;
   // Player-relative fire: the point was anchored ahead of the player,
-  // so no playerDist gate is needed. Floor 40 s, facing > 0.7.
+  // so no playerDist gate is needed. Floor 40 s, facing > 0.75
+  // (v19: was 0.7, a small tightening to match the closer blast).
   const relFire = hasPartner && rNearLate && oNearLate && time >= RACE.collisionPlayerRelAt
-    && blastDist >= 50 && blastDist <= 400 && facing > 0.7;
+    && blastDist >= 50 && blastDist <= 300 && facing > 0.75;
   return {
     fire: !!fire, lateFire: !!lateFire, relFire: !!relFire,
     blastDist, facing, playerDist,

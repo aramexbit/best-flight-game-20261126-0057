@@ -54,7 +54,7 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   const cellGround = groundAt(cellX, cellZ);
   const baseY = Math.max(0.6, cellGround);
 
-  // --- The tornado: 8 stacked open cone segments, wide at the top, ---
+  // --- The tornado: 12 stacked open cone segments, wide at the top, ---
   // narrow at the base, spinning as one group with a slow wobble, plus
   // a white spray crown churning at its foot.
   // v17: the funnel is DARKER grey-blue, not pale white — the v16
@@ -64,29 +64,61 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // v18: the funnel is darker still (#8ba0b5 / #6b7f92, was #9fb2c2 /
   // #7e93a8) and wider — Gemini's fix: the v17 funnel still read as a
   // straight pale cone, not a rotating storm column.
+  // v19 (Gemini v18 #5): the 8 stacked cylinders STILL read as a stack
+  // of cups — the steps between segments were visible and the 2.2 rad/s
+  // spin of a smooth cone is invisible. Now 12 segments with a
+  // CONTINUOUS taper (4 m at the foot to 46 m at the crown), darker
+  // slate #3B4652 / #586675, and 18 spinning debris flecks on the
+  // cone surface + at the base, so the rotation is readable from any
+  // angle and the funnel reads as a vortex, not a stack.
   const funnelMat = new THREE.MeshStandardMaterial({
-    color: 0x8ba0b5, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+    color: 0x3b4652, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
   });
   const funnelDark = new THREE.MeshStandardMaterial({
-    color: 0x6b7f92, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+    color: 0x586675, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
   });
   function buildFunnel(scale) {
     const funnel = new THREE.Group();
-    const segs = 8;
+    const segs = 12;
+    const step = 22 * scale;
     for (let i = 0; i < segs; i += 1) {
-      const rBot = (5 + i * 3.6) * scale;
-      const rTop = (7 + i * 3.6) * scale;
-      const h = 34 * scale;
+      // Continuous taper: 4 m at the foot, 46 m at the crown.
+      const rBot = (4 + 3.5 * i) * scale;
+      const rTop = (4 + 3.5 * (i + 1)) * scale;
+      const h = step + 1.5 * scale;
       const seg = new THREE.Mesh(
         new THREE.CylinderGeometry(rTop, rBot, h, 10, 1, true),
         i % 2 ? funnelDark : funnelMat,
       );
-      seg.position.y = (i * 32 + 17) * scale;
+      seg.position.y = (i + 0.5) * step;
       // A slight spiral offset per segment, so the funnel reads as
       // twisting, not a straight stack of cups.
       seg.position.x = Math.sin(i * 0.9) * 2.5 * scale;
       seg.position.z = Math.cos(i * 0.9) * 2.5 * scale;
       funnel.add(seg);
+    }
+    // Spinning debris flecks on the cone surface — the funnel's spin
+    // is otherwise invisible on a smooth cone. 10 flecks spiral up
+    // the cone (radius follows the taper), 8 churn at the base.
+    const fleckMat = new THREE.MeshStandardMaterial({ color: 0x2f3a45, roughness: 1 });
+    const fleckGeo = new THREE.DodecahedronGeometry(1.2 * scale, 0);
+    for (let f = 0; f < 10; f += 1) {
+      const y = (20 + f * 22) * scale;
+      const r = (4 + 3.5 * (y / (22 * scale))) * scale + 1.5 * scale;
+      const a = f * 0.9 + y * 0.008;
+      const fleck = new THREE.Mesh(fleckGeo, fleckMat);
+      fleck.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
+      fleck.rotation.set(f * 1.1, f * 0.7, f * 1.3);
+      funnel.add(fleck);
+    }
+    for (let f = 0; f < 8; f += 1) {
+      const a = f * 0.8;
+      const r = (8 + (f % 3) * 5) * scale;
+      const fleck = new THREE.Mesh(fleckGeo, fleckMat);
+      fleck.scale.setScalar(0.8 + (f % 3) * 0.3);
+      fleck.position.set(Math.cos(a) * r, (2 + (f % 2) * 4) * scale, Math.sin(a) * r);
+      fleck.rotation.set(f * 0.9, f * 1.4, f * 0.5);
+      funnel.add(fleck);
     }
     // Spray crown at the foot: three flat white puffs churning on the
     // surface the funnel touches.
@@ -142,12 +174,17 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // one of which looked like a floating dark rock (Gemini v16). A storm
   // wall is one merged dark mass.
   const wall = new THREE.Group();
+  // v19 (Gemini v18 #5): the wall and anvil lobes are FACETED
+  // (IcosahedronGeometry detail 0 + flatShading) in Gemini's dark
+  // crown colours #3B4652 / #586675 — the smooth detail-1 lobes read
+  // as separate grey oval blobs / floating rocks; faceted slabs merge
+  // into one thunderhead mass.
   const wallMats = [
-    new THREE.MeshLambertMaterial({ color: 0x55677a, transparent: true, opacity: 0.98 }),
-    new THREE.MeshLambertMaterial({ color: 0x64748a, transparent: true, opacity: 0.98 }),
-    new THREE.MeshLambertMaterial({ color: 0x47586a, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x55677a, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x64748a, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x47586a, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
   ];
-  const lobeGeo = new THREE.IcosahedronGeometry(1, 1);
+  const lobeGeo = new THREE.IcosahedronGeometry(1, 0);
   const wallAnchor = { x: cellX + perpX * 150 * side, z: cellZ + perpZ * 150 * side };
   for (let i = 0; i < 7; i += 1) {
     const lobe = new THREE.Mesh(lobeGeo, wallMats[i % wallMats.length]);
@@ -165,9 +202,10 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // darker #334155 / #475569) — Gemini's fix: the v17 storm read as a
   // row of grey blobs with a flat top; a multi-tier anvil gives the
   // cell a real thunderhead crown.
+  // v19: anvil colours are Gemini's dark crown #3B4652 / #586675.
   const anvilMats = [
-    new THREE.MeshLambertMaterial({ color: 0x334155, transparent: true, opacity: 0.98 }),
-    new THREE.MeshLambertMaterial({ color: 0x475569, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x3b4652, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x586675, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
   ];
   for (let i = 0; i < 5; i += 1) {
     const lobe = new THREE.Mesh(lobeGeo, anvilMats[i % anvilMats.length]);
@@ -202,7 +240,9 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     // v18: pale ice-blue rain #E0F2FE at 0.45 opacity (was #BCD8EE at
     // 0.6) — Gemini's spec: the rain reads as bright streaks against
     // the dark cell, not grey smears.
-    color: 0xe0f2fe, transparent: true, opacity: 0.45,
+    // v19: #E6F4FF at 0.35 opacity — lighter and fainter still, so the
+    // rain reads as weather, not as bright scratches on the sky.
+    color: 0xe6f4ff, transparent: true, opacity: 0.35,
   }));
   group.add(rain);
   function writeRain() {

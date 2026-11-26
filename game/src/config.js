@@ -34,7 +34,14 @@ export const PLANE = {
   // How fast the stick turns the plane, in radians per second at full deflection.
   // v18: softer tap increments (v17 live playtest: 1 W tap locked pitch up
   // forever, 2 A taps swung heading 60-70 deg).
-  pitchRate: 0.7,
+  // v19 (e): pitchRate 0.7 -> 0.9, pitchLevel 0.45 -> 0.30. The v18
+  // playtest measured 6x S taps = only -41 ft: a 0.1 s tap at 0.7 rad/s
+  // pitches ~0.07 rad and the 0.45 rad/s level decay wipes it in ~0.15 s.
+  // The new pair makes one tap ~2x more effective (0.35 was tried:
+  // the noisy Weak sim pilot stayed at 4/12 rings either way, so the
+  // extra tap gain of 0.30 is kept). The decay still clears a locked
+  // trim in ~1 s (v17's lock-in stays fixed).
+  pitchRate: 0.9,
   rollRate: 1.5,
   // A banked turn pulls the nose around this hard (radians per second per unit bank).
   turnRate: 0.95,
@@ -42,7 +49,7 @@ export const PLANE = {
   // v18: stronger roll level + a pitch level (v17 had roll auto-level only,
   // so gust pitch random-walked the trim and a W tap locked the climb).
   autoLevel: 0.7,
-  pitchLevel: 0.45,
+  pitchLevel: 0.30,
   // Climbing costs speed, diving buys it, at this rate.
   climbCost: 9.5,
   // Throttle moves at this rate per second when the key is held.
@@ -53,9 +60,20 @@ export const PLANE = {
 
 export const COURSE = {
   ringCount: 12,
-  // Rings are this far apart, give or take the jitter below.
-  ringSpacing: 430,
-  spacingJitter: 110,
+  // Rings are this far apart, give or take the wander below.
+  // v19: the legs are the NATURAL course length / 12 (~250 m) — the
+  // walk's own spacing, not a target. The clamp only guards degenerate
+  // legs. legMin MUST stay below the natural leg: v19's first attempt
+  // set the floor to 260 (ringSpacing - jitter) and the walk overshot
+  // the approach, collapsing the final leg to 145 m — the Reference
+  // autopilot then missed ring 12 by 22.6 m and never landed
+  // (sim-3tier FAIL). A longer leg needs a longer COURSE, not a
+  // higher floor. The ring-2 fix is the PITCH authority (config
+  // pitchRate 0.9 / pitchLevel 0.30): a tap now moves ~2x more
+  // altitude, enough to correct the +/-28 m step between rings in
+  // the 3.5 s the leg gives at full throttle.
+  legMin: 120,
+  legMax: 480,
   // Each leg turns the course by up to the per-leg wander in rings.js
   // (a config field used to live here but nothing read it, so it is gone).
   // Ring centres sit between these altitudes, in metres.
@@ -215,7 +233,11 @@ export const PALETTE = {
   // ground keeps the dry-grass/dirt patchwork, now in more vivid tones.
   skyTop: '#168BFA',
   skyHorizon: '#CFEFFF',
-  fog: '#cfe8f5',
+  // v19 (f): fog was #cfe8f5, nearly identical to skyHorizon, so at
+  // low altitude over the sea the fogged water and the horizon sky
+  // merged into one uniform pale blue with no visible horizon line.
+  // A deeper azure keeps a real sea/sky boundary at 77-192 ft.
+  fog: '#9CC8E8',
   sun: '#ffffff',
   sea: '#00C5D9',
   // v18: sea bands to Gemini's spec — shallow #00C5D9, mid #06A8D8,

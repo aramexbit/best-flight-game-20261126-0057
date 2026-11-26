@@ -1,6 +1,31 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v18: the Gemini v17 blind-test fixes + the five
-// v17 live-playtest P0s. The Caravan is faceted + tapered now (nose
+// standard library only). v19: the Gemini v18 blind-test fixes + the six
+// v18 live-playtest P0s. Pitch taps are ~2x stronger and symmetric now
+// (pitchRate 0.9, pitchLevel 0.30 — 1 s hold: S −26.4 m / W +24.8 m), so
+// ring 2 is reachable with held keys; the 1→2 leg stays 206 m by
+// construction (course length / 12 — a 260 m floor collapsed the final leg
+// and broke the Reference sim, so COURSE is legMin 120 / legMax 480 with
+// wander 0.22 rad). The blast gate is tighter (80–300 m, facing >0.88)
+// and the fireball bigger (shell 42 m / 3.5 s); the collision message now
+// clears from the DOM text itself (was opacity-only, surviving >140 s).
+// On a player crash the camera pulls wide and the fireball stays visible
+// as an object for 1.5 s before the over panel. Contact shadows sit under
+// all five planes (AGL < 120 m) and the sun-offset shadow cap is 50 m.
+// The horizon is visible low over the sea (fog #9CC8E8, was ≈ the pale
+// horizon). The giant transparent bubbles are gone: rival smoke is
+// flattened (1.2 m, grow 0.9, life 2.0 s) and clouds are fully opaque
+// with smaller lobes (base 40–60 m); the explosion shockwave ring is
+// deleted. The tornado is a real vortex (12 segments, taper 4→46 m, dark
+// slate #3B4652/#586675, 18 rotating debris flecks). The grass grid is
+// gone (mottle 0.012, SEG 192). The runway has turnaround pads, PAPI and
+// an animated striped windsock. Dials are redrawn (84 px numbers at
+// radius 120, needle #E53935, labels IAS/VSI, VSI as the 6th gauge).
+// The title hides the in-flight counters (Fuel, 0/12) and the instruction
+// card sits at left 4% / top 44% / max-width 44%. An AGL/glide pill
+// ("AGL 148 FT · HIGH") shows on approach. The cover freezes at 49.5 s
+// — the pre-collision convergence, deterministic every run (the 51.6 s
+// freeze caught a random debris fragment crossing the lens). v18: the
+// Gemini v17 blind-test fixes + the five v17 live-playtest P0s. The Caravan is faceted + tapered now (nose
 // 1.0→0.42, wings tapered chord 1.6→1.15 with 3° dihedral, red tapered
 // wingtips, wing struts, tapered stabiliser, dark wheels, flatShading),
 // the cockpit has slimmer pillars (0.05 m), trim #273244, a dark
@@ -57,8 +82,9 @@
 // COLLISION!"), a boom and a camera shake announce it. The rings are
 // clearance-checked: every ring sits at least 20 m above the terrain (the
 // user's playtest found ring 3 buried in a hillside; Gemini's fix prompt
-// asks for 18-25 m). The cover freezes 1.5 s after the blast (35.5 s),
-// so the split halves and fresh smoke fill the frame ahead of the player.
+// asks for 18-25 m). The cover freezes at 49.5 s (v19) — the pre-collision
+// convergence, deterministic every run (the staged blast is at ~50.35 s;
+// the old 51.6 s freeze caught a random debris fragment crossing the lens).
 // all 12 rings shows "RACE COMPLETE!" with fireworks over the runway,
 // confetti, a fanfare and a results panel (position, score, time). The
 // cockpit closes tighter (bigger dial numerals at 100 px with anisotropy 8,
@@ -112,7 +138,7 @@ if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), joi
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json). The v16 screenshots are the four staged scenes (cover, cockpit, title, landing),
+// screenshots/ and dossier.json). The v19 screenshots are the four staged scenes (cover, cockpit, title, landing),
 // each a real render of the shipped game at 1280x720, JPEG quality 82, all under 256 KiB.
 writeFileSync(
   join(out, 'dossier.json'),

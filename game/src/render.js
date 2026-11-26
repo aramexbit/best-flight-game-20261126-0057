@@ -73,6 +73,43 @@ export function createRenderer(canvas, THREE, groups) {
     rivalShadows.push({ group: g, mesh: m });
   }
 
+  // v19 (d): CONTACT shadows — a dark ellipse directly under each
+  // plane, visible only below 120 m AGL, fading with height. The
+  // sun-offset shadow alone lands up to 50 m away from the plane and
+  // reads as a separate dark patch; the contact shadow is what makes
+  // a low plane (and the landing shot) read as touching the ground.
+  // The v18 live playtest saw only ONE shadow in the whole frame —
+  // the sun-offset shadows sat off-frame, and nothing anchored the
+  // planes to the ground below them.
+  const contactMesh = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.55, depthWrite: false }),
+  );
+  contactMesh.rotation.x = -Math.PI / 2;
+  scene.add(contactMesh);
+  const rivalContacts = [];
+  for (let i = 0; i < 4; i += 1) {
+    const m = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 24),
+      new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.55, depthWrite: false }),
+    );
+    m.rotation.x = -Math.PI / 2;
+    scene.add(m);
+    rivalContacts.push(m);
+  }
+  function placeContact(mesh, terrainApi, x, y, z, visible) {
+    if (!visible) { mesh.visible = false; return; }
+    const groundY = terrainApi && terrainApi.groundAt ? terrainApi.groundAt(x, z) : 0;
+    const floorY = Math.max(groundY, 0.6);
+    const agl = Math.max(0, y - floorY);
+    if (agl > 120) { mesh.visible = false; return; }
+    mesh.visible = true;
+    mesh.position.set(x, floorY + 0.4, z);
+    const sc = 8 + agl * 0.02;
+    mesh.scale.set(sc, sc * 0.72, 1);
+    mesh.material.opacity = 0.55 * (1 - agl / 120);
+  }
+
   // v15: shared blob-shadow placement — the sun offset, growth and fade
   // are identical for the player and the rivals, so one helper places
   // any plane's shadow on the ground below it. `yaw` aligns the ellipse
@@ -89,7 +126,12 @@ export function createRenderer(canvas, THREE, groups) {
     // uncapped offset (~260 m) put the shadow out of the frame, so the
     // plane looked shadowless. A capped offset keeps it ahead of the
     // plane where the camera can see it.
-    const offLen = Math.min(120, altRough / Math.tan(sunElev));
+    // v19 (d): the cap drops to 50 m — the v18 live playtest still saw
+    // only one shadow: at 120 m the offset shadow lands far from the
+    // plane, often out of frame or on a distant hill. At 50 m it stays
+    // near the plane, and the contact shadow (above) anchors the
+    // plane to the ground directly below it.
+    const offLen = Math.min(50, altRough / Math.tan(sunElev));
     const shadowX = x + (sunDir ? -sunDir.x / sunH * offLen : 0);
     const shadowZ = z + (sunDir ? -sunDir.z / sunH * offLen : 0);
     const floorY = Math.max(terrainApi && terrainApi.groundAt ? terrainApi.groundAt(shadowX, shadowZ) : 0, 0.6);
@@ -197,7 +239,9 @@ export function createRenderer(canvas, THREE, groups) {
     planeApi.update(dt, s.throttle, time);
     // The dashboard needles follow the flight, every frame, in both views.
     // v9: throttle and fuel drive the two outer gauges too.
-    if (planeApi.setGauges) planeApi.setGauges(s.y, s.speed, headingOf(s.yaw), s.throttle, s.fuel);
+    // v19: the 6th argument is the vertical speed — the left outer gauge
+    // is a VSI now (plane.js), not a fuel gauge.
+    if (planeApi.setGauges) planeApi.setGauges(s.y, s.speed, headingOf(s.yaw), s.throttle, s.fuel, s.verticalSpeed);
 
     tmpForward.set(Math.sin(s.yaw) * Math.cos(s.pitch), Math.sin(s.pitch), -Math.cos(s.yaw) * Math.cos(s.pitch));
 
@@ -315,6 +359,13 @@ export function createRenderer(canvas, THREE, groups) {
       const rs = rivalsList[i];
       if (!rs) { rivalShadows[i].group.visible = false; continue; }
       placeShadow(rivalShadows[i].group, rivalShadows[i].mesh, terrainApi, rs.x, rs.y, rs.z, 0, rs.visible);
+    }
+    // v19 (d): the contact shadows — directly under each plane, so the
+    // landing shot and any low pass read the height at a glance.
+    placeContact(contactMesh, terrainApi, s.x, s.y, s.z, true);
+    for (let i = 0; i < rivalContacts.length; i += 1) {
+      const rs = rivalsList[i];
+      placeContact(rivalContacts[i], terrainApi, rs ? rs.x : 0, rs ? rs.y : 0, rs ? rs.z : 0, !!rs && rs.visible);
     }
 
     // v13: camera shake — applied after the lookAt, as a pure translation,

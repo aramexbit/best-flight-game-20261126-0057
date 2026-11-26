@@ -54,8 +54,17 @@ export function createCourse(random, seed, islands) {
     const dist = Math.hypot(dx, dz);
     const stepLen = i === COURSE.ringCount - 1
       ? dist
-      : clamp(dist / legsLeft, 120, 400);
-    const wander = (1 - i / COURSE.ringCount) * 0.30;
+      // v19 (a): was clamp(dist / legsLeft, 120, 400). The legs come out
+      // ~250 m, 3-4 s at 147 kts, so a player who just cleared ring 1
+      // has little time to turn for ring 2 (v18 live playtest: 0/12,
+      // closest 212 m, then the gap grew). The fix is NOT a higher
+      // floor — v19's first attempt (260) made the walk overshoot the
+      // approach and collapsed the final leg to 145 m, which the
+      // Reference autopilot could not line up on (missed ring 12 by
+      // 22.6 m). The fix is the pitch authority (test 7 proves a tap
+      // moves ~2x more altitude now); the legs stay natural.
+      : clamp(dist / legsLeft, COURSE.legMin, COURSE.legMax);
+    const wander = (1 - i / COURSE.ringCount) * 0.22;
     const heading = headingTo(x, z, approach.x, approach.z) + random.range(-wander, wander);
     x += Math.sin(heading) * stepLen;
     z += -Math.cos(heading) * stepLen;
@@ -323,7 +332,10 @@ export function buildRingMeshes(THREE, course) {
       } else {
         mesh.material = futureMat;
         mesh.scale.setScalar(1);
-        glow.visible = true;
+        // v19 (Gemini v18 #1): the glow torus on EVERY ring read as a
+        // giant transparent bubble/circle in the sky at distance. Only
+        // the NEXT ring glows now; future rings are the plain gold hoop.
+        glow.visible = false;
         glow.scale.setScalar(1);
       }
     }
