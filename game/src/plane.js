@@ -5,15 +5,21 @@
 
 import { PALETTE } from './config.js';
 
-export function buildPlane(THREE) {
+export function buildPlane(THREE, livery = null) {
+  // v13: liveries — the race rivals share this airframe with different
+  // colours. livery = { main, accent }; the player passes nothing and
+  // keeps the red-and-white Caravan. Only the exterior paint changes:
+  // cream body panels become `main`, red trim becomes `accent`.
+  const mainColor = (livery && livery.main) || PALETTE.planeCream;
+  const accentColor = (livery && livery.accent) || PALETTE.planeRed;
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
 
   // v11: glossier premium materials (cream roughness 0.42, red 0.38, both
   // with more metalness) — the redesign prompt's improved material quality
   // and colour contrast, while the red-and-white scheme itself is kept.
-  const cream = new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.42, metalness: 0.25 });
-  const red = new THREE.MeshStandardMaterial({ color: PALETTE.planeRed, roughness: 0.38, metalness: 0.25 });
+  const cream = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.42, metalness: 0.25 });
+  const red = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.38, metalness: 0.25 });
   const glass = new THREE.MeshStandardMaterial({
     color: PALETTE.planeGlass, roughness: 0.12, metalness: 0.4, transparent: true, opacity: 0.85,
   });
@@ -85,31 +91,48 @@ export function buildPlane(THREE) {
   group.add(cowl);
   // Tail: a compact tapered octagonal section, cream, ending small — no
   // cone, no nozzle, no rocket bell.
-  const tailTaper = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.55, 2.0, 8), cream);
+  // v13: the fuselage tapers more clearly toward the tail — longer, to a
+  // finer point — so the rear fuselage does not read as a flat tube.
+  const tailTaper = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.55, 2.6, 8), cream);
   tailTaper.rotation.x = Math.PI / 2;
-  tailTaper.position.set(0, 0.05, 3.2);
+  tailTaper.position.set(0, 0.05, 3.5);
   body.add(tailTaper);
 
-  // High wing: two halves with a real dihedral (tips rise ~0.17 m), red
+  // High wing: two halves with a clear dihedral (tips rise ~0.55 m), red
   // tips, an aileron seam on top, and red struts from the lower fuselage
   // side up to mid-span under the wing — thick and faceted, not a
   // paper-thin slab. Wingspan ~11 m tip to tip.
+  // v13: stronger dihedral (0.11, was 0.07), a thicker root fairing and
+  // bigger red wingtips, so the wing is the first thing read from behind
+  // — not the fuselage tube. The aileron seam is darker and thicker, and
+  // a trailing-edge hinge line marks the flap split.
   for (const side of [-1, 1]) {
     const half = new THREE.Mesh(new THREE.BoxGeometry(4.84, 0.18, 1.6), cream);
     half.position.set(side * 2.42, 0.82, -0.4);
-    half.rotation.z = side * 0.07;
+    half.rotation.z = side * 0.11;
     body.add(half);
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.18, 1.62), red);
-    tip.position.set(side * 5.17, 1.01, -0.4);
-    tip.rotation.z = side * 0.07;
+    const rootFairing = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.32, 1.75), cream);
+    rootFairing.position.set(side * 0.85, 0.78, -0.4);
+    rootFairing.rotation.z = side * 0.11;
+    body.add(rootFairing);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 1.65), red);
+    tip.position.set(side * 5.05, 1.37, -0.4);
+    tip.rotation.z = side * 0.11;
     body.add(tip);
     // Aileron seam: a thin darker line near the trailing edge, so the wing
     // reads as control surfaces, not one blank plank.
-    const aileronMat = new THREE.MeshStandardMaterial({ color: '#d8c9a8', roughness: 0.55, metalness: 0.25 });
-    const aileron = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.02, 0.14), aileronMat);
+    const aileronMat = new THREE.MeshStandardMaterial({ color: '#b8a888', roughness: 0.55, metalness: 0.25 });
+    const aileron = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.03, 0.16), aileronMat);
     aileron.position.set(side * 2.42, 0.92, 0.28);
-    aileron.rotation.z = side * 0.07;
+    aileron.rotation.z = side * 0.11;
     body.add(aileron);
+    const hinge = new THREE.Mesh(
+      new THREE.BoxGeometry(3.6, 0.03, 0.1),
+      new THREE.MeshStandardMaterial({ color: '#8a8378', roughness: 0.6 }),
+    );
+    hinge.position.set(side * 2.42, 0.9, 0.38);
+    hinge.rotation.z = side * 0.11;
+    body.add(hinge);
     // Wing strut: red, from the lower fuselage side up to mid-span under
     // the wing — the Caravan's visible struts, readable from behind.
     const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.5, 6), red);
@@ -121,7 +144,7 @@ export function buildPlane(THREE) {
       new THREE.SphereGeometry(0.09, 8, 6),
       new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff2a1e : 0x2aff5e }),
     );
-    lamp.position.set(side * 5.5, 1.03, -0.4);
+    lamp.position.set(side * 5.5, 1.4, -0.4);
     body.add(lamp);
   }
 
@@ -130,22 +153,26 @@ export function buildPlane(THREE) {
   // edge running forward along the fuselage top. The fin rises to ~2.2 m
   // above the tail, so from the rear chase camera the tail reads as a
   // Caravan empennage, never as a cone.
-  const stabiliser = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.12, 1.1), cream);
-  stabiliser.position.set(0, 0.28, 4.0);
+  // v13: the stabiliser is wider and thicker, so it reads as a separate
+  // tailplane from behind instead of merging into the fuselage tube.
+  const stabiliser = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.16, 1.15), cream);
+  stabiliser.position.set(0, 0.3, 4.2);
   body.add(stabiliser);
   for (const side of [-1, 1]) {
-    const stabTip = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.14, 1.12), red);
-    stabTip.position.set(side * 1.68, 0.28, 4.0);
+    const stabTip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 1.18), red);
+    stabTip.position.set(side * 1.85, 0.3, 4.2);
     body.add(stabTip);
   }
-  const finLower = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 1.3), cream);
-  finLower.position.set(0, 0.7, 3.95);
+  // v13: the fin is shorter and wider than v12 — the old tall thin fin
+  // read as a rocket fin from directly behind. Red cap stays.
+  const finLower = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.85, 1.6), cream);
+  finLower.position.set(0, 0.55, 3.95);
   body.add(finLower);
-  const finUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.95), cream);
-  finUpper.position.set(0, 1.55, 4.05);
+  const finUpper = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.65, 1.2), cream);
+  finUpper.position.set(0, 1.3, 4.05);
   body.add(finUpper);
-  const finTip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.4, 0.8), red);
-  finTip.position.set(0, 2.0, 4.08);
+  const finTip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.3, 1.0), red);
+  finTip.position.set(0, 1.72, 4.08);
   body.add(finTip);
   const dorsalFin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 1.3), cream);
   dorsalFin.position.set(0, 0.72, 3.2);
@@ -157,25 +184,27 @@ export function buildPlane(THREE) {
 
   // Fixed landing gear: a tricycle — two main wheels under the cabin and
   // a nose wheel under the engine — all three tyre bottoms on the same
-  // plane (y = -1.54 in plane-local coordinates, the origin being the
+  // plane (y = -1.58 in plane-local coordinates, the origin being the
   // plane centre), so the plane sits level on the ground.
+  // v13: thicker legs and bigger wheels, so the gear reads from behind
+  // instead of vanishing under the belly.
   for (const side of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.62, 6), dark);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.62, 6), dark);
     leg.position.set(side * 0.75, -0.89, 0.5);
     body.add(leg);
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.22, 12), dark);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.24, 12), dark);
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(side * 0.75, -1.2, 0.5);
     body.add(wheel);
-    const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.24, 8), new THREE.MeshStandardMaterial({ color: '#9aa0aa', roughness: 0.4, metalness: 0.6 }));
+    const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.26, 8), new THREE.MeshStandardMaterial({ color: '#9aa0aa', roughness: 0.4, metalness: 0.6 }));
     hubCap.rotation.z = Math.PI / 2;
     hubCap.position.set(side * 0.75, -1.2, 0.5);
     body.add(hubCap);
   }
-  const noseLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 6), dark);
+  const noseLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.8, 6), dark);
   noseLeg.position.set(0, -0.90, -2.3);
   body.add(noseLeg);
-  const noseWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.2, 12), dark);
+  const noseWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.22, 12), dark);
   noseWheel.rotation.z = Math.PI / 2;
   noseWheel.position.set(0, -1.26, -2.3);
   body.add(noseWheel);
@@ -191,18 +220,21 @@ export function buildPlane(THREE) {
   const prop = new THREE.Group();
   prop.position.set(0, 0, -3.55);
   group.add(prop);
-  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.42, 12), dark);
+  // v13: the spinner is red and bigger, the blades are longer and the
+  // blur disc is wider and stronger — from behind, the front of the plane
+  // must read as a propeller, never as a cone nose.
+  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 12), red);
   hub.rotation.x = -Math.PI / 2;
   prop.add(hub);
-  const hubRing = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.028, 8, 20), red);
+  const hubRing = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 8, 20), red);
   hubRing.position.set(0, 0, 0.2);
   prop.add(hubRing);
-  const hubTip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 10), red);
+  const hubTip = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.28, 10), red);
   hubTip.rotation.x = -Math.PI / 2;
-  hubTip.position.set(0, 0, -0.28);
+  hubTip.position.set(0, 0, -0.32);
   prop.add(hubTip);
   for (const angle of [0, Math.PI]) {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.28, 2.9, 0.07), dark);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 0.07), dark);
     blade.rotation.z = angle;
     blade.position.set(0, 0, -0.1);
     prop.add(blade);
@@ -210,8 +242,9 @@ export function buildPlane(THREE) {
   // v12: the blur disc is bigger (1.6 m radius, was 1.45) and stronger —
   // from the rear chase camera the spinning prop must read as a disc
   // protruding past the nose and fuselage edges, never hidden.
+  // v13: 1.85 m, so the disc clears the fuselage silhouette on both sides.
   const blur = new THREE.Mesh(
-    new THREE.CircleGeometry(1.6, 28),
+    new THREE.CircleGeometry(1.85, 28),
     new THREE.MeshBasicMaterial({
       color: '#d8d8d8', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
     }),
@@ -234,7 +267,7 @@ export function buildPlane(THREE) {
   // placeholders. In their place, three small indicator dots sit FLUSH on
   // the panel face below the middle gauge.
   const dash = new THREE.Group();
-  dash.position.set(0, -0.30, -2.1);
+  dash.position.set(0, -0.24, -2.1);
   dash.visible = false;
   // v7: the panel is a warm medium grey (was near-black #2a2f3a), with a
   // lighter inset face, so the dash reads as a built instrument panel with
@@ -251,7 +284,8 @@ export function buildPlane(THREE) {
   dash.add(panel);
   // v12: the inset face is lighter (#676d78, was PALETTE.cockpitFace) so
   // the dials sit on a face that reads as built metal, not a dark slab.
-  const faceMat = new THREE.MeshStandardMaterial({ color: '#676d78', roughness: 0.65, metalness: 0.1 });
+  // v13: lighter still (#70767f), so the cream dials stand out from it.
+  const faceMat = new THREE.MeshStandardMaterial({ color: '#70767f', roughness: 0.65, metalness: 0.1 });
   const face = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.34, 0.02), faceMat);
   face.position.set(0, 0.01, 0.06);
   dash.add(face);
@@ -291,23 +325,33 @@ export function buildPlane(THREE) {
   // Glareshield: a shaped three-piece brow — a flat centre with two side
   // pieces sloping down to the A-pillars — so the instruments sit under a
   // hood that is part of the cabin, not a floating slab.
+  // v13: the glareshield is a THIN brow now, not a slab — 0.20 m deep
+  // (was 0.36), 0.03 thick, lighter (#565b64) and set back, with a thin
+  // red pinstripe along its front lip — so it reads as a brow over the
+  // dials instead of the big dark slab that dominated the v12 cockpit
+  // frame and hid the top half of every dial.
+  const shieldMat = new THREE.MeshStandardMaterial({ color: '#565b64', roughness: 0.8, metalness: 0.1 });
   const shieldCentre = new THREE.Mesh(
-    new THREE.BoxGeometry(1.15, 0.04, 0.36),
-    new THREE.MeshStandardMaterial({ color: PALETTE.cockpitShield, roughness: 0.8, metalness: 0.1 }),
+    new THREE.BoxGeometry(1.71, 0.03, 0.20),
+    shieldMat,
   );
-  shieldCentre.position.set(0, 0.26, 0.10);
-  shieldCentre.rotation.x = 0.28;
+  shieldCentre.position.set(0, 0.20, 0.06);
+  shieldCentre.rotation.x = 0.20;
   dash.add(shieldCentre);
   for (const side of [-1, 1]) {
     const shieldSide = new THREE.Mesh(
-      new THREE.BoxGeometry(0.48, 0.04, 0.36),
-      new THREE.MeshStandardMaterial({ color: PALETTE.cockpitShield, roughness: 0.8, metalness: 0.1 }),
+      new THREE.BoxGeometry(0.5, 0.03, 0.20),
+      shieldMat,
     );
-    shieldSide.position.set(side * 0.79, 0.22, 0.10);
-    shieldSide.rotation.x = 0.28;
-    shieldSide.rotation.z = -side * 0.12;
+    shieldSide.position.set(side * 0.85, 0.18, 0.06);
+    shieldSide.rotation.x = 0.20;
+    shieldSide.rotation.z = -side * 0.10;
     dash.add(shieldSide);
   }
+  const shieldStripe = new THREE.Mesh(new THREE.BoxGeometry(1.71, 0.012, 0.02), red);
+  shieldStripe.position.set(0, 0.215, -0.035);
+  shieldStripe.rotation.x = 0.20;
+  dash.add(shieldStripe);
   // The lower console is a different, lighter grey than the panel, so
   // the dash reads as separate built parts instead of one black mass.
   // v7: a touch lighter still (#6b7078), widening the material gap between
@@ -388,13 +432,27 @@ export function buildPlane(THREE) {
   // panels sloping down to meet the tops of the side walls, so the roof
   // and the walls join without a gap. The side panels' outer edges land
   // exactly on the wall tops (x ±1.0, y 0.35).
-  const roofCentre = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.04, 0.55), shellMat);
-  roofCentre.position.set(0, 0.66, 0.32);
+  // v13: the headliner runs further back over the pilot (0.85 m deep,
+  // was 0.55), with two cross ribs and a centre spine, so the roof reads
+  // as a built cabin ceiling instead of a short shelf that stops above
+  // the windshield.
+  const roofCentre = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.04, 0.85), shellMat);
+  roofCentre.position.set(0, 0.71, 0.475);
   roofCentre.rotation.x = -0.30;
   dash.add(roofCentre);
+  for (const ribZ of [0.70, 0.88]) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.03, 0.06), shellMat);
+    rib.position.set(0, 0.71 + (ribZ - 0.475) * 0.30 + 0.02, ribZ);
+    rib.rotation.x = -0.30;
+    dash.add(rib);
+  }
+  const roofSpine = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.85), shellMat);
+  roofSpine.position.set(0, 0.73, 0.475);
+  roofSpine.rotation.x = -0.30;
+  dash.add(roofSpine);
   for (const side of [-1, 1]) {
-    const roofSide = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.55), shellMat);
-    roofSide.position.set(side * 0.80, 0.50, 0.32);
+    const roofSide = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.85), shellMat);
+    roofSide.position.set(side * 0.80, 0.55, 0.475);
     roofSide.rotation.x = -0.30;
     roofSide.rotation.z = -side * 0.64;
     dash.add(roofSide);
@@ -409,10 +467,19 @@ export function buildPlane(THREE) {
   windshield.position.set(0, 0.40, 0.0);
   windshield.rotation.x = -0.06;
   dash.add(windshield);
+  // v13: the side rails run further back and slope up from the arch, and
+  // a rear post joins each rail end down to the wall — the canopy frame
+  // now reads as a full cabin cage, not two rails that stop mid-air.
+  // The side walls are TALLER (door 0.72 m, window 0.52 m), so the cabin
+  // sides reach up to meet the roof instead of ending halfway.
   for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.55), shellMat);
-    rail.position.set(side * 0.98, 0.42, 0.28);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.85), shellMat);
+    rail.position.set(side * 0.98, 0.47, 0.42);
+    rail.rotation.x = -0.12;
     dash.add(rail);
+    const rearPost = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.05), shellMat);
+    rearPost.position.set(side * 0.98, 0.27, 0.80);
+    dash.add(rearPost);
     // v12: the wall is a door frame, not a plate. A solid lower door panel
     // with a REAL window opening above it — frame bars around a glass pane
     // with nothing solid behind it, so the window is a cutout in the wall
@@ -420,30 +487,30 @@ export function buildPlane(THREE) {
     // console, its top meets the roof side panel, its front edge overlaps
     // the A-pillar: one continuous shell.
     const wallGroup = new THREE.Group();
-    wallGroup.position.set(side * 1.0, -0.10, 0.34);
+    wallGroup.position.set(side * 1.0, 0.0, 0.34);
     wallGroup.rotation.y = -side * 0.25;
     dash.add(wallGroup);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.8), shellMat);
-    door.position.set(0, -0.28, 0);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.72, 0.8), shellMat);
+    door.position.set(0, -0.18, 0);
     wallGroup.add(door);
     const frameTop = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.66), shellMat);
-    frameTop.position.set(0, 0.45, 0);
+    frameTop.position.set(0, 0.55, 0);
     wallGroup.add(frameTop);
     const frameSill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.66), shellMat);
-    frameSill.position.set(0, 0.0, 0);
+    frameSill.position.set(0, 0.12, 0);
     wallGroup.add(frameSill);
-    const frameFront = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.51, 0.06), shellMat);
-    frameFront.position.set(0, 0.225, -0.30);
+    const frameFront = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.62, 0.06), shellMat);
+    frameFront.position.set(0, 0.30, -0.30);
     wallGroup.add(frameFront);
-    const frameBack = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.51, 0.06), shellMat);
-    frameBack.position.set(0, 0.225, 0.30);
+    const frameBack = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.62, 0.06), shellMat);
+    frameBack.position.set(0, 0.30, 0.30);
     wallGroup.add(frameBack);
-    const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.43), glassMat);
-    sideGlass.position.set(0, 0.225, 0);
+    const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.52), glassMat);
+    sideGlass.position.set(0, 0.30, 0);
     sideGlass.rotation.y = Math.PI / 2;
     wallGroup.add(sideGlass);
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.5), frameMat);
-    handle.position.set(-side * 0.04, -0.15, 0);
+    handle.position.set(-side * 0.04, -0.08, 0);
     wallGroup.add(handle);
   }
   // v6: the control yoke — a short column rising out of the console shelf
@@ -471,7 +538,9 @@ export function buildPlane(THREE) {
   yokeCol.position.set(0, -0.24, 0.20);
   yokeCol.rotation.x = 0.35;
   dash.add(yokeCol);
-  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 12, 32), yokeMat);
+  // v13: the wheel is bigger still (0.24 m radius, was 0.22), so it
+  // anchors the lower centre of the frame as a real control wheel.
+  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.03, 12, 32), yokeMat);
   yokeWheel.position.set(0, -0.06, 0.28);
   yokeWheel.rotation.x = 0.35;
   dash.add(yokeWheel);
@@ -485,7 +554,7 @@ export function buildPlane(THREE) {
   dash.add(yokeCap);
   for (const side of [-1, 1]) {
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.05), yokeMat);
-    grip.position.set(side * 0.22, -0.06, 0.28);
+    grip.position.set(side * 0.24, -0.06, 0.28);
     grip.rotation.x = 0.35;
     dash.add(grip);
   }
@@ -570,12 +639,12 @@ export function buildPlane(THREE) {
     x.fillStyle = '#1a1c22';
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.font = 'bold 76px system-ui, sans-serif';
+    x.font = 'bold 88px system-ui, sans-serif';
     x.fillText('12', 256, 104);
     x.fillText('3', 408, 256);
     x.fillText('6', 256, 408);
     x.fillText('9', 104, 256);
-    x.font = 'bold 52px system-ui, sans-serif';
+    x.font = 'bold 58px system-ui, sans-serif';
     x.fillText(label, 256, 336);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -585,19 +654,23 @@ export function buildPlane(THREE) {
   // and RPM (right) — so the panel reads as a full instrument panel, not
   // three dials with empty grey at the sides. The three main gauges keep
   // their array positions (KTS/ALT/HDG are needles 0-2).
+  // v13: the main dials are bigger still (rim 0.19, was 0.17; outer
+  // gauges 0.13, was 0.11) and sit a touch lower on the panel, so the
+  // whole dial — rim to label — stays on the panel face, clear of the
+  // glareshield brow above it.
   const gaugeDefs = [
-    { x: -0.44, pin: 0x7dff9a, label: 'KTS', r: 0.17 },
-    { x: 0, pin: 0xffd94d, label: 'ALT', r: 0.17 },
-    { x: 0.44, pin: 0x4fc3f7, label: 'HDG', r: 0.17 },
-    { x: -0.80, pin: 0x7dff9a, label: 'FUEL', r: 0.11 },
-    { x: 0.80, pin: 0xffd94d, label: 'RPM', r: 0.11 },
+    { x: -0.44, pin: 0x7dff9a, label: 'KTS', r: 0.19 },
+    { x: 0, pin: 0xffd94d, label: 'ALT', r: 0.19 },
+    { x: 0.44, pin: 0x4fc3f7, label: 'HDG', r: 0.19 },
+    { x: -0.80, pin: 0x7dff9a, label: 'FUEL', r: 0.13 },
+    { x: 0.80, pin: 0xffd94d, label: 'RPM', r: 0.13 },
   ];
   const needles = [];
   for (const def of gaugeDefs) {
     const g = new THREE.Group();
     // v7: z 0.08 (was 0.065) — the gauges sit proud of the new inset face
     // plate (front at 0.07), so the rims and dials are never clipped by it.
-    g.position.set(def.x, 0.02, 0.08);
+    g.position.set(def.x, -0.01, 0.08);
     // v6: big LIGHT dials — cream face, dark ticks, dark needle — so the
     // instruments read at a glance instead of hiding in the dark panel.
     // v8: the rim is a touch bigger (0.17, was 0.165) and the needle is
@@ -617,8 +690,8 @@ export function buildPlane(THREE) {
     face.position.z = 0.005;
     g.add(face);
     const needlePivot = new THREE.Group();
-    const needleGeo = new THREE.BoxGeometry(0.026, 0.13, 0.006);
-    needleGeo.translate(0, 0.055, 0);
+    const needleGeo = new THREE.BoxGeometry(0.032, 0.15, 0.006);
+    needleGeo.translate(0, 0.065, 0);
     const needle = new THREE.Mesh(
       needleGeo,
       new THREE.MeshBasicMaterial({ color: 0x1c1e24 }),
@@ -697,7 +770,7 @@ export function buildPlane(THREE) {
   function update(dt, throttle, time) {
     propAngle += (5 + throttle * 46) * dt;
     prop.rotation.z = propAngle;
-    blur.material.opacity = Math.min(0.35, throttle * 0.35);
+    blur.material.opacity = Math.min(0.45, throttle * 0.45);
     // A hint of life even on the ground: the nav lamps breathe gently.
     void time;
   }

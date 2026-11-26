@@ -126,8 +126,12 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
 /**
  * Set the world to the named scene and return the screen to show over it, the
  * camera mode and the best score to display. Any unknown name is the start scene.
+ * `onStep` (optional) runs once per simulated fixed step with (dt, t) —
+ * v13 uses it to fly the race rivals and advance the explosion effects
+ * on the same clock as the player, so the staged shots catch the flyby,
+ * the mid-air collision and the burning wrecks.
  */
-export function stageShot(name, game) {
+export function stageShot(name, game, onStep) {
   const { flight, course, terrain } = game;
   flight.reset(course.spawn);
   course.reset();
@@ -212,6 +216,11 @@ export function stageShot(name, game) {
     }
     if (events & 2) landed = true;
     void events;
+    // v13: the race and the effects share this clock — the rivals crash on
+    // their scripted schedule (see config RACE) and the explosion smoke
+    // advances step by step, so the screenshot catches each blast at the
+    // right age instead of at frame zero.
+    if (onStep) onStep(SAMPLE, (i + 1) * SAMPLE);
   }
   const screen = name === 'start' ? 'title' : 'play';
   return { screen, camera, best: s.score, landed };

@@ -13,6 +13,7 @@ export function createHud() {
   const timeEl = el('hud-time');
   const scoreEl = el('hud-score');
   const ringsEl = el('hud-rings');
+  const posEl = el('hud-pos');
   const fuelFill = el('fuel-fill');
   const thrFill = el('thr-fill');
   const msgEl = el('hud-msg');
@@ -55,7 +56,7 @@ export function createHud() {
     compassCtx.clearRect(0, 0, w, h);
     compassCtx.fillStyle = PALETTE.hudPanel;
     compassCtx.fillRect(0, 0, w, h);
-    compassCtx.font = `600 13px ${FONT}`;
+    compassCtx.font = `700 14px ${FONT}`;
     compassCtx.textAlign = 'center';
     compassCtx.textBaseline = 'middle';
     // The strip shows 120 degrees around the current heading.
@@ -109,6 +110,17 @@ export function createHud() {
     attCtx.moveTo(-c, shift);
     attCtx.lineTo(c, shift);
     attCtx.stroke();
+    // v13: pitch ladder — short lines at ±20° and ±40° of pitch, so the
+    // ball reads as an attitude indicator instead of a two-colour disc.
+    attCtx.strokeStyle = 'rgba(255,247,232,0.7)';
+    attCtx.lineWidth = 1.5;
+    for (const deg of [-40, -20, 20, 40]) {
+      const ly = shift - (deg / 90) * c;
+      attCtx.beginPath();
+      attCtx.moveTo(-14, ly);
+      attCtx.lineTo(14, ly);
+      attCtx.stroke();
+    }
     attCtx.restore();
     // Fixed wings: the plane symbol never moves, the world turns behind it.
     // v11: the attitude marker is the new gold #FFD52A (was #ffd94d) — same
@@ -130,7 +142,7 @@ export function createHud() {
   /**
    * Refresh every instrument from the flight state, the course and the clock.
    * `view` is { heading, pitch, roll, altM, speedMs, fuel, throttle, time, score,
-   * rings, ringTotal, nextDist, stalled }.
+   * rings, ringTotal, pos, nextDist, stalled }.
    */
   function update(view, dt) {
     setText(altEl, 'alt', `${Math.round(view.altM * 3.28084)}`);
@@ -141,6 +153,7 @@ export function createHud() {
     setText(timeEl, 'time', `${mins}:${String(secs).padStart(2, '0')}`);
     setText(scoreEl, 'score', `${view.score}`);
     setText(ringsEl, 'rings', `RING ${view.rings}/${view.ringTotal} · ${Math.round(view.nextDist)} m`);
+    setText(posEl, 'pos', view.pos || '–');
     fuelFill.style.width = `${Math.round(view.fuel * 100)}%`;
     fuelFill.style.background = view.fuel < 0.2 ? PALETTE.hudWarn : PALETTE.hudGood;
     thrFill.style.width = `${Math.round(view.throttle * 100)}%`;

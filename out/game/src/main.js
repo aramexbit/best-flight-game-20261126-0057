@@ -16,6 +16,8 @@ import { buildPlane } from './plane.js';
 import { createRenderer, CAMERA_CHASE, CAMERA_COCKPIT } from './render.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
+import { createRivals } from './rivals.js';
+import { createEffects } from './effects.js';
 import { ACTION_CAMERA, ACTION_CONFIRM, ACTION_MUTE, ACTION_PAUSE, ACTION_RESTART, createInput } from './input.js';
 import { stageShot } from './shots.js';
 
@@ -45,6 +47,12 @@ const renderer = createRenderer(canvas, THREE, {
 const flight = createFlight(course.spawn);
 const hud = createHud();
 const audio = createAudio();
+// v13: the race — four AI rivals in the same Caravan airframe, and the
+// explosion/smoke system they crash into. The rivals fly the same
+// 12-ring course and never touch the player; the effects are visual only.
+const effects = createEffects(THREE, renderer.scene);
+const rivals = createRivals(THREE, seed, islands, effects);
+renderer.scene.add(rivals.group);
 
 function readBest() {
   try {
@@ -76,13 +84,20 @@ function hudView() {
     score: s.score,
     rings: s.ringsPassed,
     ringTotal: COURSE.ringCount,
+    pos: rivals.playerPosition(flight, course),
     nextDist: course.distanceToNext(s.x, s.y, s.z),
     stalled: s.stalled,
   };
 }
 
 function runShot(name) {
-  const scene = stageShot(name, { flight, course, terrain });
+  // The staged run flies the race too: rivals and effects step with the
+  // player, so the cover catches the flyby and the collisions and the
+  // landing catches the burning wreck.
+  const scene = stageShot(name, { flight, course, terrain }, (dt, t) => {
+    rivals.update(dt, t, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp));
+    effects.update(dt);
+  });
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
   // Framing per shot (v7): the cover (play) camera is close and low
@@ -102,12 +117,16 @@ function runShot(name) {
   // right and slightly banked in the landing frame; closer to centre it
   // reads as on the centreline with level wings, and "09" still shows
   // beside the fuselage instead of hiding under it.
+  // v13: cover and landing chase ride 5-6 m to the side (a 3/4 rear
+  // angle, was straight behind) — from straight behind the plane reads
+  // as a tube + tall fin, a rocket; from the side the cabin windows, the
+  // high wing and the struts read at a glance, so it is a plane.
   // v9: lateral -30 (was -24) — the scene sits a touch further right, so
   // the first ring clears the (now narrower) title card's right edge.
   if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -30, 4.5); }
-  else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, 0, 4.5); }
+  else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, -6, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
-  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, -2.0, 2.2); }
+  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, -5, 2.2); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;
@@ -169,6 +188,9 @@ function runGame() {
   function startGame() {
     flight.reset(course.spawn);
     course.reset();
+    rivals.reset();
+    effects.clear();
+    rivals.group.visible = true;
     accumulator = 0;
     screen = 'play';
     hud.hidePanels();
@@ -243,6 +265,10 @@ function runGame() {
       // The title screen flies itself: a slow autopilot orbit so the world is alive
       // behind the panel. v2: the flight clock stays frozen at 0:00 until the
       // player starts — the title orbit runs on its own clock instead.
+      // v13: the rivals sit out the title screen (they would hover at the
+      // start line in the air behind the panel).
+      rivals.group.visible = false;
+      effects.update(STEP);
       const s = flight.state;
       const prev = { x: s.x, y: s.y, z: s.z };
       s.yaw += 0.12 * STEP;
@@ -279,6 +305,10 @@ function runGame() {
     if (events & EVENT_FUEL_EMPTY) hud.showMessage('FUEL EMPTY — GLIDING', 3);
     if (events & EVENT_LAND) endGame(true);
     else if (events & EVENT_CRASH) endGame(false);
+    // v13: the race flies with the player — rivals step on the player's
+    // clock, and the explosion smoke advances on the same fixed step.
+    rivals.update(STEP, s.elapsed, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp));
+    effects.update(STEP);
     audio.update(s.throttle, s.speed);
   }
 

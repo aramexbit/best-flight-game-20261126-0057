@@ -131,11 +131,20 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const rz = z - runway.z;
     const along = rx * dirX + rz * dirZ;
     const across = rx * perpX + rz * perpZ;
-    const a = 1 - smoothstep(COURSE.runwayLength / 2 - 30, COURSE.runwayLength / 2 + 60, Math.abs(along));
+    // v13: a broad graded plateau, not a narrow shelf. The flat zone spans
+    // the strip plus a 30 m shoulder each side, then fades over 150 m along
+    // and across — so the strip sits in a wide airfield clearing with a
+    // gentle transition to the hills, instead of a shelf with an abrupt cut
+    // at its edges (Gemini v12: the runway's edges read as asymmetric
+    // because the strip sat on a ridge with an abrupt terrain cut, not
+    // because of the shoulder lines themselves). The old fade (60 m along /
+    // 55 m across) could not smooth the island's ±20 m ridge bumps, so the
+    // strip climbed a crest and its far threshold hid behind the hill.
+    const a = 1 - smoothstep(COURSE.runwayLength / 2 - 30, COURSE.runwayLength / 2 + 150, Math.abs(along));
     // v3: the flat zone spans the full strip width (it used to start fading
     // 6 m inside the edge, so the terrain poked through the strip's edges by
     // a hair); the shoulders sit on the blend just outside the strip.
-    const c = 1 - smoothstep(COURSE.runwayWidth / 2, COURSE.runwayWidth / 2 + 55, Math.abs(across));
+    const c = 1 - smoothstep(COURSE.runwayWidth / 2 + 30, COURSE.runwayWidth / 2 + 150, Math.abs(across));
     return a * c;
   }
 
@@ -174,6 +183,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const grass = new THREE.Color(PALETTE.grass);
   const grassLight = new THREE.Color(PALETTE.grassLight);
   const grassDry = new THREE.Color(PALETTE.grassDry);
+  const airfield = new THREE.Color(PALETTE.airfield);
   const dirt = new THREE.Color(PALETTE.dirt);
   const forest = new THREE.Color(PALETTE.forest);
   const rock = new THREE.Color(PALETTE.rock);
@@ -213,12 +223,14 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       // v12: stronger patchwork (light 0.75, was 0.6; dry 0.7, was 0.55)
       // — the v11 cover shot still showed wide flat green slopes between
       // the groves, so the ground itself carries more colour variation.
-      tmp.copy(grass).lerp(grassLight, Math.max(0, fbm(x * 0.006 + 4.2, z * 0.006 - 2.8, 2)) * 0.75);
-      tmp.lerp(forest, Math.max(0, fbm(x * 0.004, z * 0.004, 2)) * 0.7);
+      // v13: stronger patchwork still (light 0.85, dry 0.8, mottle 0.03/0.07)
+      // — the ground itself must carry colour variation between groves.
+      tmp.copy(grass).lerp(grassLight, Math.max(0, fbm(x * 0.006 + 4.2, z * 0.006 - 2.8, 2)) * 0.85);
+      tmp.lerp(forest, Math.max(0, fbm(x * 0.004, z * 0.004, 2)) * 0.8);
       const dry = Math.max(0, fbm(x * 0.018 + 11.7, z * 0.018 - 6.3, 2));
-      tmp.lerp(grassDry, dry * 0.7);
+      tmp.lerp(grassDry, dry * 0.8);
       const mottle = fbm(x * 0.045 + 3.3, z * 0.045 - 8.8, 2);
-      tmp.offsetHSL(mottle * 0.02, 0, mottle * 0.05);
+      tmp.offsetHSL(mottle * 0.03, 0, mottle * 0.07);
     }
     else if (h < 270) tmp.copy(forest).lerp(rock, Math.min(1, slope / 22));
     else if (h < 350) tmp.copy(rock);
@@ -228,8 +240,17 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // hills, so the runway sits IN the hillside instead of floating on it
     // (Gemini v5: "the runway looks a bit flat/floating where it meets the
     // rolling green hill").
+    // v13: two-stage — the dirt hugs the strip (rb squared, so it fades
+    // fast) while a mown airfield grass carries the rest of the wide pad
+    // out to the blend edge, so the runway sits in a maintained clearing
+    // with a soft grass transition instead of a dirt scar cut into wild
+    // grass (Gemini v12: blend the runway's ground colour into the
+    // surrounding grass, no hard cut line).
     const rb = runwayBlend(x, z);
-    if (rb > 0.04 && h > beachTop) tmp.lerp(dirt, rb * 0.6);
+    if (rb > 0.04 && h > beachTop) {
+      tmp.lerp(airfield, rb * 0.55);
+      tmp.lerp(dirt, rb * rb * 0.55);
+    }
     if (slope > 22) tmp.lerp(rock, 0.55);
     tmp.offsetHSL(0, 0, jitter);
     colors[i * 3] = tmp.r;
@@ -977,8 +998,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // cover shot showed as empty green.
     // v12: 16 trees per hero grove — the midground still thins out between
     // the groves in the v11 cover shot.
+    // v13: 20 trees per hero grove — the midground must read as forest.
     const hero = [course.rings[1], course.rings[5], course.rings[6], course.rings[9], course.rings[10], course.rings[11]];
-    for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 16);
+    for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 20);
     if (course.spawn) plantHeroGrove(course.spawn.x, course.spawn.z, 10);
     // v6: a beach cluster at the spawn — palms and rocks on the shore the
     // title camera looks across, so the title shot's foreground beach is
@@ -1081,9 +1103,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // grows its own grove: trees and bushes on the slope west of the strip,
   // clear of the runway zone (the clear-zone check keeps every trunk off
   // the strip and the approach cone).
+  // v13: denser still (30 trees, 30 bushes, 12 rocks, was 18/16/8) — the
+  // cover foreground must read as real forest edge, not scattered props.
   {
     let westTrees = 0;
-    for (let tries = 0; tries < 300 && westTrees < 18; tries += 1) {
+    for (let tries = 0; tries < 300 && westTrees < 30; tries += 1) {
       const along = vegRandom.range(-750, -250);
       const across = vegRandom.range(-260, 260);
       const px = runway.x + dirX * along + perpX * across;
@@ -1095,7 +1119,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       westTrees += 1;
     }
     let westBushes = 0;
-    for (let tries = 0; tries < 200 && westBushes < 16; tries += 1) {
+    for (let tries = 0; tries < 200 && westBushes < 30; tries += 1) {
       const along = vegRandom.range(-750, -250);
       const across = vegRandom.range(-260, 260);
       const px = runway.x + dirX * along + perpX * across;
@@ -1109,7 +1133,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // v12: rock outcrops on the same slope, so the cover foreground is not
     // just green — trees, bushes and stone together.
     let westRocks = 0;
-    for (let tries = 0; tries < 200 && westRocks < 8; tries += 1) {
+    for (let tries = 0; tries < 200 && westRocks < 12; tries += 1) {
       const along = vegRandom.range(-750, -250);
       const across = vegRandom.range(-260, 260);
       const px = runway.x + dirX * along + perpX * across;
@@ -1124,10 +1148,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // v12: grass tufts — small bright-green blobs scattered on the western
   // slope of the runway island, breaking the flat green of the cover
   // foreground into texture between the trees and bushes.
+  // v13: 120 tufts (was 60) — the foreground texture doubles.
   {
     const tuftMat = new THREE.MeshStandardMaterial({ color: '#7ed957', roughness: 0.9, metalness: 0, flatShading: true });
     const tuftGeo = new THREE.IcosahedronGeometry(1, 0);
-    for (let tries = 0; tries < 300 && tuftsPlanted < 60; tries += 1) {
+    for (let tries = 0; tries < 300 && tuftsPlanted < 120; tries += 1) {
       const along = vegRandom.range(-800, -250);
       const across = vegRandom.range(-280, 280);
       const px = runway.x + dirX * along + perpX * across;
@@ -1218,7 +1243,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // in clusters instead of lone singles (Gemini v5 asked for clustered
   // coastal rocks/cliffs).
   for (const isl of islands) {
-    const cliffCount = 5 + vegRandom.int(0, 3);
+    // v13: 8-12 cliffs per island (was 5-8) — the ridges read as rock.
+    const cliffCount = 8 + vegRandom.int(0, 4);
     for (let c = 0; c < cliffCount; c += 1) {
       const ca = vegRandom.range(0, Math.PI * 2);
       const cr = isl.radius * vegRandom.range(0.98, 1.08);
@@ -1435,14 +1461,17 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   sun.position.copy(sunDir).multiplyScalar(3900);
   sun.lookAt(0, 0, 0);
   group.add(sun);
-  const sunLight = new THREE.DirectionalLight(0xfff2dd, 2.6);
+  // v13: softer sun (2.45, was 2.6) and more sky fill (1.18, was 1.1) —
+  // the grade stays bright, but the shadows stop crushing the cockpit
+  // and the cloud undersides stop going dark.
+  const sunLight = new THREE.DirectionalLight(0xfff2dd, 2.45);
   sunLight.position.copy(sunDir).multiplyScalar(1200);
   group.add(sunLight);
   // v11: a warmer, less green bounce from the ground (was #4a8a4a) — the
   // old green hemisphere tinted the cloud undersides green in the cockpit
   // shot — and a touch more sky light (1.1, was 1.0) for the bright
   // premium daytime grade.
-  group.add(new THREE.HemisphereLight(0xbfd9ff, 0x6f7f5e, 1.1));
+  group.add(new THREE.HemisphereLight(0xbfd9ff, 0x6f7f5e, 1.18));
 
   // --- Clouds (v10): stylised cumulus clusters, rebuilt from scratch.
   // The v9 clouds were smooth flattened ellipsoids (detail-2 icosahedra
@@ -1498,14 +1527,37 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // cameras' view; banks C/D sit off the course to the south and north.
   // Each cloud is wider too (lobes spread ±30 m, radii 55-90 m), so a
   // bank reads as one layered mass even at a kilometre.
+  // v13: the banks MERGE — tighter bank rectangles, more and wider and
+  // flatter lobes (8-11 base lobes, radii 70-110 m, squashed 0.55-0.75),
+  // all three clouds of a bank at nearly the same altitude (±25 m, was
+  // a 60 m staircase), and one wide flat shared skirt lobe under each
+  // bank, so a bank reads as one wide flat cumulus mass, not three
+  // separate balls stacked in a staircase.
   const banks = [
-    { x0: 1650, x1: 2100, z0: -950, z1: -550, alt: 320 },
-    { x0: 1600, x1: 2050, z0: 550, z1: 950, alt: 340 },
-    { x0: -400, x1: 700, z0: -1500, z1: -1000, alt: 300 },
-    { x0: -1400, x1: -300, z0: 900, z1: 1500, alt: 310 },
+    { x0: 1700, x1: 2050, z0: -900, z1: -650, alt: 320 },
+    { x0: 1650, x1: 2000, z0: 600, z1: 850, alt: 340 },
+    { x0: -300, x1: 600, z0: -1400, z1: -1100, alt: 300 },
+    { x0: -1300, x1: -400, z0: 1000, z1: 1400, alt: 310 },
   ];
   for (let b = 0; b < banks.length; b += 1) {
     const bank = banks[b];
+    // Shared skirt: one wide flat lobe under the whole bank, so the three
+    // clouds sit on a common base instead of floating as separate balls.
+    // It drifts at the bank's speed (captured from the first cloud), so
+    // it never slides out from under its own bank.
+    const skirtX = (bank.x0 + bank.x1) / 2;
+    const skirtZ = (bank.z0 + bank.z1) / 2;
+    let skirtMesh = null;
+    let bankSpeed = null;
+    if (distToPath(skirtX, skirtZ) >= 450) {
+      const skirt = new THREE.Mesh(lobeGeo, cloudMats[0]);
+      skirt.scale.set(170, 24, 115);
+      skirt.position.set(skirtX, bank.alt - 55, skirtZ);
+      skirt.rotation.y = cloudRandom.range(0, Math.PI * 2);
+      group.add(skirt);
+      clouds.push(skirt);
+      skirtMesh = skirt;
+    }
     for (let c = 0; c < 3; c += 1) {
       let cx = 0;
       let cz = 0;
@@ -1517,42 +1569,44 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       }
       if (!placed) continue;
       const cloud = new THREE.Group();
-      const baseLobes = 6 + cloudRandom.int(0, 2);
+      const baseLobes = 8 + cloudRandom.int(0, 3);
       for (let p = 0; p < baseLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
-        const rx = cloudRandom.range(55, 90);
-        const ry = rx * cloudRandom.range(0.75, 0.95);
+        const rx = cloudRandom.range(70, 110);
+        const ry = rx * cloudRandom.range(0.55, 0.75);
         const rz = rx * cloudRandom.range(0.8, 1.1);
         lobe.scale.set(rx, ry, rz);
         lobe.position.set(
-          cloudRandom.range(-30, 30),
+          cloudRandom.range(-45, 45),
           ry * cloudRandom.range(0.9, 1.1),
-          cloudRandom.range(-20, 20),
+          cloudRandom.range(-30, 30),
         );
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
         cloud.add(lobe);
       }
-      const topLobes = 4 + cloudRandom.int(0, 2);
+      const topLobes = 5 + cloudRandom.int(0, 2);
       for (let p = 0; p < topLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
-        const rx = cloudRandom.range(30, 55);
+        const rx = cloudRandom.range(40, 65);
         const ry = rx * cloudRandom.range(0.6, 0.85);
         lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.0));
         lobe.position.set(
-          cloudRandom.range(-22, 22),
+          cloudRandom.range(-30, 30),
           34 + cloudRandom.range(0, 16),
-          cloudRandom.range(-16, 16),
+          cloudRandom.range(-22, 22),
         );
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
         cloud.add(lobe);
       }
-      // Staggered altitudes inside a bank: the three clouds overlap in
-      // the view at different heights, so the bank reads as layered.
-      cloud.position.set(cx, bank.alt + c * 60 + cloudRandom.range(0, 30), cz);
+      // Nearly one altitude inside a bank: the three clouds overlap in
+      // the view at the same height, so the bank reads as merged.
+      cloud.position.set(cx, bank.alt + cloudRandom.range(-25, 25), cz);
       cloud.userData.speed = cloudRandom.range(1.5, 4);
+      if (bankSpeed === null) bankSpeed = cloud.userData.speed;
       clouds.push(cloud);
       group.add(cloud);
     }
+    if (skirtMesh) skirtMesh.userData.speed = bankSpeed ?? 2.5;
   }
 
   // v11: scene props from the title mockup — white sailboats gliding on
@@ -1687,6 +1741,88 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       group.add(house);
       houses += 1;
     }
+  }
+
+  // v13: airfield props — a perimeter fence along both sides of the strip,
+  // a pickup truck parked by the taxiway and a small terminal hut, so the
+  // airfield reads as a worked airport, not an empty strip. All sit 70-75 m
+  // off the centreline, outside the runway clear zone (clearOfRunway), and
+  // the fence posts follow the terrain while the rails run in 25 m segments
+  // at each segment's average height.
+  {
+    const fenceMat = new THREE.MeshStandardMaterial({ color: '#8a8f96', roughness: 0.8, metalness: 0.4 });
+    const railMat = new THREE.MeshStandardMaterial({ color: '#6e737c', roughness: 0.8, metalness: 0.4 });
+    const fx = runway.dirX; const fz = runway.dirZ;
+    const px = -fz; const pz = fx;
+    const fenceYaw = -Math.atan2(fz, fx);
+    for (const side of [-1, 1]) {
+      const off = 70 * side;
+      for (let d = -250; d < 250; d += 25) {
+        const qx1 = runway.x + fx * d + px * off;
+        const qz1 = runway.z + fz * d + pz * off;
+        const qx2 = runway.x + fx * (d + 25) + px * off;
+        const qz2 = runway.z + fz * (d + 25) + pz * off;
+        const h1 = groundAt(qx1, qz1);
+        const h2 = groundAt(qx2, qz2);
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.3, 0.12), fenceMat);
+        post.position.set(qx1, h1 + 0.65, qz1);
+        group.add(post);
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(25, 0.06, 0.06), railMat);
+        rail.position.set((qx1 + qx2) / 2, (h1 + h2) / 2 + 1.1, (qz1 + qz2) / 2);
+        rail.rotation.y = fenceYaw;
+        group.add(rail);
+      }
+      const lastX = runway.x + fx * 250 + px * off;
+      const lastZ = runway.z + fz * 250 + pz * off;
+      const lastPost = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.3, 0.12), fenceMat);
+      lastPost.position.set(lastX, groundAt(lastX, lastZ) + 0.65, lastZ);
+      group.add(lastPost);
+    }
+    // Pickup truck: white body, red cab stripe, four dark wheels.
+    const truck = new THREE.Group();
+    const truckBody = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.9, 1.7), new THREE.MeshStandardMaterial({ color: '#f2ede6', roughness: 0.6 }));
+    truckBody.position.y = 0.85;
+    truck.add(truckBody);
+    const truckCab = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.7, 1.6), new THREE.MeshStandardMaterial({ color: '#C83C32', roughness: 0.6 }));
+    truckCab.position.set(-0.8, 1.6, 0);
+    truck.add(truckCab);
+    const truckWheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.25, 10);
+    const truckWheelMat = new THREE.MeshStandardMaterial({ color: '#22242a', roughness: 0.9 });
+    for (const [wx, wz] of [[-1.2, 0.8], [1.2, 0.8], [-1.2, -0.8], [1.2, -0.8]]) {
+      const wheel = new THREE.Mesh(truckWheelGeo, truckWheelMat);
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(wx, 0.38, wz);
+      truck.add(wheel);
+    }
+    const truckX = runway.x + fx * -180 + px * 75;
+    const truckZ = runway.z + fz * -180 + pz * 75;
+    truck.position.set(truckX, groundAt(truckX, truckZ), truckZ);
+    truck.rotation.y = fenceYaw;
+    group.add(truck);
+    // Terminal hut: cream walls, red-brown roof, a door and two windows,
+    // facing the strip.
+    const hut = new THREE.Group();
+    const hutWalls = new THREE.Mesh(new THREE.BoxGeometry(8, 3.4, 6), new THREE.MeshStandardMaterial({ color: '#f2e5c5', roughness: 0.85 }));
+    hutWalls.position.y = 1.7;
+    hut.add(hutWalls);
+    const hutRoof = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.3, 6.8), new THREE.MeshStandardMaterial({ color: '#b4552d', roughness: 0.85 }));
+    hutRoof.position.y = 3.55;
+    hut.add(hutRoof);
+    const hutDoor = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.2), new THREE.MeshStandardMaterial({ color: '#2a2f3a', roughness: 0.85 }));
+    hutDoor.position.set(-1.5, 1.1, -3.02);
+    hutDoor.rotation.y = Math.PI;
+    hut.add(hutDoor);
+    for (const wx of [1.5, 3]) {
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.2), new THREE.MeshStandardMaterial({ color: '#22303f', roughness: 0.15, metalness: 0.35 }));
+      win.position.set(wx, 1.9, -3.02);
+      win.rotation.y = Math.PI;
+      hut.add(win);
+    }
+    const hutX = runway.x + fx * 120 + px * -75;
+    const hutZ = runway.z + fz * 120 + pz * -75;
+    hut.position.set(hutX, groundAt(hutX, hutZ), hutZ);
+    hut.rotation.y = fenceYaw + Math.PI / 2;
+    group.add(hut);
   }
 
   function update(dt) {

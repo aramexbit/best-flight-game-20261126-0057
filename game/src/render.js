@@ -68,6 +68,14 @@ export function createRenderer(canvas, THREE, groups) {
   let chaseLateral = 0;
   let chaseHeight = 4.5;
 
+  // v13: camera shake amplitude in metres — set by triggerShake (a
+  // near-miss flyby jolts the camera), decaying fast in draw so it reads
+  // as a jolt, not a wobble.
+  let shakeAmp = 0;
+  function triggerShake(amp) {
+    shakeAmp = Math.max(shakeAmp, amp);
+  }
+
   /** Field of view in degrees; the title wants it wider, the landing narrower. */
   function setFov(fov) {
     camera.fov = fov;
@@ -196,6 +204,15 @@ export function createRenderer(canvas, THREE, groups) {
     // shadow anchors the plane against the brighter v11 grade.
     shadowMesh.material.opacity = Math.max(0.15, Math.min(0.6, 0.6 - altAbove * 0.0013));
 
+    // v13: camera shake — applied after the lookAt, as a pure translation,
+    // so the frame jolts without changing where the camera looks.
+    if (shakeAmp > 0.005) {
+      camera.position.x += (Math.random() - 0.5) * shakeAmp;
+      camera.position.y += (Math.random() - 0.5) * shakeAmp;
+      camera.position.z += (Math.random() - 0.5) * shakeAmp;
+      shakeAmp *= Math.exp(-dt * 6);
+    }
+
     // The ring guide chevron fades as the plane closes in, so it needs the
     // plane's position (the flight state carries x, y, z).
     ringsApi.refresh(time, s);
@@ -203,5 +220,5 @@ export function createRenderer(canvas, THREE, groups) {
     renderer.render(scene, camera);
   }
 
-  return { draw, setCameraMode, setFov, setChase, get mode() { return mode; } };
+  return { draw, setCameraMode, setFov, setChase, triggerShake, scene, get mode() { return mode; } };
 }

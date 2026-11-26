@@ -1,13 +1,21 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v12: the Caravan rebuild and the molded cabin —
-// the airframe is now a Cessna 208-style bush plane (boxy cabin with four
-// windows a side, high wing with dihedral and red struts, tall fin with a
-// red cap, compact tapered tail, no rocket cone) and the cockpit is one
-// single molded cabin shell (curved side walls with real window cutouts,
-// a three-piece headliner, a shaped glareshield, a yoke with a throttle
-// quadrant); the sky carries layered cloud banks, the runway has symmetric
-// mesh-snapped shoulders with white edge lines on both sides, and the
-// title-screen key-cap badges are yellow with navy text, as the user chose.
+// standard library only). v13: the RACE — five planes on the same 12-ring
+// course, the player Caravan plus four AI rivals (blue, yellow, green,
+// orange liveries) that weave, bank and rubber-band around the player, with
+// scripted drama: a dive crash at 10 s, a ring-clip spin into the sea at
+// ~40 s, a mid-air collision at 40.8 s (fireball, shockwave, debris, falling
+// smoke), a near-miss flyby at 39-42 s with a whoosh and camera shake, and a
+// final-approach sea crash at ~130 s — every crash a real explosion with a
+// burning wreck and a smoke column, and the race HUD shows POS x/5. The
+// v12 Caravan stays (boxy cabin, high wing, tapered tail) but reads as a
+// plane from behind now: shorter wider fin, stronger dihedral with thicker
+// roots and bigger red tips, a bigger blur disc and red spinner, a longer
+// tail taper, a wider stabiliser and visible gear — and the cover/landing
+// chase cameras ride 5-6 m to the side, a 3/4 rear angle. The runway sits
+// on a flattened pad blended into the grass, the cockpit is a fuller
+// enclosed cabin (thin glareshield brow, bigger brighter dials, taller side
+// walls, longer headliner), the cloud banks merge into wide flat masses,
+// and the airfield grows a fence, a pickup truck and a terminal hut.
 // The v11 vibrant premium grade stays: bright blue sky #168BFA, tropical
 // turquoise sea #00C5D9, vivid green grass #42B83C, warm cream sand
 // #E8D39A, deep navy UI panels #063C85 with cyan glow outlines, glossy
@@ -47,7 +55,7 @@ if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), joi
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json). The v12 screenshots are the four staged scenes (cover, cockpit, title, landing),
+// screenshots/ and dossier.json). The v13 screenshots are the four staged scenes (cover, cockpit, title, landing),
 // each a real render of the shipped game at 1280x720, JPEG quality 82, all under 256 KiB.
 writeFileSync(
   join(out, 'dossier.json'),

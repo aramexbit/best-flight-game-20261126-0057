@@ -106,6 +106,38 @@ export function createAudio() {
     tone(45, t + 0.05, 0.7, 'triangle', 0.4);
   }
 
+  /**
+   * v13: the near-miss flyby whoosh — a short burst of filtered noise
+   * whose bandpass sweeps up and back down as the rival passes, so the
+   * overtake is heard as well as seen. Silent when muted or before the
+   * audio context exists (no gesture yet).
+   */
+  function whoosh() {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime;
+    const len = ctx.sampleRate * 0.7;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i += 1) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 1.2;
+    filter.frequency.setValueAtTime(500, t);
+    filter.frequency.exponentialRampToValueAtTime(1800, t + 0.3);
+    filter.frequency.exponentialRampToValueAtTime(400, t + 0.7);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.5, t + 0.25);
+    gain.gain.linearRampToValueAtTime(0, t + 0.7);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    src.start(t);
+    src.stop(t + 0.7);
+  }
+
   function landChord() {
     if (!ctx || muted) return;
     const t = ctx.currentTime;
@@ -126,5 +158,5 @@ export function createAudio() {
     windGain.gain.setTargetAtTime(0, t, 0.2);
   }
 
-  return { start, update, chime, thud, landChord, setMuted, stopEngine };
+  return { start, update, chime, thud, landChord, whoosh, setMuted, stopEngine };
 }

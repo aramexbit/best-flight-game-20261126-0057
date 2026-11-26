@@ -150,7 +150,19 @@ export function createCourse(random, seed, islands) {
     streak = 0;
   }
 
-  return { rings, runway, spawn, approach, nextRing, distanceToNext, checkPass, reset };
+  /**
+   * v13: jump the course to `passed` rings (for a respawning rival that
+   * rejoins behind the player — its next ring becomes the player's next
+   * ring minus one, instead of a ring hundreds of metres behind it that
+   * it would have to fly backwards to reach).
+   */
+  function setProgress(passed) {
+    nextIndex = Math.max(0, Math.min(passed, rings.length));
+    for (let i = 0; i < rings.length; i += 1) rings[i].passed = i < nextIndex;
+    streak = 0;
+  }
+
+  return { rings, runway, spawn, approach, nextRing, distanceToNext, checkPass, reset, setProgress };
 }
 
 /** Build the visible rings, their glow halos and the next-ring guide. */

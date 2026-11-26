@@ -16,8 +16,11 @@ export const WORLD = {
   // v9: far 5200 (was 4200) — the v9 title shot looks across 4300 m of
   // sea at the eastern ridge, which the old far plane swallowed whole,
   // so the title background was low green hills with no mountains at all.
-  fogNear: 900,
-  fogFar: 5200,
+  // v13: near 800 / far 5000 (was 900 / 5200) — a touch more haze, so the
+  // horizon unifies into one soft atmospheric depth instead of hard-edged
+  // far hills; the eastern ridge still shows through at 4300 m.
+  fogNear: 800,
+  fogFar: 5000,
 };
 
 export const PLANE = {
@@ -71,6 +74,43 @@ export const COURSE = {
   parTime: 240,
 };
 
+// v13: the race — four AI rivals, one pack, one scripted crash schedule.
+// All times are seconds from run start; the schedule is deterministic,
+// so the same seed and the same player line give the same race every run
+// (and the same screenshots). See rivals.js for what each event does.
+export const RACE = {
+  rivalCount: 4,
+  // R1 blue: extreme dive, so the cockpit shot at 12 s catches it smoking.
+  // 11.5 s (was 10): the dive drops fast — at 12 s a dive started at 10 s
+  // is already 33 m below the player, and even at 11 s it is 10 m below
+  // in 11 m — 45° under the horizon, behind the dashboard, invisible
+  // through the windshield. Starting at 11.5 s leaves it ~1 m below at
+  // 12 s, in the windshield near the ring, nosing down with a smoke trail.
+  diveCrashAt: 11.5,
+  // R4 orange: clips ring 11, spins two seconds, dives, hits the sea.
+  clipCrashAt: 35,
+  // R2 yellow + R3 green: mid-air collision — the cover shot at 41 s
+  // catches the fireball, the shockwave and both rivals tumbling.
+  collisionAt: 40.8,
+  // R1 blue: near-miss flyby down the player's left side, 39-42 s.
+  flybyAt: 39,
+  // Seconds a crashed rival stays out before rejoining. 3 s (was 6):
+  // the landing shot freezes at ~47 s, only ~4 s after the mid-air
+  // collision ends — with 6 s every rival was still hidden at the
+  // freeze and the landing frame had no race in it at all.
+  // (A "final crash at 130 s" was planned for the landing shot, but the
+  // landing shot freezes at ~47 s — 140 s in shots.js is only a cap —
+  // so 130 s is unreachable, and a wreck in the sea left of the runway
+  // is geometrically impossible in the frame anyway: the sea is 780 m
+  // from the runway in every direction, far outside the landing camera's
+  // view. The landing shot's drama is the respawned rivals ahead
+  // instead. The run still has four rivals crashing: BIRU's dive,
+  // ORANYE's clip-dive, and the KUNING+HIJAU mid-air collision.)
+  respawnDelay: 3,
+  // Seconds a sea/ground impact's smoke column keeps rising.
+  smokeColumnSeconds: 10,
+};
+
 export const SCORE = {
   ring: 100,
   centreBonus: 50,
@@ -98,6 +138,10 @@ export const PALETTE = {
   grass: '#42B83C',
   forest: '#2E9E33',
   grassLight: '#6FD653',
+  // v13: mown airfield grass for the graded plateau around the runway —
+  // a touch lighter and yellower than the wild grass, so the airfield
+  // reads as a maintained clearing instead of a dirt scar in the hills.
+  airfield: '#66BE4C',
   // v6: dry grass for the terrain patchwork and dirt for the graded apron
   // around the runway — two more ground colours, so the hills read as
   // worked island ground instead of one flat green wash.
@@ -121,7 +165,9 @@ export const PALETTE = {
   // v9 (iterasi 2): the glareshield gets its own lighter grey — the v9
   // cockpit shot showed the shield as one big black slab, because the
   // camera sees its shadowed underside; a lighter grey keeps it readable.
-  cockpitPanel: '#4b515c',
+  // v13: '#525864' (was '#4b515c') — a touch lighter, so the panel face
+  // separates from the dark glareshield instead of merging into one slab.
+  cockpitPanel: '#525864',
   cockpitFace: '#5d636e',
   cockpitConsole: '#6b7078',
   // v10: faint windshield glazing colour for the curved canopy bow (plane.js).
