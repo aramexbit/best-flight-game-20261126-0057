@@ -32,7 +32,10 @@ export function createEffects(THREE, scene) {
   const sparks = [];
   const confettiParts = [];
   const shows = [];
-  const PUFF_BUDGET = 90;
+  // v15: 140 (was 90) — the longer fireball, flame puffs, split-half flame
+  // trails and the four coloured slipstream trails all draw from the same
+  // pool; 90 evicted fresh explosion smoke mid-blast.
+  const PUFF_BUDGET = 140;
 
   function smokePuff(x, y, z, size, opts = {}) {
     if (puffs.length >= PUFF_BUDGET) {
@@ -91,25 +94,32 @@ export function createEffects(THREE, scene) {
   }
 
   /**
-   * The explosion. v14 — a CLASSIC explosion, not an abstract ring: a big
-   * orange fireball swelling 2 m to ~26 m, a bright yellow core to ~14 m,
-   * and a fat cloud of twenty DARK smoke puffs (near-black, 0.85 opacity,
-   * 8-12 s life) that dominates the frame. The gold shockwave is demoted
-   * to a small, faint, short-lived ring (22 m, 1.0 s, 0.5 opacity) — a
-   * punctuation mark, never the main event (Gemini v13: the rings read as
-   * abstract shock art, not a blast). `air` true means the blast happened
-   * in the sky (the smoke falls slowly); false means sea or ground (a
-   * wreck and a rising smoke column stay behind).
+   * The explosion. v15 — a CLASSIC multi-part explosion (Gemini's fix
+   * prompt + the key art): the v14 fireball died in 0.7 s, so the cover
+   * froze on a black smoke column. Now the orange shell swells 2 m to
+   * ~34 m over 2.2 s (2.8x the 11 m wingspan), the amber core to 18 m
+   * over 1.8 s, a white-yellow inner core to 10 m over 1.2 s, eight big
+   * orange flame puffs keep the orange alive after the ball fades, and
+   * the dark smoke is an irregular billowing cluster of fourteen puffs
+   * (#26292E-#3E434B, 0.7 opacity) — NOT a narrow vertical column. The
+   * gold shockwave stays a small, faint, short-lived ring (22 m, 1.0 s,
+   * 0.5 opacity) — a punctuation mark, never the main event (Gemini
+   * v13: the rings read as abstract shock art, not a blast). `air` true
+   * means the blast happened in the sky (the smoke falls slowly); false
+   * means sea or ground (a wreck and a rising smoke column stay behind).
    */
   function explode(x, y, z, air) {
     const shellMat = new THREE.MeshBasicMaterial({
-      color: 0xff7f1a, transparent: true, opacity: 0.95, depthWrite: false,
+      color: 0xff7a00, transparent: true, opacity: 0.95, depthWrite: false,
     });
     const shell = new THREE.Mesh(ballGeo, shellMat);
     shell.position.set(x, y, z);
     shell.scale.setScalar(2);
     scene.add(shell);
-    balls.push({ mesh: shell, life: 0, maxLife: 0.7, from: 2, to: 26 });
+    // v15 (fix): the shell lives 2.8 s (was 2.2) — the v15 cover froze
+    // the blast 1.7 s old and the linear fade had already washed the
+    // fireball to a faint bubble while the black smoke dominated.
+    balls.push({ mesh: shell, life: 0, maxLife: 2.8, from: 2, to: 34 });
     const coreMat = new THREE.MeshBasicMaterial({
       color: 0xffd52a, transparent: true, opacity: 0.95, depthWrite: false,
     });
@@ -117,7 +127,15 @@ export function createEffects(THREE, scene) {
     core.position.set(x, y, z);
     core.scale.setScalar(1.2);
     scene.add(core);
-    balls.push({ mesh: core, life: 0, maxLife: 0.5, from: 1.2, to: 14 });
+    balls.push({ mesh: core, life: 0, maxLife: 1.8, from: 1.2, to: 18 });
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: 0xfff6a8, transparent: true, opacity: 0.95, depthWrite: false,
+    });
+    const inner = new THREE.Mesh(ballGeo, innerMat);
+    inner.position.set(x, y, z);
+    inner.scale.setScalar(1);
+    scene.add(inner);
+    balls.push({ mesh: inner, life: 0, maxLife: 1.2, from: 1, to: 10 });
     // Shockwave, demoted (v14): one small faint ring, half the old size,
     // gone in a second — the dark smoke and the fire are the explosion now.
     const mat = new THREE.MeshBasicMaterial({
@@ -129,14 +147,13 @@ export function createEffects(THREE, scene) {
     ring.scale.setScalar(2);
     scene.add(ring);
     rings.push({ mesh: ring, life: 0, maxLife: 1.0, from: 2, to: 22, baseOpacity: 0.5 });
-    // Debris: twenty dark shards and eight burning ones (was 12 + 4) —
-    // Gemini's fix prompt asks for 25-40 outward-streaking ember/flame
-    // chunks in the classic explosion, so the blast reads as shrapnel,
-    // not a clean puff.
-    for (let d = 0; d < 28; d += 1) {
-      const burning = d < 8;
+    // Debris: twenty dark shards and twelve burning ones at 8-22 m/s
+    // (Gemini's fix prompt: 24-36 outward-streaking ember/flame chunks),
+    // so the blast reads as shrapnel, not a clean puff.
+    for (let d = 0; d < 32; d += 1) {
+      const burning = d < 12;
       const mat = new THREE.MeshBasicMaterial({
-        color: burning ? 0xff7f1a : 0x22242a,
+        color: burning ? 0xff9e1b : 0x22242a,
         transparent: true, opacity: 1, depthWrite: false,
       });
       const piece = new THREE.Mesh(debrisGeo, mat);
@@ -146,8 +163,8 @@ export function createEffects(THREE, scene) {
       piece.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
       scene.add(piece);
       const a = Math.random() * Math.PI * 2;
-      const up = 8 + Math.random() * 18;
-      const out = 10 + Math.random() * 22;
+      const up = 6 + Math.random() * 12;
+      const out = 8 + Math.random() * 14;
       debris.push({
         mesh: piece,
         life: 0,
@@ -160,25 +177,45 @@ export function createEffects(THREE, scene) {
         },
       });
     }
-    // Smoke: twenty big DARK puffs — the classic explosion's smoke ball.
-    // Falling slowly if the blast was in the air, rising if it hit the
-    // sea or the ground.
-    for (let p = 0; p < 20; p += 1) {
+    // Smoke: fourteen DARK puffs in an irregular billowing cluster
+    // (#26292E-#3E434B, 0.7 opacity) that frames the fire instead of
+    // swallowing it — NOT a narrow vertical column. Falling slowly if
+    // the blast was in the air, rising if it hit the sea or the ground.
+    const smokeColors = [0x26292e, 0x2e3138, 0x3e434b];
+    for (let p = 0; p < 14; p += 1) {
       smokePuff(
-        x + (Math.random() - 0.5) * 8,
-        y + (Math.random() - 0.5) * 5,
-        z + (Math.random() - 0.5) * 8,
-        3.5 + Math.random() * 3,
+        x + (Math.random() - 0.5) * 24,
+        y + (Math.random() - 0.5) * 16,
+        z + (Math.random() - 0.5) * 24,
+        3 + Math.random() * 2,
         {
-          color: 0x2e2e2e,
+          color: smokeColors[p % smokeColors.length],
           life: 8 + Math.random() * 4,
-          grow: 1.1,
+          grow: 0.8,
           vel: {
-            x: (Math.random() - 0.5) * 4,
-            y: air ? -3 - Math.random() * 2 : 2 + Math.random() * 2,
-            z: (Math.random() - 0.5) * 4,
+            x: (Math.random() - 0.5) * 5,
+            y: air ? -2 - Math.random() * 1.5 : 2 + Math.random() * 2,
+            z: (Math.random() - 0.5) * 5,
           },
-          opacity: 0.85,
+          opacity: 0.7,
+        },
+      );
+    }
+    // Flame puffs: eight big orange puffs that outlive the fireball, so
+    // the orange keeps burning after the ball fades instead of the frame
+    // going all smoke.
+    for (let f = 0; f < 8; f += 1) {
+      smokePuff(
+        x + (Math.random() - 0.5) * 10,
+        y + (Math.random() - 0.5) * 6,
+        z + (Math.random() - 0.5) * 10,
+        4 + Math.random() * 2,
+        {
+          color: 0xff7f1a,
+          life: 2.5 + Math.random() * 0.5,
+          grow: 1.4,
+          vel: { x: (Math.random() - 0.5) * 3, y: 1 + Math.random(), z: (Math.random() - 0.5) * 3 },
+          opacity: 0.9,
         },
       );
     }
@@ -366,7 +403,11 @@ export function createEffects(THREE, scene) {
       }
       const k = b.life / b.maxLife;
       b.mesh.scale.setScalar(b.from + (b.to - b.from) * k);
-      b.mesh.material.opacity = 0.95 * (1 - k);
+      // v15 (fix): the fireball fades on a (1 - k^2) curve, not linear —
+      // it stays bright orange through the first half of its life (the
+      // cover freezes ~1.2 s after the blast) instead of washing out to
+      // a faint bubble while the dark smoke is still fresh.
+      b.mesh.material.opacity = 0.95 * (1 - k * k);
     }
     for (let i = rings.length - 1; i >= 0; i -= 1) {
       const r = rings[i];
@@ -436,7 +477,11 @@ export function createEffects(THREE, scene) {
       h.group.rotation.y += h.spin.y * dt;
       h.group.rotation.z += h.spin.z * dt;
       h.smokeTimer += dt;
-      if (h.smokeTimer >= 0.12) {
+      // v15 (fix): a smoke puff every 0.25 s (was 0.12) — the two halves
+      // separate along the camera's view axis, so their trails stacked
+      // into one black chimney above the fireball in the v15 cover shot.
+      // Half the puffs still reads as burning wreckage, without the stack.
+      if (h.smokeTimer >= 0.25) {
         h.smokeTimer = 0;
         const p = h.group.position;
         smokePuff(p.x, p.y, p.z, 2 + Math.random(), {

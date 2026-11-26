@@ -16,17 +16,15 @@ const START_SECONDS = 8;
 // reads as hanging/stalled in pitch in the cover shot (Gemini v10). At 40 s
 // it is on the same leg but earlier, on a leveler stretch over the same
 // tree-covered western slopes, so the attitude reads as smooth flight.
-// v14: 35.5 s (was 41) — the cover must freeze ~1.5 s AFTER the mid-air
-// blast, not 7 s after it. The collision now fires player-triggered at
-// ~34 s (seed 1: 33.9 s) at the meeting point past ring 10, and the
-// player flies past that point at ~36.5 s — so at 41 s the blast is
-// 300 m BEHIND the chase camera and the cover shows empty sky. At
-// 35.5 s the blast is 1.6 s old and ~55 m ahead: fireball near full
-// size, dark smoke fresh, the two split airframes still tumbling close
-// together in the centre of the frame, with the next ring beyond them.
-// This is staging only: the flight model and the shot cameras are
-// untouched.
-const PLAY_SECONDS = 35.5;
+// v15: 35.0 s (was 35.5) — the cover must freeze ~1.2 s AFTER the
+// mid-air blast (seed 1: 33.8 s), when the fireball is still bright
+// orange: with the v15 (1 - k^2) fade the shell holds ~0.8 opacity at
+// 1.2 s, while at 1.7 s it had already washed to a faint bubble and the
+// black smoke owned the frame (the v14 "chimney" complaint). The blast
+// sits ~60 m ahead of the player at the freeze, the two split halves
+// ~35 m apart and tumbling, with the next ring beyond them. This is
+// staging only: the flight model and the shot cameras are untouched.
+const PLAY_SECONDS = 35.0;
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world

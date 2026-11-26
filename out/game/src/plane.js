@@ -662,12 +662,16 @@ export function buildPlane(THREE, livery = null) {
     // v14: numbers 100 px (was 88) and labels 64 px (was 58) — the v13
     // cockpit shot's dials still read small, and the main gauges are the
     // hero of the cockpit frame; bigger numerals, same canvas.
-    x.font = 'bold 100px system-ui, sans-serif';
+    // v15: numbers 112 px and labels 72 px — Gemini's fix prompt asks
+    // for each instrument at 11-14% of viewport height with markings
+    // unmistakable at a glance; the canvas stays 512 px, the ink gets
+    // bigger on it.
+    x.font = 'bold 112px system-ui, sans-serif';
     x.fillText('12', 256, 104);
     x.fillText('3', 408, 256);
     x.fillText('6', 256, 408);
     x.fillText('9', 104, 256);
-    x.font = 'bold 64px system-ui, sans-serif';
+    x.font = 'bold 72px system-ui, sans-serif';
     x.fillText(label, 256, 336);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -718,11 +722,15 @@ export function buildPlane(THREE, livery = null) {
     face.position.z = 0.005;
     g.add(face);
     const needlePivot = new THREE.Group();
-    const needleGeo = new THREE.BoxGeometry(0.032, 0.15, 0.006);
+    // v15: high-visibility orange-red needles (#FF4D1A, Gemini's fix
+    // prompt), thicker and longer than the old dark ones — the v14
+    // cockpit shot's dials read small and low-contrast, and a needle
+    // must read at a glance against the cream face at screenshot distance.
+    const needleGeo = new THREE.BoxGeometry(0.042, 0.17, 0.006);
     needleGeo.translate(0, 0.065, 0);
     const needle = new THREE.Mesh(
       needleGeo,
-      new THREE.MeshBasicMaterial({ color: 0x1c1e24 }),
+      new THREE.MeshBasicMaterial({ color: 0xff4d1a }),
     );
     needlePivot.add(needle);
     needlePivot.position.z = 0.012;

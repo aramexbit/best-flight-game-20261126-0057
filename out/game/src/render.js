@@ -54,6 +54,46 @@ export function createRenderer(canvas, THREE, groups) {
   shadowGroup.add(shadowMesh);
   scene.add(shadowGroup);
 
+  // v15: one blob shadow per rival — the user counted five planes and
+  // one shadow, so each rival gets the same soft radial texture as the
+  // player, with its own material so opacity fades independently.
+  const rivalShadows = [];
+  for (let i = 0; i < 4; i += 1) {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 24),
+      new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.4, depthWrite: false }),
+    );
+    m.rotation.x = -Math.PI / 2;
+    g.add(m);
+    scene.add(g);
+    rivalShadows.push({ group: g, mesh: m });
+  }
+
+  // v15: shared blob-shadow placement — the sun offset, growth and fade
+  // are identical for the player and the rivals, so one helper places
+  // any plane's shadow on the ground below it. `yaw` aligns the ellipse
+  // with the wings; a hidden plane hides its shadow too.
+  function placeShadow(group, mesh, terrainApi, x, y, z, yaw, visible) {
+    if (!visible) { group.visible = false; return; }
+    group.visible = true;
+    const sunDir = terrainApi && terrainApi.sunDir ? terrainApi.sunDir : null;
+    const sunElev = sunDir ? Math.asin(Math.max(0.1, Math.min(0.99, sunDir.y))) : 0.8;
+    const sunH = sunDir ? Math.hypot(sunDir.x, sunDir.z) : 1;
+    const groundY0 = terrainApi && terrainApi.groundAt ? terrainApi.groundAt(x, z) : 0;
+    const altRough = Math.max(0, y - Math.max(groundY0, 0.6));
+    const offLen = altRough / Math.tan(sunElev);
+    const shadowX = x + (sunDir ? -sunDir.x / sunH * offLen : 0);
+    const shadowZ = z + (sunDir ? -sunDir.z / sunH * offLen : 0);
+    const floorY = Math.max(terrainApi && terrainApi.groundAt ? terrainApi.groundAt(shadowX, shadowZ) : 0, 0.6);
+    const altAbove = Math.max(0, y - floorY);
+    const shadowScale = 1 + altAbove * 0.0025;
+    group.position.set(shadowX, floorY + 0.5, shadowZ);
+    group.rotation.y = -yaw;
+    mesh.scale.set(7.5 * shadowScale, 5.5 * shadowScale, 1);
+    mesh.material.opacity = Math.max(0.15, Math.min(0.6, 0.6 - altAbove * 0.0013));
+  }
+
   const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 9000);
   const chasePos = new THREE.Vector3(0, 200, 0);
   const lookTarget = new THREE.Vector3();
@@ -109,7 +149,7 @@ export function createRenderer(canvas, THREE, groups) {
    * Move everything for one frame. `flight` is the flight state; `planeApi` drives
    * the prop; `ringsApi` refreshes the ring colours; `terrainApi` drifts clouds.
    */
-  function draw(flight, planeApi, ringsApi, terrainApi, dt, time) {
+  function draw(flight, planeApi, ringsApi, terrainApi, dt, time, rivalStates) {
     const s = flight.state;
     const p = groups.plane;
 
@@ -179,30 +219,20 @@ export function createRenderer(canvas, THREE, groups) {
     // A shadow straight below the plane is never in frame (the chase camera
     // looks forward, and the ground below the plane sits ~70° down); the
     // sun-offset shadow lands ahead of the plane on the runway and hills,
-    // where the camera can see it. The ground height is sampled at the
-    // shadow's own position, and it grows and fades with altitude.
-    const sunDir = terrainApi && terrainApi.sunDir ? terrainApi.sunDir : null;
-    const sunElev = sunDir ? Math.asin(Math.max(0.1, Math.min(0.99, sunDir.y))) : 0.8;
-    const sunH = sunDir ? Math.hypot(sunDir.x, sunDir.z) : 1;
-    const groundY0 = terrainApi && terrainApi.groundAt ? terrainApi.groundAt(s.x, s.z) : 0;
-    const altRough = Math.max(0, s.y - Math.max(groundY0, 0.6));
-    const offLen = altRough / Math.tan(sunElev);
-    const shadowX = s.x + (sunDir ? -sunDir.x / sunH * offLen : 0);
-    const shadowZ = s.z + (sunDir ? -sunDir.z / sunH * offLen : 0);
-    const floorY = Math.max(terrainApi && terrainApi.groundAt ? terrainApi.groundAt(shadowX, shadowZ) : 0, 0.6);
-    const altAbove = Math.max(0, s.y - floorY);
-    // v6: a bigger, darker shadow — the v5 blob was small and sat at the
-    // frame edge in the cover shot, so Gemini read "no visible ground
-    // shadow". It grows faster with altitude now and never fades below 0.12.
-    const shadowScale = 1 + altAbove * 0.0025;
-    shadowGroup.position.set(shadowX, floorY + 0.5, shadowZ);
-    shadowGroup.rotation.y = -s.yaw;
-    shadowMesh.scale.set(7.5 * shadowScale, 5.5 * shadowScale, 1);
-    // v6: opacity floor 0.12 and ceiling 0.55 (was 0.05 / 0.42) — the shadow
-    // stays readable at altitude instead of washing out to nothing.
-    // v11: floor 0.15 and ceiling 0.6 — a touch stronger still, so the blob
-    // shadow anchors the plane against the brighter v11 grade.
-    shadowMesh.material.opacity = Math.max(0.15, Math.min(0.6, 0.6 - altAbove * 0.0013));
+    // where the camera can see it. v15: the placement now lives in
+    // placeShadow() above, shared with the four rival shadows below.
+    placeShadow(shadowGroup, shadowMesh, terrainApi, s.x, s.y, s.z, s.yaw, true);
+    // v15: the rivals get the same blob shadow as the player (the user
+    // counted five planes and one shadow) — same sun offset, same growth
+    // and fade with altitude, hidden when the rival is out of the race.
+    // rivalStates comes from rivals.debug(); a rival reports no yaw, so
+    // its ellipse stays axis-aligned instead of wing-aligned.
+    const rivalsList = rivalStates || [];
+    for (let i = 0; i < rivalShadows.length; i += 1) {
+      const rs = rivalsList[i];
+      if (!rs) { rivalShadows[i].group.visible = false; continue; }
+      placeShadow(rivalShadows[i].group, rivalShadows[i].mesh, terrainApi, rs.x, rs.y, rs.z, 0, rs.visible);
+    }
 
     // v13: camera shake — applied after the lookAt, as a pure translation,
     // so the frame jolts without changing where the camera looks.

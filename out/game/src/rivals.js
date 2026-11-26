@@ -46,15 +46,49 @@ const LIVERIES = [
   // rivals must LEAD the player from the start, visibly ahead of it, not
   // trail behind where the chase camera never sees them.
   // Gemini's fix prompt asks for 1.15-1.30x player cruise speed
-  // (145-165 KTS vs the player's 110-130); the low end of that range is
-  // used here, because the diag showed faster rivals miss more rings
-  // and arrive late to the collision — 1.15/1.13/1.12/1.10 keeps them
-  // ahead without breaking the ring-passing the tighter weave fixed.
-  { name: 'BIRU', main: '#E8EEF2', accent: '#2563EB', speedBias: 1.15, weave: 0.0 },
-  { name: 'KUNING', main: '#FFD52A', accent: '#22242a', speedBias: 1.13, weave: 2.1 },
-  { name: 'HIJAU', main: '#F2E5C5', accent: '#2E9E33', speedBias: 1.12, weave: 4.2 },
-  { name: 'ORANYE', main: '#F2E5C5', accent: '#FF7F2A', speedBias: 1.10, weave: 1.3 },
+  // (145-165 KTS vs the player's 110-130). v15 uses the TOP of that
+  // range — the user asked for rivals FASTER than the player so the
+  // blast is seen — 1.28/1.26/1.24/1.22; the sim must still pass 12/12
+  // rings on every seed, or the values come back down.
+  { name: 'BIRU', main: '#E8EEF2', accent: '#2563EB', speedBias: 1.28, weave: 0.0 },
+  { name: 'KUNING', main: '#FFD52A', accent: '#22242a', speedBias: 1.26, weave: 2.1 },
+  { name: 'HIJAU', main: '#F2E5C5', accent: '#2E9E33', speedBias: 1.24, weave: 4.2 },
+  { name: 'ORANYE', main: '#F2E5C5', accent: '#FF7F2A', speedBias: 1.22, weave: 1.3 },
 ];
+
+// v15: race-number markers — one floating sprite per rival (#2-#5 in
+// Gemini's marker colours: cyan, violet, lime, coral), so each rival
+// reads as a numbered racer in the pack instead of anonymous traffic.
+// The same colours are the slipstream-trail colours.
+const MARKER_COLORS = ['#00E5FF', '#A855F7', '#A3E635', '#FF3B6B'];
+const MARKER_COLOR_HEX = [0x00e5ff, 0xa855f7, 0xa3e635, 0xff3b6b];
+function makeMarkerSprite(THREE, text, color) {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const x = c.getContext('2d');
+  x.beginPath();
+  x.arc(64, 64, 56, 0, Math.PI * 2);
+  x.fillStyle = color;
+  x.fill();
+  x.lineWidth = 8;
+  x.strokeStyle = '#ffffff';
+  x.stroke();
+  x.fillStyle = '#132238';
+  x.font = '900 64px system-ui, sans-serif';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText(text, 64, 68);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  // v15 (fix): scale 3.5 m (was 9) — at 9 m the disc subtended ~20° at
+  // race distance and COVERED the rival, the ring and half the cockpit
+  // windshield in the v15 shots; a 3.5 m badge reads as a race number
+  // without hiding the plane it marks.
+  sprite.scale.set(3.5, 3.5, 1);
+  return sprite;
+}
 
 export function createRivals(THREE, seed, islands, effects) {
   const group = new THREE.Group();
@@ -74,6 +108,11 @@ export function createRivals(THREE, seed, islands, effects) {
   const rivals = LIVERIES.map((liv, i) => {
     const api = buildPlane(THREE, { main: liv.main, accent: liv.accent });
     group.add(api.group);
+    // v15: the numbered race marker floats above the plane (a sprite on
+    // the rivals group, positioned in syncMesh, so it never rolls with
+    // the airframe) — #2 BIRU, #3 KUNING, #4 HIJAU, #5 ORANYE.
+    const marker = makeMarkerSprite(THREE, `#${i + 2}`, MARKER_COLORS[i]);
+    group.add(marker);
     // Each rival runs its own course instance: identical rings (same seed),
     // but its own nextIndex and streak, so its progress is independent of
     // the player's and of the other rivals'.
@@ -97,7 +136,8 @@ export function createRivals(THREE, seed, islands, effects) {
       crashed: { dive: false, clip: false, collision: false },
       flybyDone: false, flybyTriggered: false, prevAlong: -999,
       spinAngle: 0, vel: { x: 0, y: 0, z: 0 },
-      smokeT: 0, respawnT: 0, meetPoint: null,
+      smokeT: 0, trailT: 0, respawnT: 0, meetPoint: null, marker,
+      trailColor: MARKER_COLOR_HEX[i],
     };
   });
 
@@ -108,6 +148,14 @@ export function createRivals(THREE, seed, islands, effects) {
     r.api.group.rotation.y = -s.yaw;
     r.api.group.rotation.x = s.pitch;
     r.api.group.rotation.z = -s.roll;
+    // v15: the race-number marker floats 4.5 m above the plane in world
+    // space (not rolled with the airframe) and hides with its plane.
+    // (4.5 m, was 5.5 — with the smaller 3.5 m badge the marker sits
+    // closer to the airframe instead of floating high above it.)
+    if (r.marker) {
+      r.marker.position.set(s.x, s.y + 4.5, s.z);
+      r.marker.visible = r.api.group.visible;
+    }
   }
 
   /** A smoke puff from the rival's tail, every 0.1 s while it is in trouble. */
@@ -128,6 +176,7 @@ export function createRivals(THREE, seed, islands, effects) {
     r.stateT = 0;
     r.respawnT = delay;
     r.api.group.visible = false;
+    if (r.marker) r.marker.visible = false;
   }
 
   function respawn(r, ps, pf) {
@@ -309,6 +358,48 @@ export function createRivals(THREE, seed, islands, effects) {
           }
         }
       } else if (r.state === 'holding') {
+        // v15: keep the meeting point AHEAD of the player. If the player
+        // has flown past it (behind them) or is still more than 400 m
+        // away, re-anchor it to the player's ring + 3 and send both
+        // rivals converging again — the blast waits for the player, it
+        // never goes off behind them or a kilometre away. In the clamped
+        // case (ring + 3 past the last ring) the anchor is 400 m ahead
+        // of the player instead — see the fix note below — because
+        // re-anchoring to ring 12 again would freeze the point behind a
+        // player who has already flown past it (seed 11: no blast in
+        // 120 s).
+        const alongMp = (r.meetPoint.x - ps.x) * pf.x + (r.meetPoint.z - ps.z) * pf.z;
+        const distMp = Math.hypot(ps.x - r.meetPoint.x, ps.y - r.meetPoint.y, ps.z - r.meetPoint.z);
+        // v15 (fix, seed 11): when the player's ring + 3 is past the last
+        // ring (ringsPassed >= 9), the ring index CLAMPS to ring 12 — so
+        // the re-anchor re-anchored to the SAME point the player had
+        // just flown past, the rivals converged on a point behind the
+        // player, and the blast could never fire in view (facing < 0,
+        // blastDist < 100) for the rest of the flight. In the clamped
+        // case anchor 400 m AHEAD of the player along their heading
+        // instead: a point that moves with the player, so the rivals
+        // converge on somewhere the player is flying TOWARD and the
+        // in-view gates (100-400 m, facing > 0.6) can align during the
+        // final approach. 400 m gives the rivals (~5 s to converge from
+        // ~440 m) time to arrive before the player covers it (~6 s).
+        if ((distMp > 400 || alongMp < -50) && time < RACE.collisionFallbackAt) {
+          const clamped = ps.ringsPassed + 3 >= playerCourse.rings.length;
+          if (clamped) {
+            sharedMeetPoint = { x: ps.x + pf.x * 400, y: ps.y + 10, z: ps.z + pf.z * 400 };
+          } else {
+            const idx = Math.min(playerCourse.rings.length - 1, ps.ringsPassed + 3);
+            const ring = playerCourse.rings[idx];
+            const ax = ring.axis;
+            sharedMeetPoint = { x: ring.x + ax.x * 60, y: ring.y + 25, z: ring.z + ax.z * 60 };
+          }
+          for (const o of rivals) {
+            if ((o.name === 'KUNING' || o.name === 'HIJAU') && (o.state === 'holding' || o.state === 'converging')) {
+              o.meetPoint = sharedMeetPoint;
+              o.state = 'converging';
+              o.stateT = 0;
+            }
+          }
+        }
         // Orbit the meeting point (15 m radius, slow 0.25 rad/s, opposite
         // phases so the two rivals cross each other) until the player
         // closes in — then the collision fires IN FRONT of the player, in
@@ -340,10 +431,45 @@ export function createRivals(THREE, seed, islands, effects) {
         const rNear = Math.hypot(s.x - r.meetPoint.x, s.y - r.meetPoint.y, s.z - r.meetPoint.z) < 80;
         const oNear = other
           && Math.hypot(other.flight.state.x - r.meetPoint.x, other.flight.state.y - r.meetPoint.y, other.flight.state.z - r.meetPoint.z) < 80;
-        const fire = other && rNear && oNear
+        // v15: the blast must be IN VIEW — 100-400 m ahead of the player,
+        // inside a ~53° forward cone — so the fireball fills the
+        // windshield instead of going off behind the camera or a
+        // kilometre away (the user's live playtest: the blast fired at
+        // the 60 s / 800 m backstop, invisible). The backstop now needs
+        // the player within 350 m AND roughly facing the blast.
+        let blastDist = Infinity;
+        let facing = -1;
+        if (other) {
+          const os = other.flight.state;
+          const mx = (s.x + os.x) / 2;
+          const mz = (s.z + os.z) / 2;
+          blastDist = Math.hypot(mx - ps.x, s.y - ps.y, mz - ps.z);
+          if (blastDist > 0.01) {
+            facing = ((mx - ps.x) * pf.x + (mz - ps.z) * pf.z) / blastDist;
+          }
+        }
+        const inView = blastDist >= 100 && blastDist <= 400 && facing > 0.6;
+        const fire = other && rNear && oNear && inView
           && ((playerDist < RACE.collisionTriggerDist)
-            || (time >= RACE.collisionFallbackAt && playerDist < RACE.collisionCloseDist));
-        if (fire) {
+            || (time >= RACE.collisionFallbackAt && playerDist < RACE.collisionCloseDist && facing > 0.5));
+        // v15 (fix, seed 11): second-chance window. The normal gates
+        // (both rivals within 80 m, blast 100-400 m ahead) assume the
+        // pair settles at the meeting point before the player arrives.
+        // On a slow-convergence line the player reaches the point while
+        // the rivals are still looping ~100 m around it (their holding
+        // orbit is a wide autopilot loop, not a hover), so the window
+        // never opens — seed 11 ran 120 s with no blast. From 45 s on,
+        // if both rivals are within 130 m of the point and the blast
+        // midpoint is 50-400 m ahead in view, fire anyway: a 34 m
+        // fireball at 50 m still fills the windshield. Seeds that fire
+        // on the normal window (~34 s) never reach this branch, so the
+        // cover staging (seed 1 blast ~33.8 s) is untouched.
+        const rNearLate = Math.hypot(s.x - r.meetPoint.x, s.y - r.meetPoint.y, s.z - r.meetPoint.z) < 130;
+        const oNearLate = other
+          && Math.hypot(other.flight.state.x - r.meetPoint.x, other.flight.state.y - r.meetPoint.y, other.flight.state.z - r.meetPoint.z) < 130;
+        const lateFire = other && rNearLate && oNearLate && time >= 45
+          && blastDist >= 50 && blastDist <= 400 && facing > 0.6 && playerDist < 350;
+        if (fire || lateFire) {
           // The collision: big dark-smoke fireball at the midpoint, and
           // BOTH airframes torn in two, tumbling away burning. The other
           // rival is switched to tumbling here too, so the blast only
@@ -514,6 +640,24 @@ export function createRivals(THREE, seed, islands, effects) {
         const ev = r.flight.step(dt, autopilotTo(r.flight, target, throttle, groundAt), groundAt, runway);
         const pass = r.course.checkPass(prev, s);
         if (pass && pass.passed) s.ringsPassed += 1;
+        // v15: coloured slipstream — a small puff in the rival's marker
+        // colour every 0.25 s off the tail, so the pack leaves motion
+        // cues instead of flying clean and anonymous (Gemini: rivals
+        // must read as an active racing pack, not scattered traffic).
+        // v15 (fix): size 1.0 (was 1.4) and opacity 0.30 (was 0.45) — a
+        // trail puff close to the cockpit camera washed a quarter of
+        // the windshield pink in the v15 cockpit shot; smaller and
+        // fainter still reads as a motion cue at race distance.
+        r.trailT += dt;
+        if (r.trailT >= 0.25) {
+          r.trailT = 0;
+          const f = forwardOf(s.yaw);
+          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 1.0, {
+            color: r.trailColor,
+            life: 1.1, grow: 1.0,
+            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.30,
+          });
+        }
         if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
           hide(r, RACE.respawnDelay);

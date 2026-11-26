@@ -143,15 +143,31 @@ export function createFlight(spawn) {
     }
 
     // Ground and water. Touching down is only a landing on the runway, slow and level.
+    // v15: the window is wider and gentler than v14 — the user's own
+    // playtest never saw the finish at all, and a casual pilot lands
+    // slightly long, slightly wide and slightly fast. The strip counts
+    // with its shoulders and a 40 m overshoot, and "gentle" is 48 m/s
+    // (was 42), 0.45 roll / 0.35 pitch (was 0.35 / 0.28), 8 m/s sink
+    // (was 6). A hard touchdown off the strip is still a crash.
     const ground = groundAt(state.x, state.z);
     if (state.y <= ground + 1.6) {
       const onRunway = runway !== null
-        && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2
-        && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2;
-      const gentle = state.speed < 42 && Math.abs(state.roll) < 0.35
-        && Math.abs(state.pitch) < 0.28 && Math.abs(state.verticalSpeed) < 6;
+        && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2 + 40
+        && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2 + 20;
+      const gentle = state.speed < 48 && Math.abs(state.roll) < 0.45
+        && Math.abs(state.pitch) < 0.35 && Math.abs(state.verticalSpeed) < 8;
+      // v15: the FINISH ZONE — after all 12 rings, a soft touchdown
+      // anywhere in the extended airfield box (80 m past the strip,
+      // 30 m to each side) counts as a landing too. The player flew
+      // the whole course; the finish must not be lost to a touchdown
+      // 20 m wide of the centreline.
+      const inFinishZone = runway !== null && state.ringsPassed >= COURSE.ringCount
+        && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2 + 80
+        && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2 + 30;
+      const softEnough = state.speed < 50 && Math.abs(state.roll) < 0.45
+        && Math.abs(state.pitch) < 0.35 && Math.abs(state.verticalSpeed) < 8;
       state.y = ground + 1.6;
-      if (onRunway && gentle) {
+      if ((onRunway && gentle) || (inFinishZone && softEnough)) {
         state.status = 'landed';
         state.speed = Math.max(0, state.speed - 30 * dt);
         events |= EVENT_LAND;

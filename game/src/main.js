@@ -155,7 +155,10 @@ function runShot(name) {
   }
   let painted = 0;
   function paint() {
-    renderer.draw(flight, planeApi, ringMeshes, terrain, 1 / 60, performance.now() / 1000);
+    // v15: the rivals ride along for their shadows (rivals.debug() gives
+    // the four positions; the group is visible in every staged shot).
+    renderer.draw(flight, planeApi, ringMeshes, terrain, 1 / 60, performance.now() / 1000,
+      rivals.group.visible ? rivals.debug() : []);
     painted += 1;
     if (painted < 2) requestAnimationFrame(paint);
     else window.__shotReady = true;
@@ -165,6 +168,10 @@ function runShot(name) {
 
 function runGame() {
   const input = createInput(canvas);
+  // v15: expose the live input for the probe — the deterministic W/S key
+  // test dispatches real keydown events and reads pitch() back, so the
+  // key mapping itself (not just the flight model) is verified end to end.
+  window.__debug.input = input;
   let screen = 'title';
   let titleTime = 0;
   let best = readBest();
@@ -379,7 +386,10 @@ function runGame() {
       if (screen === 'over') effects.update(1 / 60);
     }
     hud.update(hudView(), 1 / 60);
-    renderer.draw(flight, planeApi, ringMeshes, terrain, 1 / 60, now / 1000);
+    // v15: the live draw gets the rivals too, so their blob shadows track
+    // them in play — hidden on the title screen, where the pack sits out.
+    renderer.draw(flight, planeApi, ringMeshes, terrain, 1 / 60, now / 1000,
+      rivals.group.visible ? rivals.debug() : []);
   }
 
   document.addEventListener('visibilitychange', () => {

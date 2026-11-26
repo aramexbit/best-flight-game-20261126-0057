@@ -61,9 +61,15 @@ export function createInput(target) {
   }
 
   return {
-    /** -1 to pull up, +1 to push down; 0 when neither or both. */
+    // v15: W pulls UP, S pushes DOWN — the v14 mapping was backwards
+    // (W sent -1 and the model dives on -1, so W dived and S climbed,
+    // against both the key-cap label and this comment). The swap is
+    // here only, in the player's key mapping: flight.js and the
+    // autopilot are untouched, so the flight model and the sim scores
+    // do not move.
+    /** +1 to pull up, -1 to push down; 0 when neither or both. */
     pitch() {
-      return (any(PITCH_DOWN) ? 1 : 0) - (any(PITCH_UP) ? 1 : 0);
+      return (any(PITCH_UP) ? 1 : 0) - (any(PITCH_DOWN) ? 1 : 0);
     },
     /** -1 for left, +1 for right; 0 when neither or both. */
     roll() {

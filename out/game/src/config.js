@@ -118,11 +118,16 @@ export const RACE = {
   // goes off behind the player and the cover freeze at 41 s sees nothing
   // but empty sky ahead. The cover timing is fixed the other way — the
   // cover freezes ~1.5 s after the blast instead, see PLAY_SECONDS.)
-  collisionFallbackAt: 60,
+  // v15: 90 s (was 60) — the meeting point now re-anchors ahead of a
+  // slow player instead of firing far away, so the backstop only fires
+  // once the player is genuinely closing in.
+  collisionFallbackAt: 90,
   // v14: 800 m (was 600) — the diag showed the player orbiting the runway
   // at 635-750 m from the meeting point after the course, so the 600 m
   // backstop never caught it; 800 m does, as a last resort.
-  collisionCloseDist: 800,
+  // v15: 350 m (was 800) — an 800 m blast is invisible; the backstop
+  // only fires when the player is close enough to actually see it.
+  collisionCloseDist: 350,
   // R1 blue: near-miss flyby down the player's left side, 39-42 s.
   flybyAt: 39,
   // Seconds a crashed rival stays out before rejoining. 3 s (was 6):

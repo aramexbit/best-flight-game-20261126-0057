@@ -35,15 +35,23 @@ export function createHud() {
   // v14: the mid-air collision cue rides on this — main.js calls
   // showMessage('MID-AIR COLLISION!', 2.5) when rivals.js fires the
   // collision event, so the player is told even if the blast is far off.
+  // v15: a timed flash message is the big gold centre text; the
+  // persistent objective is a compact pill instead (see showObjective).
   function showMessage(text, seconds) {
     msgEl.textContent = text;
+    msgEl.classList.remove('objective');
     msgEl.style.opacity = '1';
     msgTimer = seconds;
   }
 
   /** A message that stays until the run ends: the landing objective. */
+  // v15: the objective is a compact pill at the top centre (Gemini's fix
+  // prompt: ≤36% wide, y 6-12%) — the v14 giant centre banner covered the
+  // runway sightline in the landing shot, so the objective no longer
+  // uses the big gold centre style.
   function showObjective(text) {
     msgEl.textContent = text;
+    msgEl.classList.add('objective');
     msgEl.style.opacity = '1';
     msgTimer = 9999;
   }
@@ -168,7 +176,12 @@ export function createHud() {
     else showWarning('');
     if (msgTimer > 0) {
       msgTimer -= dt;
-      if (msgTimer <= 0) msgEl.style.opacity = '0';
+      if (msgTimer <= 0) {
+        msgEl.style.opacity = '0';
+        // v15: a timed-out message drops the pill styling too, so the
+        // next flash message starts from the big gold centre style.
+        msgEl.classList.remove('objective');
+      }
     }
   }
 
