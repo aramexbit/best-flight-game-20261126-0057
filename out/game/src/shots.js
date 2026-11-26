@@ -179,12 +179,15 @@ export function stageShot(name, game) {
       // was 0.25) — the v10 landing plane read slightly crabbed against the
       // runway (Gemini v10). The distance and height window stay at the
       // proven 300 m / +50 m, so the freeze still catches.
-      const aligned = Math.abs(wrapAngle(s.yaw - runwayHeading)) < 0.18;
+      // v12: aligned < 0.15 — the v11 plane still sat offset and slightly
+      // banked in the landing frame.
+      const aligned = Math.abs(wrapAngle(s.yaw - runwayHeading)) < 0.15;
       // ...and the wings are level. Heading alone is not enough: the plane
       // can be on-heading while still banked mid-turn, and the whole frame
       // tilts with it. The roll settles as the turn finishes.
       // v11: level < 0.12 (was 0.15), same reason — a straighter final.
-      const level = Math.abs(s.roll) < 0.12;
+      // v12: level < 0.10 — the wings must read level in the frame.
+      const level = Math.abs(s.roll) < 0.10;
       // v4: freeze closer and lower — inside 300 m and below 50 m above the
       // strip — so the runway fills the frame instead of reading as a narrow
       // distant strip (v3 froze at 400 m / 65 m). The v3 lesson still holds:

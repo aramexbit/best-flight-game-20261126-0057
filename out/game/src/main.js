@@ -98,12 +98,16 @@ function runShot(name) {
   // under its belly (Gemini v7). The freeze window is untouched
   // (300 m / +50 m, proven in v6) — only the camera moves, not the
   // approach.
+  // v12: lateral -2.0 (was -4.5) — the v11 plane still sat offset to the
+  // right and slightly banked in the landing frame; closer to centre it
+  // reads as on the centreline with level wings, and "09" still shows
+  // beside the fuselage instead of hiding under it.
   // v9: lateral -30 (was -24) — the scene sits a touch further right, so
   // the first ring clears the (now narrower) title card's right edge.
   if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -30, 4.5); }
   else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, 0, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
-  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, -4.5, 2.2); }
+  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, -2.0, 2.2); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;

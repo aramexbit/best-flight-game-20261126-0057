@@ -22,79 +22,167 @@ export function buildPlane(THREE) {
   const body = new THREE.Group();
   group.add(body);
 
-  // Fuselage: a rounded, tapered tube along Z, nose at -Z — v3, the bush-plane
-  // redesign. Eight metres nose to tail, 10 longitudinal segments, cream on
-  // top with a darker belly slung underneath (a second, slightly smaller tube
-  // offset down, so only its lower half shows). The v2 fuselage was a short
-  // 5.4 m tube that read as a toy from any distance.
-  const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.36, 6.4, 10), cream);
-  fuselage.rotation.x = Math.PI / 2;
-  fuselage.position.set(0, 0, 0.3);
-  body.add(fuselage);
+  // v12: the Caravan rebuild — the v11 smooth tube + big red tail cone read
+  // as a rocket from the rear chase camera (the user's own words), so the
+  // airframe follows the Cessna 208B Grand Caravan (Susi Air PK-VVH photo +
+  // the two-panel concept art) per the Gemini build prompt: a BOXY cabin
+  // core with faceted edges, a crowned roof and a flat belly — never a
+  // smooth tube; a red cheatline stripe; four large cabin windows per
+  // side; a tapered nose into the turboprop cowling; a compact tapered
+  // tail end with no cone or nozzle; a tall fin with a red cap; a wide
+  // stabiliser. Livery stays red-and-white; the photo's dark belly cargo
+  // pod is NOT copied. Forward is -Z, same as before; the airframe is
+  // ~8 m long, wingspan ~11 m.
+  const cabinBox = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.15, 4.4), cream);
+  cabinBox.position.set(0, 0.05, 0.1);
+  body.add(cabinBox);
+  // Crowned roof strip: slightly narrower than the cabin, so the top reads
+  // as a cabin roof, not a flat slab.
+  const roofStrip = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.14, 4.0), cream);
+  roofStrip.position.set(0, 0.68, 0.1);
+  body.add(roofStrip);
+  // Flat belly: a darker strip under the cabin — the Caravan's flat-angled
+  // belly, kept clean (no cargo pod).
   const bellyMat = new THREE.MeshStandardMaterial({ color: PALETTE.planeBelly, roughness: 0.6, metalness: 0.1 });
-  const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.32, 6.0, 10), bellyMat);
-  belly.rotation.x = Math.PI / 2;
-  belly.position.set(0, -0.15, 0.3);
-  body.add(belly);
-  // Red nose cowling and a cream tail cone. The cowling, prop and blur disc live
-  // on the top group (not the body) so the cockpit view can hide the bodywork
-  // while the nose stays in sight ahead of the pilot.
+  const bellyStrip = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 4.0), bellyMat);
+  bellyStrip.position.set(0, -0.58, 0.1);
+  body.add(bellyStrip);
+  // Red cheatline stripe along each side of the cabin — the Caravan's red
+  // band, so the fuselage reads as a cabin from the side and the rear.
+  for (const side of [-1, 1]) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 4.2), red);
+    stripe.position.set(side * 0.58, -0.12, 0.1);
+    body.add(stripe);
+  }
+  // Cabin windows: four large dark glass panes per side, slightly proud of
+  // the cabin wall, with the window rhythm of the real Caravan; two angled
+  // windshield panes at the front of the cabin.
+  const windowMat = new THREE.MeshStandardMaterial({ color: '#22303f', roughness: 0.15, metalness: 0.35 });
+  for (const side of [-1, 1]) {
+    for (let w = 0; w < 4; w += 1) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.42, 0.5), windowMat);
+      win.position.set(side * 0.59, 0.18, -1.3 + w * 0.85);
+      body.add(win);
+    }
+    const shieldPane = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.03), windowMat);
+    shieldPane.position.set(side * 0.3, 0.28, -2.12);
+    shieldPane.rotation.y = -side * 0.35;
+    shieldPane.rotation.x = -0.2;
+    body.add(shieldPane);
+  }
+  // Nose transition: a short faceted section bridging the cabin front to
+  // the red engine cowling.
+  const noseSec = new THREE.Mesh(new THREE.CylinderGeometry(0.60, 0.56, 0.5, 8), cream);
+  noseSec.rotation.x = Math.PI / 2;
+  noseSec.position.set(0, 0.05, -2.35);
+  body.add(noseSec);
+  // Red nose cowling. The cowling, prop and blur disc live on the group
+  // (not the body) so the cockpit view can hide the bodywork while the
+  // nose stays in sight ahead of the pilot.
   const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.55, 0.9, 14), red);
   cowl.rotation.x = Math.PI / 2;
   cowl.position.set(0, 0, -3.0);
   group.add(cowl);
-  const tailCone = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.1, 12), red);
-  tailCone.rotation.x = -Math.PI / 2;
-  tailCone.position.set(0, 0, 3.9);
-  body.add(tailCone);
-  // Glass cabin on top, ahead of the wing.
-  const cabin = new THREE.Mesh(new THREE.SphereGeometry(0.62, 16, 12), glass);
-  cabin.scale.set(0.92, 0.8, 1.5);
-  cabin.position.set(0, 0.52, -0.7);
-  body.add(cabin);
+  // Tail: a compact tapered octagonal section, cream, ending small — no
+  // cone, no nozzle, no rocket bell.
+  const tailTaper = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.55, 2.0, 8), cream);
+  tailTaper.rotation.x = Math.PI / 2;
+  tailTaper.position.set(0, 0.05, 3.2);
+  body.add(tailTaper);
 
-  // High wing: one long slab with red tips, braced by struts to the fuselage.
-  // v3: 11 m span (9.68 m centre + 0.66 m red tips each side, the outer 12%),
-  // so the wing-and-tail shape reads at close, medium and distant scales.
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(9.68, 0.16, 1.6), cream);
-  wing.position.set(0, 0.62, -0.4);
-  body.add(wing);
+  // High wing: two halves with a real dihedral (tips rise ~0.17 m), red
+  // tips, an aileron seam on top, and red struts from the lower fuselage
+  // side up to mid-span under the wing — thick and faceted, not a
+  // paper-thin slab. Wingspan ~11 m tip to tip.
   for (const side of [-1, 1]) {
+    const half = new THREE.Mesh(new THREE.BoxGeometry(4.84, 0.18, 1.6), cream);
+    half.position.set(side * 2.42, 0.82, -0.4);
+    half.rotation.z = side * 0.07;
+    body.add(half);
     const tip = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.18, 1.62), red);
-    tip.position.set(side * 5.17, 0.62, -0.4);
+    tip.position.set(side * 5.17, 1.01, -0.4);
+    tip.rotation.z = side * 0.07;
     body.add(tip);
-    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6), dark);
-    strut.position.set(side * 1.1, -0.05, -0.4);
-    strut.rotation.z = side * 0.85;
+    // Aileron seam: a thin darker line near the trailing edge, so the wing
+    // reads as control surfaces, not one blank plank.
+    const aileronMat = new THREE.MeshStandardMaterial({ color: '#d8c9a8', roughness: 0.55, metalness: 0.25 });
+    const aileron = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.02, 0.14), aileronMat);
+    aileron.position.set(side * 2.42, 0.92, 0.28);
+    aileron.rotation.z = side * 0.07;
+    body.add(aileron);
+    // Wing strut: red, from the lower fuselage side up to mid-span under
+    // the wing — the Caravan's visible struts, readable from behind.
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.5, 6), red);
+    strut.position.set(side * 1.18, 0.31, -0.4);
+    strut.rotation.z = -side * 0.986;
     body.add(strut);
     // Wingtip navigation light: red on the left, green on the right.
     const lamp = new THREE.Mesh(
       new THREE.SphereGeometry(0.09, 8, 6),
       new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff2a1e : 0x2aff5e }),
     );
-    lamp.position.set(side * 5.5, 0.62, -0.4);
+    lamp.position.set(side * 5.5, 1.03, -0.4);
     body.add(lamp);
   }
 
-  // Tail: horizontal stabiliser and a red fin.
-  const stabiliser = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.12, 1.0), cream);
-  stabiliser.position.set(0, 0.22, 2.7);
+  // Tail: a wide horizontal stabiliser with red tips near the base of a
+  // TALL stepped fin — cream with a red cap — plus a dorsal fin leading
+  // edge running forward along the fuselage top. The fin rises to ~2.2 m
+  // above the tail, so from the rear chase camera the tail reads as a
+  // Caravan empennage, never as a cone.
+  const stabiliser = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.12, 1.1), cream);
+  stabiliser.position.set(0, 0.28, 4.0);
   body.add(stabiliser);
-  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.5, 1.1), red);
-  fin.position.set(0, 0.85, 2.7);
-  body.add(fin);
-
-  // Fixed landing gear: two main wheels and a tail wheel.
   for (const side of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.9, 6), dark);
-    leg.position.set(side * 0.75, -0.55, -0.7);
-    leg.rotation.z = side * 0.3;
-    body.add(leg);
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.18, 12), dark);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(side * 0.95, -0.95, -0.7);
-    body.add(wheel);
+    const stabTip = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.14, 1.12), red);
+    stabTip.position.set(side * 1.68, 0.28, 4.0);
+    body.add(stabTip);
   }
+  const finLower = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 1.3), cream);
+  finLower.position.set(0, 0.7, 3.95);
+  body.add(finLower);
+  const finUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.95), cream);
+  finUpper.position.set(0, 1.55, 4.05);
+  body.add(finUpper);
+  const finTip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.4, 0.8), red);
+  finTip.position.set(0, 2.0, 4.08);
+  body.add(finTip);
+  const dorsalFin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 1.3), cream);
+  dorsalFin.position.set(0, 0.72, 3.2);
+  dorsalFin.rotation.x = -0.45;
+  body.add(dorsalFin);
+  const ventralFin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.7), red);
+  ventralFin.position.set(0, -0.35, 4.0);
+  body.add(ventralFin);
+
+  // Fixed landing gear: a tricycle — two main wheels under the cabin and
+  // a nose wheel under the engine — all three tyre bottoms on the same
+  // plane (y = -1.54 in plane-local coordinates, the origin being the
+  // plane centre), so the plane sits level on the ground.
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.62, 6), dark);
+    leg.position.set(side * 0.75, -0.89, 0.5);
+    body.add(leg);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.22, 12), dark);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(side * 0.75, -1.2, 0.5);
+    body.add(wheel);
+    const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.24, 8), new THREE.MeshStandardMaterial({ color: '#9aa0aa', roughness: 0.4, metalness: 0.6 }));
+    hubCap.rotation.z = Math.PI / 2;
+    hubCap.position.set(side * 0.75, -1.2, 0.5);
+    body.add(hubCap);
+  }
+  const noseLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 6), dark);
+  noseLeg.position.set(0, -0.90, -2.3);
+  body.add(noseLeg);
+  const noseWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.2, 12), dark);
+  noseWheel.rotation.z = Math.PI / 2;
+  noseWheel.position.set(0, -1.26, -2.3);
+  body.add(noseWheel);
+  const noseHub = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.22, 8), new THREE.MeshStandardMaterial({ color: '#9aa0aa', roughness: 0.4, metalness: 0.6 }));
+  noseHub.rotation.z = Math.PI / 2;
+  noseHub.position.set(0, -1.26, -2.3);
+  body.add(noseHub);
 
   // Propeller: a dark hub, two blades and a faint blur disc that appears with
   // throttle. v3: the hub is dark (blueprint) with a red ring and tip for
@@ -114,13 +202,16 @@ export function buildPlane(THREE) {
   hubTip.position.set(0, 0, -0.28);
   prop.add(hubTip);
   for (const angle of [0, Math.PI]) {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.7, 0.07), dark);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.28, 2.9, 0.07), dark);
     blade.rotation.z = angle;
     blade.position.set(0, 0, -0.1);
     prop.add(blade);
   }
+  // v12: the blur disc is bigger (1.6 m radius, was 1.45) and stronger —
+  // from the rear chase camera the spinning prop must read as a disc
+  // protruding past the nose and fuselage edges, never hidden.
   const blur = new THREE.Mesh(
-    new THREE.CircleGeometry(1.45, 28),
+    new THREE.CircleGeometry(1.6, 28),
     new THREE.MeshBasicMaterial({
       color: '#d8d8d8', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
     }),
@@ -158,7 +249,9 @@ export function buildPlane(THREE) {
   // built into an aircraft cabin instead of a lone box in front of water.
   const panel = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.12), panelMat);
   dash.add(panel);
-  const faceMat = new THREE.MeshStandardMaterial({ color: PALETTE.cockpitFace, roughness: 0.65, metalness: 0.1 });
+  // v12: the inset face is lighter (#676d78, was PALETTE.cockpitFace) so
+  // the dials sit on a face that reads as built metal, not a dark slab.
+  const faceMat = new THREE.MeshStandardMaterial({ color: '#676d78', roughness: 0.65, metalness: 0.1 });
   const face = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.34, 0.02), faceMat);
   face.position.set(0, 0.01, 0.06);
   dash.add(face);
@@ -190,34 +283,43 @@ export function buildPlane(THREE) {
   // glare-shield depth"). The v9 lesson still holds — it stays light grey
   // and slopes gently, so its underside does not become a black slab over
   // the dials.
-  const shield = new THREE.Mesh(
-    new THREE.BoxGeometry(2.05, 0.04, 0.34),
+  // v12: one shell material for the whole cabin — walls, roof, pillars,
+  // bow and console share it, so the interior reads as a single molded
+  // cabin instead of separate dark bars; it is lighter than the old frame
+  // grey, so the bright sky outside no longer fights the interior.
+  const shellMat = new THREE.MeshStandardMaterial({ color: '#6e737c', roughness: 0.6, metalness: 0.2 });
+  // Glareshield: a shaped three-piece brow — a flat centre with two side
+  // pieces sloping down to the A-pillars — so the instruments sit under a
+  // hood that is part of the cabin, not a floating slab.
+  const shieldCentre = new THREE.Mesh(
+    new THREE.BoxGeometry(1.15, 0.04, 0.36),
     new THREE.MeshStandardMaterial({ color: PALETTE.cockpitShield, roughness: 0.8, metalness: 0.1 }),
   );
-  shield.position.set(0, 0.24, 0.10);
-  shield.rotation.x = 0.28;
-  dash.add(shield);
+  shieldCentre.position.set(0, 0.26, 0.10);
+  shieldCentre.rotation.x = 0.28;
+  dash.add(shieldCentre);
+  for (const side of [-1, 1]) {
+    const shieldSide = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48, 0.04, 0.36),
+      new THREE.MeshStandardMaterial({ color: PALETTE.cockpitShield, roughness: 0.8, metalness: 0.1 }),
+    );
+    shieldSide.position.set(side * 0.79, 0.22, 0.10);
+    shieldSide.rotation.x = 0.28;
+    shieldSide.rotation.z = -side * 0.12;
+    dash.add(shieldSide);
+  }
   // The lower console is a different, lighter grey than the panel, so
   // the dash reads as separate built parts instead of one black mass.
   // v7: a touch lighter still (#6b7078), widening the material gap between
   // the console, the panel face and the dark glareshield.
   const consoleMat = new THREE.MeshStandardMaterial({ color: PALETTE.cockpitConsole, roughness: 0.75, metalness: 0.1 });
-  // Side cheeks: angled flanks at the panel ends, dropping back toward the
-  // pilot — the panel now has sides, not just a front face.
-  for (const side of [-1, 1]) {
-    const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.35), consoleMat);
-    cheek.position.set(side * 1.0, -0.05, 0.08);
-    cheek.rotation.x = 0.35;
-    dash.add(cheek);
-  }
-  // Lower console: a sloped shelf under the panel, dropping back toward the
-  // pilot — the dash now continues down into the airframe instead of ending
-  // at a flat bottom edge.
-  // v9: wider (1.6 m) and dropped lower, so the console continues down
-  // toward the bottom of the frame instead of ending at a flat edge.
-  const consoleShelf = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.30, 0.3), consoleMat);
-  consoleShelf.position.set(0, -0.34, 0.10);
-  consoleShelf.rotation.x = 0.5;
+  // Lower console: a wide shelf spanning wall to wall (2.0 m) in the shell
+  // material, sloping up toward the panel — it meets the side walls with
+  // no gap, so the dash continues down into the airframe as one piece.
+  // The old side cheeks are gone: the console ends ARE the sides now.
+  const consoleShelf = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.34, 0.42), shellMat);
+  consoleShelf.position.set(0, -0.36, 0.12);
+  consoleShelf.rotation.x = 0.45;
   dash.add(consoleShelf);
   // Windshield pillars at the panel edges, leaning out toward the top. v5:
   // 0.035 wide and 0.62 tall, spanning from the panel bottom to above the
@@ -233,12 +335,12 @@ export function buildPlane(THREE) {
   // canopy frame needs to read as solid structure from the pilot's seat,
   // not thin posts, so the windshield framing is unmistakable.
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.95, 0.06), dark);
-    pillar.position.set(side * 0.98, -0.05, 0.02);
-    pillar.rotation.z = -side * 0.15;
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.11, 1.0, 0.09), shellMat);
+    pillar.position.set(side * 0.97, -0.02, 0.02);
+    pillar.rotation.z = -side * 0.12;
     dash.add(pillar);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.07), dark);
-    base.position.set(side * 0.96, -0.48, 0.03);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.10), shellMat);
+    base.position.set(side * 0.95, -0.48, 0.03);
     dash.add(base);
   }
   // v6: canopy framing — a top arch bar joining the pillar tops, side rails
@@ -268,12 +370,12 @@ export function buildPlane(THREE) {
   // instead of the "thin floating wire" Gemini v10 saw. Two canopy struts
   // divide the windshield into three panes, and a headliner slab runs back
   // from the bow — the top of the frame is now a cabin roof, not open sky.
-  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.035, 8, 28, Math.PI), frameMat);
-  arch.scale.set(1, 0.22, 1);
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.05, 8, 28, Math.PI), shellMat);
+  arch.scale.set(1, 0.24, 1);
   arch.position.set(0, 0.42, 0.0);
   dash.add(arch);
   for (const side of [-1, 1]) {
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.04), frameMat);
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.05), shellMat);
     strut.position.set(side * 0.5, 0.31, 0.0);
     dash.add(strut);
   }
@@ -282,53 +384,67 @@ export function buildPlane(THREE) {
   // higher and further back (y 0.62, z 0.30) — the first v11 shot showed it
   // as a straight light-grey shelf across the windshield, separate from the
   // dark canopy bow. Now it reads as one dark canopy structure with the bow.
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 0.3), frameMat);
-  roof.position.set(0, 0.62, 0.30);
-  roof.rotation.x = -0.35;
-  dash.add(roof);
+  // Headliner: a three-piece molded roof — a flat centre with two side
+  // panels sloping down to meet the tops of the side walls, so the roof
+  // and the walls join without a gap. The side panels' outer edges land
+  // exactly on the wall tops (x ±1.0, y 0.35).
+  const roofCentre = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.04, 0.55), shellMat);
+  roofCentre.position.set(0, 0.66, 0.32);
+  roofCentre.rotation.x = -0.30;
+  dash.add(roofCentre);
+  for (const side of [-1, 1]) {
+    const roofSide = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.55), shellMat);
+    roofSide.position.set(side * 0.80, 0.50, 0.32);
+    roofSide.rotation.x = -0.30;
+    roofSide.rotation.z = -side * 0.64;
+    dash.add(roofSide);
+  }
+  // v12: opacity 0.16 (was 0.10) — the glazing reads as glass, not open
+  // sky, so the windshield and side windows are visible as panes.
   const glassMat = new THREE.MeshStandardMaterial({
     color: PALETTE.cockpitGlass, roughness: 0.05, metalness: 0.2,
-    transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false,
+    transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false,
   });
   const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.84, 0.34), glassMat);
   windshield.position.set(0, 0.40, 0.0);
   windshield.rotation.x = -0.06;
   dash.add(windshield);
   for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.55), frameMat);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.55), shellMat);
     rail.position.set(side * 0.98, 0.42, 0.28);
     dash.add(rail);
-    // v11: the side walls are taller (1.1 m, was 0.9) and deeper (0.8 m,
-    // was 0.6), so they reach from the console up to the canopy bow — the
-    // cabin now has real sides. Each wall carries a framed side window: a
-    // glass pane set into the wall's inner face with a dark frame around
-    // it, so the cockpit reads as enclosed with side windows instead of
-    // open at the sides (Gemini v10: "no visible side walls, struts, or
-    // enclosed canopy framing").
+    // v12: the wall is a door frame, not a plate. A solid lower door panel
+    // with a REAL window opening above it — frame bars around a glass pane
+    // with nothing solid behind it, so the window is a cutout in the wall
+    // and the sky and sea show through it. The wall's bottom meets the
+    // console, its top meets the roof side panel, its front edge overlaps
+    // the A-pillar: one continuous shell.
     const wallGroup = new THREE.Group();
-    wallGroup.position.set(side * 1.0, -0.18, 0.18);
-    wallGroup.rotation.y = -side * 0.3;
+    wallGroup.position.set(side * 1.0, -0.10, 0.34);
+    wallGroup.rotation.y = -side * 0.25;
     dash.add(wallGroup);
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.1, 0.8), consoleMat);
-    wallGroup.add(wall);
-    const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.45), glassMat);
-    sideGlass.position.set(-side * 0.03, 0.08, 0);
-    sideGlass.rotation.y = -side * Math.PI / 2;
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.8), shellMat);
+    door.position.set(0, -0.28, 0);
+    wallGroup.add(door);
+    const frameTop = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.66), shellMat);
+    frameTop.position.set(0, 0.45, 0);
+    wallGroup.add(frameTop);
+    const frameSill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.66), shellMat);
+    frameSill.position.set(0, 0.0, 0);
+    wallGroup.add(frameSill);
+    const frameFront = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.51, 0.06), shellMat);
+    frameFront.position.set(0, 0.225, -0.30);
+    wallGroup.add(frameFront);
+    const frameBack = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.51, 0.06), shellMat);
+    frameBack.position.set(0, 0.225, 0.30);
+    wallGroup.add(frameBack);
+    const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.43), glassMat);
+    sideGlass.position.set(0, 0.225, 0);
+    sideGlass.rotation.y = Math.PI / 2;
     wallGroup.add(sideGlass);
-    for (const wy of [-0.17, 0.33]) {
-      const frameBar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.56), frameMat);
-      frameBar.position.set(-side * 0.03, wy, 0);
-      wallGroup.add(frameBar);
-    }
-    for (const wz of [-0.26, 0.26]) {
-      const frameBar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.56, 0.05), frameMat);
-      frameBar.position.set(-side * 0.03, 0.08, wz);
-      wallGroup.add(frameBar);
-    }
-    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.8), frameMat);
-    sill.position.set(side * 1.0, 0.36, 0.18);
-    sill.rotation.y = -side * 0.3;
-    dash.add(sill);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.5), frameMat);
+    handle.position.set(-side * 0.04, -0.15, 0);
+    wallGroup.add(handle);
   }
   // v6: the control yoke — a short column rising out of the console shelf
   // with a crossbar handle and two grips, sitting just below the panel's
@@ -344,8 +460,15 @@ export function buildPlane(THREE) {
   // (Gemini v10: "only a tiny dark curve/hub poking up from the grey dash
   // box"). The old wheel was small AND low-contrast against the dark panel.
   const yokeMat = new THREE.MeshStandardMaterial({ color: '#7a8090', roughness: 0.45, metalness: 0.3 });
-  const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.3, 8), yokeMat);
-  yokeCol.position.set(0, -0.26, 0.18);
+  // Yoke column with a shroud: a thick column rising out of the console
+  // with a tapered cover behind it, so the wheel reads as mounted on a
+  // real control column, not a bare stick in front of the panel.
+  const yokeShroud = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 0.12), shellMat);
+  yokeShroud.position.set(0, -0.28, 0.16);
+  yokeShroud.rotation.x = 0.35;
+  dash.add(yokeShroud);
+  const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.3, 8), yokeMat);
+  yokeCol.position.set(0, -0.24, 0.20);
   yokeCol.rotation.x = 0.35;
   dash.add(yokeCol);
   const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 12, 32), yokeMat);
@@ -365,6 +488,26 @@ export function buildPlane(THREE) {
     grip.position.set(side * 0.22, -0.06, 0.28);
     grip.rotation.x = 0.35;
     dash.add(grip);
+  }
+  // Throttle quadrant: a dark box on the console right of the yoke column
+  // with two levers (throttle black, mixture red) — the second control
+  // that makes the cockpit read as a flown aeroplane.
+  const quadrant = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.34), dark);
+  quadrant.position.set(0.55, -0.20, 0.20);
+  quadrant.rotation.x = 0.45;
+  dash.add(quadrant);
+  const leverMat = new THREE.MeshStandardMaterial({ color: '#22242a', roughness: 0.5, metalness: 0.4 });
+  for (const [lx, knobColor] of [[0.50, '#22242a'], [0.60, '#c0392b']]) {
+    const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6), leverMat);
+    lever.position.set(lx, -0.14, 0.22);
+    lever.rotation.x = 0.4;
+    dash.add(lever);
+    const knob = new THREE.Mesh(
+      new THREE.SphereGeometry(0.028, 8, 6),
+      new THREE.MeshStandardMaterial({ color: knobColor, roughness: 0.5, metalness: 0.2 }),
+    );
+    knob.position.set(lx, -0.05, 0.27);
+    dash.add(knob);
   }
   // Three small indicator dots, FLUSH on the panel face below the middle
   // gauge (z 0.075, just proud of the v7 inset face at 0.07) — green, amber, red.
@@ -554,7 +697,7 @@ export function buildPlane(THREE) {
   function update(dt, throttle, time) {
     propAngle += (5 + throttle * 46) * dt;
     prop.rotation.z = propAngle;
-    blur.material.opacity = Math.min(0.22, throttle * 0.3);
+    blur.material.opacity = Math.min(0.35, throttle * 0.35);
     // A hint of life even on the ground: the nav lamps breathe gently.
     void time;
   }

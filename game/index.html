@@ -44,7 +44,10 @@
 
   #hud-bottom-right { position: absolute; bottom: 14px; right: 14px; text-align: right; }
   #compass { width: 260px; height: 34px; border-radius: 10px; border: 1px solid rgba(0, 229, 255, 0.35); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); }
-  #hud-bottom-right .hint { margin-top: 8px; font-size: 12px; opacity: 0.7; }
+  /* v12: the control hint is a navy pill (was bare white text at 0.7
+     opacity) — over bright grass it washed out; now it reads on any
+     background, like the other HUD panels. */
+  #hud-bottom-right .hint { display: inline-block; margin-top: 8px; font-size: 12px; background: rgba(6, 60, 133, 0.88); border: 1px solid rgba(130, 210, 255, 0.35); border-radius: 999px; padding: 4px 10px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 
   #hud-msg { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); font-size: 34px; font-weight: 800; letter-spacing: 0.08em; color: #ffd94d; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.65); opacity: 0; transition: opacity 0.4s; white-space: nowrap; }
   #hud-warn { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: 20px; font-weight: 700; letter-spacing: 0.1em; color: #ff5d4d; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); opacity: 0; white-space: nowrap; }
@@ -70,7 +73,11 @@
   .top-pill .star { color: #FFD52A; font-size: 20px; line-height: 1; text-shadow: 0 0 8px rgba(255, 213, 42, 0.7); }
   #btn-gear { pointer-events: auto; cursor: pointer; width: 42px; height: 42px; border-radius: 50%; background: rgba(6, 60, 133, 0.88); border: 1px solid rgba(0, 229, 255, 0.4); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
   #btn-gear:hover { transform: scale(1.08); }
-  #panel-title .card { position: absolute; left: 4%; top: 50%; transform: translateY(-50%); width: 420px; max-width: 44vw; text-align: left; padding: 20px 24px; }
+  /* v12: bottom padding 16px (was 20px) — the green "Press Space" prompt
+     line is gone, so the card ends at the key-cap grid; a slightly tighter
+     bottom keeps the card compact instead of leaving a gap where the line
+     used to be. */
+  #panel-title .card { position: absolute; left: 4%; top: 50%; transform: translateY(-50%); width: 420px; max-width: 44vw; text-align: left; padding: 20px 24px 16px; }
   .card { pointer-events: auto; text-align: center; background: rgba(6, 60, 133, 0.88); border: 1px solid rgba(130, 210, 255, 0.35); border-radius: 20px; padding: 26px 44px; color: #ffffff; max-width: 620px; backdrop-filter: blur(3px); box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.15), 0 0 18px rgba(0, 229, 255, 0.22), 0 12px 32px rgba(0, 0, 0, 0.35); }
   .card h1 { margin: 0; font-size: 30px; letter-spacing: 0.02em; font-weight: 900; background: linear-gradient(#FFE65C, #FFB800); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55)); }
   .card h2 { margin: 0 0 10px; font-size: 34px; color: #FFD52A; }
@@ -84,7 +91,10 @@
   .card .lines div { margin: 2px 0; }
   .keys-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
   .keycap { text-align: center; }
-  .keycap .key { display: flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(#ffffff, #dfe8f2); color: #132238; font-weight: 800; font-size: 14px; border-radius: 6px; border-bottom: 3px solid #9fb2c8; padding: 6px 4px 5px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); }
+  /* v12: key-cap badges are YELLOW with navy text (#132238, same as the
+     Start button label) — the user's final choice, 26 Nov 16:10 WIB. The
+     navy SVG icons inside the keys stay navy, so they read on yellow. */
+  .keycap .key { display: flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(#FFE65C, #FFC93C); color: #132238; font-weight: 800; font-size: 14px; border-radius: 6px; border-bottom: 3px solid #B45309; padding: 6px 4px 5px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); }
   .keycap .key-label { display: block; font-size: 11px; color: rgba(255, 255, 255, 0.78); margin-top: 4px; }
   .card .keys { margin-top: 20px; font-size: 14px; line-height: 1.8; opacity: 0.85; }
   .card .prompt { margin-top: 18px; font-size: 18px; font-weight: 700; color: #2CE65B; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
@@ -160,7 +170,6 @@
       <div class="keycap"><span class="key"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" fill="none" stroke="#132238" stroke-width="2"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="#132238" stroke-width="2"/><path d="M9 7l1.5-3h3L15 7" fill="none" stroke="#132238" stroke-width="2"/></svg>C</span><span class="key-label">Camera</span></div>
       <div class="keycap"><span class="key"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" fill="#132238"/><rect x="14" y="4" width="4" height="16" fill="#132238"/></svg>P</span><span class="key-label">Pause</span></div>
     </div>
-    <div class="prompt">▶ Press Space or click to fly</div>
   </div>
   <div id="title-objectives">
     <div class="obj-pill"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v5a5 5 0 0 1-10 0V3z" fill="#FFD52A"/><path d="M7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3" fill="none" stroke="#FFD52A" stroke-width="1.8"/><rect x="11" y="13" width="2" height="4" fill="#FFD52A"/><rect x="7" y="17" width="10" height="2.4" rx="1" fill="#FFD52A"/></svg><span>Complete<br>All Rings</span></div>
