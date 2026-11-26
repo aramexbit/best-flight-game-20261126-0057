@@ -44,6 +44,13 @@ try {
       };
     });
     console.log('shot', shot.name, 'ok', statSync(OUT_DIR + '/' + shot.name).size, 'bytes', JSON.stringify(hudState));
+    // v4: report how much scenery the generator planted (trees/palms/rocks/
+    // bushes) — the cover shot is the proof it is visible, this is the count.
+    if (shot.name === '1-cover.jpg') {
+      const veg = await page.evaluate(() => window.__vegCounts || null);
+      console.log('veg', JSON.stringify(veg));
+      if (!veg || !veg.trees || !veg.palms) throw new Error('veg counts missing');
+    }
   }
 
   // Playtest: title -> Space starts -> hold throttle + roll, HUD must move.
@@ -83,6 +90,31 @@ try {
   });
   console.log('playtest before', JSON.stringify(before));
   console.log('playtest after', JSON.stringify(after));
+  // v4: cockpit mode must keep the same HUD as third-person — time, score and
+  // ring progress in the upper-right, and the alt/speed/heading chips below.
+  // Pressing C flashes "COCKPIT VIEW" in the message line for 1.5 s, which is
+  // how this check proves the camera actually switched.
+  await page.keyboard.press('KeyC');
+  await page.waitForTimeout(400);
+  const cockpitHud = await page.evaluate(() => {
+    const hudStyle = getComputedStyle(document.getElementById('hud'));
+    return {
+      msg: document.getElementById('hud-msg').textContent,
+      time: document.getElementById('hud-time').textContent,
+      score: document.getElementById('hud-score').textContent,
+      rings: document.getElementById('hud-rings').textContent,
+      alt: document.getElementById('hud-alt').textContent,
+      hudVisible: hudStyle.opacity !== '0' && hudStyle.visibility !== 'hidden',
+    };
+  });
+  console.log('cockpit hud', JSON.stringify(cockpitHud));
+  if (cockpitHud.msg !== 'COCKPIT VIEW') throw new Error('cockpit mode did not engage');
+  if (!cockpitHud.hudVisible) throw new Error('HUD hidden in cockpit mode');
+  if (!cockpitHud.time || cockpitHud.time === '0:00') throw new Error('TIME missing in cockpit HUD');
+  if (!cockpitHud.score) throw new Error('SCORE missing in cockpit HUD');
+  if (!cockpitHud.rings) throw new Error('RING missing in cockpit HUD');
+  await page.keyboard.press('KeyC');
+  await page.waitForTimeout(400);
 } finally {
   if (browser) await browser.close();
   server.kill();

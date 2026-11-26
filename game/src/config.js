@@ -50,11 +50,13 @@ export const COURSE = {
   // Ring centres sit between these altitudes, in metres.
   minRingAlt: 120,
   maxRingAlt: 300,
-  // The glowing ring itself, in metres. v3: the blueprint scale — inner
-  // diameter ~22 m, about twice the 11 m wingspan, so the ring reads as a
-  // real air-race gate instead of a barn door (v2 was 26 m radius, 49 m across).
-  ringRadius: 11.5,
-  ringTube: 0.45,
+  // The glowing ring itself, in metres. v4: radius 13 m (was 11.5) — the
+  // v3 blind test said the main ring reads small in the cover shot, and the
+  // gate is the primary objective, so it gets a touch bigger. Tube 0.5 for
+  // presence. Passing stays easier, not harder, so the autopilot's tight
+  // mode (tuned for the small ring) still holds.
+  ringRadius: 13,
+  ringTube: 0.5,
   // The runway waits this far past the last ring, along the final heading.
   runwayPastRing: 520,
   // v3: the full-size strip from the blueprint, 450 m long and 28 m wide,
@@ -76,21 +78,23 @@ export const SCORE = {
 };
 
 export const PALETTE = {
-  // Golden hour: warm sun, peach haze, teal sea, green islands. v3: the
-  // blueprint palette — a deep mauve upper sky over a hot orange horizon,
-  // and a sea that runs turquoise in the shallows to near-black teal offshore.
-  skyTop: '#593D46',
-  skyHorizon: '#FF8B45',
-  fog: '#f7b98a',
-  sun: '#ffd9a0',
-  sea: '#0B5550',
-  seaDeep: '#073D39',
-  seaMid: '#167D78',
+  // v4: daytime — bright blue sky, white sun, blue sea. The golden-hour
+  // palette is gone: the sunset sky read dark and muddy in screenshots, and
+  // the user asked for a bright daytime scene that is pleasant to look at.
+  // The sea now runs bright turquoise in the shallows to deep blue offshore,
+  // so the coast reads as a tropical shore at a glance.
+  skyTop: '#2E7FC2',
+  skyHorizon: '#BFE3F2',
+  fog: '#cfe8f5',
+  sun: '#ffffff',
+  sea: '#1B7FA8',
+  seaDeep: '#0B5A8A',
+  seaMid: '#1B7FA8',
   seaShallow: '#42A99B',
   sand: '#e8cf9a',
-  grass: '#4d8a4a',
-  forest: '#2f6b35',
-  grassLight: '#6a9a4a',
+  grass: '#58a04e',
+  forest: '#2f7a38',
+  grassLight: '#7cb85c',
   rock: '#7a6a5e',
   snow: '#f2ede6',
   ring: '#FFD477',

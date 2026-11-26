@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Langit Nusantara — Ring Run</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #2e4a7a; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #8ec8e8; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -24,7 +24,10 @@
   #hud-top-left .panel { position: static; min-width: 92px; text-align: center; }
   #hud-top-right { position: absolute; top: 14px; right: 14px; text-align: right; }
   #hud-top-right .panel { position: static; min-width: 130px; }
-  #hud-rings { margin-top: 8px; font-size: 15px; font-weight: 600; letter-spacing: 0.06em; }
+  /* v4: a dark shadow under the ring line, so it stays readable when a bright
+     daytime cloud drifts behind it — the white-on-white washout in the v4
+     cockpit shot hid the ring progress. */
+  #hud-rings { margin-top: 8px; font-size: 15px; font-weight: 600; letter-spacing: 0.06em; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5); }
 
   #hud-bottom-left { position: absolute; bottom: 14px; left: 14px; display: flex; gap: 14px; align-items: flex-end; }
   #attitude { width: 110px; height: 110px; background: rgba(20, 24, 40, 0.55); border: 1px solid rgba(255, 247, 232, 0.25); border-radius: 50%; }
@@ -44,10 +47,11 @@
 
   /* --- Full-screen panels: title, pause, game over --- */
   .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
-  /* v3: the title panel sits on the left (max 520 px, under half the frame),
-  so the aircraft stays visible middle-right with a ring as the objective. */
+  /* v4: the title panel sits on the left (max 440 px, about a third of the
+  frame), so the aircraft stays visible middle-right and the whole first ring
+  clears the panel's right edge instead of hiding behind it. */
   #panel-title { justify-content: flex-start; }
-  #panel-title .card { margin-left: 4%; max-width: 520px; text-align: left; padding: 24px 34px; }
+  #panel-title .card { margin-left: 4%; max-width: 440px; text-align: left; padding: 24px 34px; }
   .card { pointer-events: auto; text-align: center; background: rgba(16, 20, 36, 0.72); border: 1px solid rgba(255, 217, 77, 0.45); border-radius: 16px; padding: 26px 44px; color: #fff7e8; max-width: 620px; backdrop-filter: blur(3px); }
   .card h1 { margin: 0 0 4px; font-size: 38px; letter-spacing: 0.04em; color: #ffd94d; }
   .card h2 { margin: 0 0 10px; font-size: 34px; color: #ffd94d; }
@@ -91,11 +95,11 @@
 <div class="overlay" id="panel-title">
   <div class="card">
     <h1>LANGIT NUSANTARA</h1>
-    <div class="sub">Ring Run — a golden-hour flight over a tropical archipelago</div>
+    <div class="sub">Ring Run — a bright daytime flight over a tropical archipelago</div>
     <div class="lines">
       <div>Fly through all 12 glowing rings, then land on the runway.</div>
-      <div>Centre a ring for a bonus. Mind your fuel and your speed —</div>
-      <div>slow down too much and the wing quits on you.</div>
+      <div>Centre a ring for a bonus. Mind your fuel and your speed.</div>
+      <div>Slow down too much and the wing quits on you.</div>
     </div>
     <div class="keys">W/S pitch &nbsp;·&nbsp; A/D roll &nbsp;·&nbsp; Q/E rudder &nbsp;·&nbsp; Shift/Ctrl throttle<br>C camera &nbsp;·&nbsp; M sound &nbsp;·&nbsp; P pause &nbsp;·&nbsp; R restart</div>
     <div class="prompt">Press Space or click to fly</div>

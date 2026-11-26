@@ -33,7 +33,8 @@ const status = document.getElementById('status');
 // The world is built once, from the seed: islands, course, terrain, rings, plane.
 const islands = planIslands(createRandom(seed));
 const course = createCourse(createRandom(seed + 7), seed, islands);
-const terrain = buildTerrain(THREE, seed, islands, course.runway);
+const terrain = buildTerrain(THREE, seed, islands, course.runway, course);
+window.__vegCounts = terrain.vegCounts || null;
 const ringMeshes = buildRingMeshes(THREE, course);
 const planeApi = buildPlane(THREE);
 const renderer = createRenderer(canvas, THREE, {
@@ -84,14 +85,17 @@ function runShot(name) {
   const scene = stageShot(name, { flight, course, terrain });
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
-  // v3: each shot gets the blueprint's own framing — the title pulls the camera
-  // back and to the side so the aircraft sits middle-right, the mid-flight
-  // shot goes a touch wider, the landing shot goes closer and lower so the
-  // runway fills the central 60% of the frame.
-  if (name === 'start') { renderer.setFov(60); renderer.setChase(35, -16, 5); }
+  // v4: each shot gets its own framing. The title pulls the camera closer and
+  // further to the side (28 m back, 24 m lateral) so the aircraft sits clearly
+  // right of the panel — in v3 it hid behind the panel's right edge and the
+  // ring was half-covered too. The cockpit shot goes wider (FOV 66) so the
+  // smaller dashboard fits with the ring in the upper-middle. The landing
+  // shot goes closer and lower (15 m back, 3.5 m up, FOV 56) so the runway
+  // fills the central 60% of the frame instead of reading as a narrow strip.
+  if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -24, 4.5); }
   else if (name === 'play') { renderer.setFov(65); renderer.setChase(16, 0, 4.5); }
-  else if (name === 'cockpit') { renderer.setFov(62); }
-  else if (name === 'landing') { renderer.setFov(58); renderer.setChase(14, 0, 3.8); }
+  else if (name === 'cockpit') { renderer.setFov(66); }
+  else if (name === 'landing') { renderer.setFov(56); renderer.setChase(15, 0, 3.5); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;
@@ -271,9 +275,10 @@ function runGame() {
   });
 
   hud.showPanel('title');
-  // v3: the title orbit is framed wide and from the side, aircraft middle-right.
-  renderer.setFov(60);
-  renderer.setChase(35, -16, 5);
+  // v4: the title orbit is framed closer and from the side, aircraft clearly
+  // right of the panel (same framing as the title screenshot).
+  renderer.setFov(62);
+  renderer.setChase(28, -24, 4.5);
   announce('Langit Nusantara. Press Space or click to fly.');
   requestAnimationFrame(frame);
 }

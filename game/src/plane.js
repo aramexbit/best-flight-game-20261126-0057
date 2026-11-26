@@ -131,35 +131,38 @@ export function buildPlane(THREE) {
   // The v1 panel was three plain coloured circles on a black bar, which a fresh
   // eye read as a debug object, not a cockpit.
   const dash = new THREE.Group();
-  dash.position.set(0, -0.22, -2.1);
+  dash.position.set(0, -0.15, -2.1);
   dash.visible = false;
-  // v3: a wider, taller panel (1.6 x 0.5) with an angled glareshield sloping
-  // down toward the pilot and two windshield pillars at the edges, so the
-  // panel reads as a cockpit structure instead of a flat slab floating in
-  // front of the camera.
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 0.08), dark);
+  // v4: a smaller panel (1.35 x 0.38, was 1.6 x 0.5 — 25% less height) with
+  // a shorter glareshield and thinner, shorter pillars, so all three gauges
+  // fit inside the cockpit frame instead of being cropped at the bottom
+  // (the v3 shot cut the dials in half). The panel still reads as a cockpit
+  // structure, not a flat slab floating in front of the camera.
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.38, 0.08), dark);
   dash.add(panel);
   // Red trim along the top edge of the panel, so it is visibly built, not cut out.
-  const trim = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.035, 0.09), red);
-  trim.position.set(0, 0.265, 0);
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.09), red);
+  trim.position.set(0, 0.205, 0);
   dash.add(trim);
   // Glareshield: a sloped shelf over the panel top, highest at the panel and
   // falling away toward the pilot.
-  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.05, 0.3), dark);
-  shield.position.set(0, 0.27, 0.1);
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.05, 0.26), dark);
+  shield.position.set(0, 0.21, 0.09);
   shield.rotation.x = 0.45;
   dash.add(shield);
-  // Windshield pillars at the panel edges, leaning out toward the top.
+  // Windshield pillars at the panel edges, leaning out toward the top. v4:
+  // 0.035 wide and 0.42 tall (was 0.05 x 0.55) — they frame the view instead
+  // of reading as heavy dark posts.
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.55, 0.06), dark);
-    pillar.position.set(side * 0.74, 0.32, 0.02);
-    pillar.rotation.z = -side * 0.25;
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.42, 0.05), dark);
+    pillar.position.set(side * 0.62, 0.24, 0.02);
+    pillar.rotation.z = -side * 0.22;
     dash.add(pillar);
   }
   // Two toggle switches under the left gauge, one warning lamp under the right.
-  for (const sx of [-0.62, -0.5]) {
+  for (const sx of [-0.52, -0.42]) {
     const sw = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, 0.03), glass);
-    sw.position.set(sx, -0.16, 0.06);
+    sw.position.set(sx, -0.14, 0.06);
     sw.rotation.z = 0.25;
     dash.add(sw);
   }
@@ -167,24 +170,26 @@ export function buildPlane(THREE) {
     new THREE.SphereGeometry(0.035, 10, 8),
     new THREE.MeshBasicMaterial({ color: 0xff5d4d }),
   );
-  lamp.position.set(0.62, -0.16, 0.06);
+  lamp.position.set(0.52, -0.14, 0.06);
   dash.add(lamp);
   const gaugeDefs = [
-    { x: -0.52, needle: 0x7dff9a },
+    { x: -0.44, needle: 0x7dff9a },
     { x: 0, needle: 0xffd94d },
-    { x: 0.52, needle: 0x4fc3f7 },
+    { x: 0.44, needle: 0x4fc3f7 },
   ];
   const needles = [];
   for (const def of gaugeDefs) {
     const g = new THREE.Group();
     g.position.set(def.x, 0.02, 0.05);
+    // v4: dials 0.12 rim (was 0.135) to match the smaller panel, with room
+    // to breathe top and bottom — the whole dial must clear the frame edge.
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.135, 0.016, 8, 28),
+      new THREE.TorusGeometry(0.12, 0.014, 8, 28),
       new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.4, metalness: 0.5 }),
     );
     g.add(rim);
     const face = new THREE.Mesh(
-      new THREE.CircleGeometry(0.128, 24),
+      new THREE.CircleGeometry(0.113, 24),
       new THREE.MeshBasicMaterial({ color: 0x10131c }),
     );
     face.position.z = 0.005;
@@ -193,16 +198,16 @@ export function buildPlane(THREE) {
     for (let t = 0; t < 12; t += 1) {
       const a = (t / 12) * Math.PI * 2;
       const tick = new THREE.Mesh(
-        new THREE.BoxGeometry(0.008, t % 3 === 0 ? 0.036 : 0.024, 0.004),
+        new THREE.BoxGeometry(0.008, t % 3 === 0 ? 0.032 : 0.021, 0.004),
         new THREE.MeshBasicMaterial({ color: 0xfff7e8 }),
       );
-      tick.position.set(Math.sin(a) * 0.104, Math.cos(a) * 0.104, 0.01);
+      tick.position.set(Math.sin(a) * 0.092, Math.cos(a) * 0.092, 0.01);
       tick.rotation.z = -a;
       g.add(tick);
     }
     const needlePivot = new THREE.Group();
-    const needleGeo = new THREE.BoxGeometry(0.014, 0.1, 0.006);
-    needleGeo.translate(0, 0.04, 0);
+    const needleGeo = new THREE.BoxGeometry(0.012, 0.085, 0.006);
+    needleGeo.translate(0, 0.035, 0);
     const needle = new THREE.Mesh(
       needleGeo,
       new THREE.MeshBasicMaterial({ color: def.needle }),
@@ -211,7 +216,7 @@ export function buildPlane(THREE) {
     needlePivot.position.z = 0.012;
     g.add(needlePivot);
     const pin = new THREE.Mesh(
-      new THREE.CircleGeometry(0.016, 12),
+      new THREE.CircleGeometry(0.014, 12),
       new THREE.MeshBasicMaterial({ color: 0xfff7e8 }),
     );
     pin.position.z = 0.016;
@@ -224,10 +229,11 @@ export function buildPlane(THREE) {
   // The nose, seen from the pilot's seat: a low dark shape below the panel,
   // the top of the engine cowling. v3 replaces the floating red spinner with
   // this — it anchors the bottom of the cockpit view as part of the aircraft.
+  // v4: 1.15 m wide (was 1.3) to match the smaller panel.
   const nose = new THREE.Group();
-  nose.position.set(0, -0.5, -2.55);
+  nose.position.set(0, -0.44, -2.55);
   nose.visible = false;
-  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.16, 0.9), dark);
+  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.14, 0.9), dark);
   noseTop.rotation.x = -0.12;
   nose.add(noseTop);
   group.add(nose);

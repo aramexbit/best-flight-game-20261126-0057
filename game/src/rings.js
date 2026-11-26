@@ -164,22 +164,21 @@ export function buildRingMeshes(THREE, course) {
     color: PALETTE.ring, transparent: true, opacity: 0.15, depthWrite: false,
   });
   const nextMat = new THREE.MeshBasicMaterial({ color: PALETTE.ringNext });
-  const futureMat = new THREE.MeshBasicMaterial({ color: PALETTE.ring, transparent: true, opacity: 0.55 });
+  // v4: future rings at 0.45 (was 0.55) — the distant rings cluttered the sky
+  // above the main ring in the v3 cover shot; a touch fainter, they read as
+  // the course ahead instead of competing with the gate in front.
+  const futureMat = new THREE.MeshBasicMaterial({ color: PALETTE.ring, transparent: true, opacity: 0.45 });
   // Completed rings go muted green-gold (blueprint), not bright green.
   const doneMat = new THREE.MeshBasicMaterial({ color: PALETTE.ringDone, transparent: true, opacity: 0.55 });
   // v2: the light pillars are gone (see below); no beacon geometry is built.
 
   // v2: no light pillars. The tall beacons read as debug graphics / rendering
   // artefacts to a fresh eye; the next ring's pulse and the HUD distance are
-  // the wayfinding now. v3 adds only a short chevron above the next ring —
-  // 4 m tall, fading out as the plane closes within 30 m — never a beam.
-  const guideMat = new THREE.MeshBasicMaterial({
-    color: PALETTE.ringNext, transparent: true, opacity: 0.5, depthWrite: false,
-  });
-  const guide = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 4), guideMat);
-  guide.rotation.x = Math.PI; // point down, toward the ring below it
-  guide.visible = false;
-  group.add(guide);
+  // the wayfinding now. v4: the chevron is gone too — in the v3 cover shot the
+  // little triangle above the ring read as one more stray shape competing with
+  // the gate, and the small circles of the future rings already clutter the
+  // sky above it. The next ring's pulse and the HUD distance carry the
+  // wayfinding on their own.
 
   const meshes = course.rings.map((ring) => {
     const mesh = new THREE.Mesh(ringGeo, futureMat);
@@ -198,6 +197,9 @@ export function buildRingMeshes(THREE, course) {
 
   /** Recolour rings by state; the next one pulses so it reads at a glance. */
   function refresh(time, planePos) {
+    // v4: planePos is unused now that the chevron is gone — kept in the
+    // signature so the renderer call site does not change.
+    void planePos;
     const next = course.nextRing();
     for (let i = 0; i < meshes.length; i += 1) {
       const ring = course.rings[i];
@@ -213,13 +215,6 @@ export function buildRingMeshes(THREE, course) {
         mesh.scale.setScalar(1 + pulse * Math.sin(time * 3.2));
         glow.visible = true;
         glow.scale.copy(mesh.scale);
-        // Park the chevron above this ring and fade it as the plane closes in.
-        guide.visible = true;
-        guide.position.set(ring.x, ring.y + COURSE.ringRadius + 5, ring.z);
-        const dist = planePos
-          ? Math.hypot(planePos.x - ring.x, planePos.y - ring.y, planePos.z - ring.z)
-          : 999;
-        guideMat.opacity = 0.5 * Math.min(1, Math.max(0, dist / 30));
       } else {
         mesh.material = futureMat;
         mesh.scale.setScalar(1);
@@ -227,7 +222,6 @@ export function buildRingMeshes(THREE, course) {
         glow.scale.setScalar(1);
       }
     }
-    if (!next) guide.visible = false;
   }
 
   return { group, refresh };

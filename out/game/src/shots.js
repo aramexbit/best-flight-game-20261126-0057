@@ -8,9 +8,14 @@ import { STEP } from './config.js';
 import { wrapAngle } from './flight.js';
 
 const START_SECONDS = 8;
-const PLAY_SECONDS = 26;
+const PLAY_SECONDS = 40;
 const COCKPIT_SECONDS = 14;
 const LANDING_SECONDS = 140;
+// v4: the cover (play) scene runs 40 s, not 26 s — at 26 s the plane is still
+// over open sea with the nearest land 600 m away, so no tree can read in the
+// frame. At 40 s it is over the runway island's western slopes (11/12 rings),
+// with tree-covered hills 100-300 m ahead and the beach below: the cover
+// finally shows the archipelago instead of empty water.
 const SAMPLE = 1 / 60;
 
 /** Steer toward a point: bank into the heading error, pitch toward the height. */
@@ -135,24 +140,29 @@ export function stageShot(name, game) {
         ? { x: runway.x - runway.dirX * 260, y: runway.height + 45, z: runway.z - runway.dirZ * 260 }
         : { x: runway.x, y: runway.height + 6, z: runway.z };
       throttleTarget = 0.3;
-      // v3: freeze the frame on final approach — inside 400 m, below 65 m
+      // v4: freeze the frame on final approach — inside 300 m, below 50 m
       // above the strip, nose lined up with the runway and wings level, so
-      // the runway fills the central 60% of the frame with its threshold,
-      // number and lights in view. The v2 freeze (160 m out, 55 m up) put the
-      // plane over the strip looking down, and the runway read as a narrow
-      // road from up there. The freeze waits for alignment AND level wings:
-      // freezing mid-turn caught the plane in a steep bank and the whole
-      // frame tilted with it. (And the height must be generous: the plane is
-      // still descending through ~58 m when it lines up, and by the time it
-      // drops under 42 m it has overshot the runway centre and is orbiting
-      // it at a 77-degree bank instead of landing.)
+      // the runway fills the frame with its threshold, number and lights in
+      // view. The v3 freeze (400 m out, 65 m up) still left the runway reading
+      // as a narrow distant strip. The freeze waits for alignment AND level
+      // wings: freezing mid-turn caught the plane in a steep bank and the
+      // whole frame tilted with it. (And the height must be generous: the
+      // plane is still descending through ~58 m when it lines up, and by the
+      // time it drops under 42 m it has overshot the runway centre and is
+      // orbiting it at a 77-degree bank instead of landing.)
       const runwayHeading = Math.atan2(runway.dirX, -runway.dirZ);
       const aligned = Math.abs(wrapAngle(s.yaw - runwayHeading)) < 0.25;
       // ...and the wings are level. Heading alone is not enough: the plane
       // can be on-heading while still banked mid-turn, and the whole frame
       // tilts with it. The roll settles as the turn finishes.
       const level = Math.abs(s.roll) < 0.15;
-      if (distToRunway < 400 && s.y < runway.height + 65 && aligned && level) break;
+      // v4: freeze closer and lower — inside 300 m and below 50 m above the
+      // strip — so the runway fills the frame instead of reading as a narrow
+      // distant strip (v3 froze at 400 m / 65 m). The v3 lesson still holds:
+      // the plane is descending through ~58 m when it lines up, so the height
+      // window must stay generous enough to catch it before it overshoots the
+      // centre and starts orbiting at a steep bank.
+      if (distToRunway < 300 && s.y < runway.height + 50 && aligned && level) break;
     } else if (ring) {
       target = ring;
     } else {
