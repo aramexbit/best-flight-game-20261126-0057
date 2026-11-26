@@ -98,7 +98,9 @@ function runShot(name) {
   // under its belly (Gemini v7). The freeze window is untouched
   // (300 m / +50 m, proven in v6) — only the camera moves, not the
   // approach.
-  if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -24, 4.5); }
+  // v9: lateral -30 (was -24) — the scene sits a touch further right, so
+  // the first ring clears the (now narrower) title card's right edge.
+  if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -30, 4.5); }
   else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, 0, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
   else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, -4.5, 2.2); }
@@ -283,8 +285,9 @@ function runGame() {
   hud.showPanel('title');
   // v4: the title orbit is framed closer and from the side, aircraft clearly
   // right of the panel (same framing as the title screenshot).
+  // v9: lateral -30 (was -24), matching the screenshot framing.
   renderer.setFov(62);
-  renderer.setChase(28, -24, 4.5);
+  renderer.setChase(28, -30, 4.5);
   announce('Langit Nusantara. Press Space or click to fly.');
   requestAnimationFrame(frame);
 }

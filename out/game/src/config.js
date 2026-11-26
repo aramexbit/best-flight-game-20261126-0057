@@ -13,8 +13,11 @@ export const WORLD = {
   islandCount: 9,
   maxHeight: 330,
   // Fog starts here and swallows the far islands by this distance.
+  // v9: far 5200 (was 4200) — the v9 title shot looks across 4300 m of
+  // sea at the eastern ridge, which the old far plane swallowed whole,
+  // so the title background was low green hills with no mountains at all.
   fogNear: 900,
-  fogFar: 4200,
+  fogFar: 5200,
 };
 
 export const PLANE = {
@@ -112,12 +115,16 @@ export const PALETTE = {
   planeBelly: '#BCA887',
   planeRed: '#C83C32',
   planeGlass: '#9fd8e8',
-  // v7: the cockpit stops being one black slab — three separate greys, so
+  // v9: the cockpit stops being one black slab — three separate greys, so
   // the panel face, the dark glareshield and the lighter console read as
   // distinct built parts (Gemini v6: "chunky, dark geometric slab").
+  // v9 (iterasi 2): the glareshield gets its own lighter grey — the v9
+  // cockpit shot showed the shield as one big black slab, because the
+  // camera sees its shadowed underside; a lighter grey keeps it readable.
   cockpitPanel: '#4b515c',
   cockpitFace: '#5d636e',
   cockpitConsole: '#6b7078',
+  cockpitShield: '#4a4e56',
   hudText: '#fff7e8',
   hudPanel: 'rgba(20, 24, 40, 0.55)',
   hudWarn: '#ff5d4d',

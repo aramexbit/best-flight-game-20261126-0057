@@ -147,19 +147,25 @@ export function buildPlane(THREE) {
   // material separation — panel face, dark glareshield, lighter console —
   // instead of one black box (Gemini v6: "chunky, dark geometric slab").
   const panelMat = new THREE.MeshStandardMaterial({ color: PALETTE.cockpitPanel, roughness: 0.7, metalness: 0.15 });
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.42, 0.12), panelMat);
+  // v9: the whole cockpit assembly is WIDER (panel 2.0 m, was 1.35) and the
+  // camera sits lower and closer (see render.js) — the v8 console read as
+  // a small floating box in the middle of the frame because it only spanned
+  // a fifth of the frame width. Now the panel, glareshield, canopy pillars
+  // and side walls reach toward the frame edges, so the instruments read as
+  // built into an aircraft cabin instead of a lone box in front of water.
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.12), panelMat);
   dash.add(panel);
   const faceMat = new THREE.MeshStandardMaterial({ color: PALETTE.cockpitFace, roughness: 0.65, metalness: 0.1 });
-  const face = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.34, 0.02), faceMat);
+  const face = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.34, 0.02), faceMat);
   face.position.set(0, 0.01, 0.06);
   dash.add(face);
   // Red trim along the top edge of the panel, so it is visibly built, not cut out.
-  const trim = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.13), red);
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.035, 0.13), red);
   trim.position.set(0, 0.225, 0);
   dash.add(trim);
   // v6: the same red trim along the bottom edge, so the panel is framed
   // top and bottom and reads as one finished housing.
-  const trimBottom = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.13), red);
+  const trimBottom = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.035, 0.13), red);
   trimBottom.position.set(0, -0.225, 0);
   dash.add(trimBottom);
   // Glareshield: wider than the panel, shallow and high, sloping gently down
@@ -170,11 +176,16 @@ export function buildPlane(THREE) {
   // v7: the shield is dark grey (#3a3e46, was near-black #22242a) — it still
   // reads as the shaded top of the console, but it no longer merges with the
   // black of the canopy frame into one heavy dark slab across the windshield.
+  // v9 (iterasi 2): shallower (0.20 deep, was 0.30), set back (z 0.02, was
+  // 0.06) and lighter (cockpitShield #4a4e56, was #3a3e46) — the v9
+  // cockpit shot showed the shield as one big black slab hanging over the
+  // dials, because the camera sees its shadowed underside; less overhang
+  // and a lighter grey keep it a top surface, not a roof.
   const shield = new THREE.Mesh(
-    new THREE.BoxGeometry(1.45, 0.04, 0.30),
-    new THREE.MeshStandardMaterial({ color: '#3a3e46', roughness: 0.8, metalness: 0.1 }),
+    new THREE.BoxGeometry(2.05, 0.04, 0.20),
+    new THREE.MeshStandardMaterial({ color: PALETTE.cockpitShield, roughness: 0.8, metalness: 0.1 }),
   );
-  shield.position.set(0, 0.26, 0.06);
+  shield.position.set(0, 0.26, 0.02);
   shield.rotation.x = 0.35;
   dash.add(shield);
   // The lower console is a different, lighter grey than the panel, so
@@ -186,28 +197,34 @@ export function buildPlane(THREE) {
   // pilot — the panel now has sides, not just a front face.
   for (const side of [-1, 1]) {
     const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.35), consoleMat);
-    cheek.position.set(side * 0.68, -0.05, 0.08);
+    cheek.position.set(side * 1.0, -0.05, 0.08);
     cheek.rotation.x = 0.35;
     dash.add(cheek);
   }
   // Lower console: a sloped shelf under the panel, dropping back toward the
   // pilot — the dash now continues down into the airframe instead of ending
   // at a flat bottom edge.
-  const consoleShelf = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.28, 0.3), consoleMat);
-  consoleShelf.position.set(0, -0.30, 0.10);
+  // v9: wider (1.6 m) and dropped lower, so the console continues down
+  // toward the bottom of the frame instead of ending at a flat edge.
+  const consoleShelf = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.30, 0.3), consoleMat);
+  consoleShelf.position.set(0, -0.34, 0.10);
   consoleShelf.rotation.x = 0.5;
   dash.add(consoleShelf);
   // Windshield pillars at the panel edges, leaning out toward the top. v5:
   // 0.035 wide and 0.62 tall, spanning from the panel bottom to above the
   // glareshield, with a small base block where each meets the panel — they
   // are part of the airframe now, connected top and bottom, not floating posts.
+  // v9: tall A-pillars at the panel ends, running from below the panel to
+  // above the glareshield — the windshield now has a real frame left and
+  // right, instead of two short posts floating on the panel (Gemini v8:
+  // the console read as a floating box with no aircraft around it).
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.62, 0.05), dark);
-    pillar.position.set(side * 0.62, 0.10, 0.02);
-    pillar.rotation.z = -side * 0.22;
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 0.06), dark);
+    pillar.position.set(side * 0.98, 0.05, 0.02);
+    pillar.rotation.z = -side * 0.15;
     dash.add(pillar);
     const base = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.07), dark);
-    base.position.set(side * 0.60, -0.19, 0.03);
+    base.position.set(side * 0.96, -0.42, 0.03);
     dash.add(base);
   }
   // v6: canopy framing — a top arch bar joining the pillar tops, side rails
@@ -222,21 +239,25 @@ export function buildPlane(THREE) {
   // v7: the arch is thinner (0.04, was 0.05) and a touch lighter — it still
   // frames the canopy, but no longer reads as a heavy black bar across the
   // top of the windshield (Gemini v6).
-  const arch = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.04, 0.06), frameMat);
-  arch.position.set(0, 0.44, 0.0);
+  // v9: the canopy frame spans the full widened panel — a 2.0 m arch bar
+  // across the top, rails running back at the panel ends, and tall side
+  // walls reaching down toward the bottom of the frame, so the cockpit
+  // reads as an enclosed cabin with sides and a roof, not a lone box.
+  const arch = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.04, 0.06), frameMat);
+  arch.position.set(0, 0.50, 0.0);
   dash.add(arch);
   for (const side of [-1, 1]) {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.55), frameMat);
-    rail.position.set(side * 0.64, 0.42, 0.28);
+    rail.position.set(side * 0.98, 0.48, 0.28);
     dash.add(rail);
     // Side wall: an angled interior panel at the dash end, with a dark sill
     // on top — the cockpit now has sides, not just a front face.
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.55), consoleMat);
-    wall.position.set(side * 0.70, -0.10, 0.15);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), consoleMat);
+    wall.position.set(side * 1.0, -0.25, 0.15);
     wall.rotation.y = -side * 0.3;
     dash.add(wall);
     const sill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.55), frameMat);
-    sill.position.set(side * 0.70, 0.16, 0.15);
+    sill.position.set(side * 1.0, 0.22, 0.15);
     sill.rotation.y = -side * 0.3;
     dash.add(sill);
   }
@@ -245,15 +266,15 @@ export function buildPlane(THREE) {
   // bottom edge. It anchors the bottom of the cockpit view as part of the
   // aircraft, and it does not cover the gauges or the indicator dots.
   const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.26, 8), frameMat);
-  yokeCol.position.set(0, -0.32, 0.14);
+  yokeCol.position.set(0, -0.27, 0.14);
   yokeCol.rotation.x = 0.4;
   dash.add(yokeCol);
   const yokeBar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.045, 0.045), frameMat);
-  yokeBar.position.set(0, -0.22, 0.21);
+  yokeBar.position.set(0, -0.18, 0.21);
   dash.add(yokeBar);
   for (const side of [-1, 1]) {
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.13, 0.05), frameMat);
-    grip.position.set(side * 0.14, -0.20, 0.21);
+    grip.position.set(side * 0.14, -0.16, 0.21);
     grip.rotation.z = -side * 0.12;
     dash.add(grip);
   }
@@ -329,10 +350,16 @@ export function buildPlane(THREE) {
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
+  // v9: two smaller live gauges fill the widened panel ends — FUEL (left)
+  // and RPM (right) — so the panel reads as a full instrument panel, not
+  // three dials with empty grey at the sides. The three main gauges keep
+  // their array positions (KTS/ALT/HDG are needles 0-2).
   const gaugeDefs = [
-    { x: -0.44, pin: 0x7dff9a, label: 'KTS' },
-    { x: 0, pin: 0xffd94d, label: 'ALT' },
-    { x: 0.44, pin: 0x4fc3f7, label: 'HDG' },
+    { x: -0.44, pin: 0x7dff9a, label: 'KTS', r: 0.17 },
+    { x: 0, pin: 0xffd94d, label: 'ALT', r: 0.17 },
+    { x: 0.44, pin: 0x4fc3f7, label: 'HDG', r: 0.17 },
+    { x: -0.80, pin: 0x7dff9a, label: 'FUEL', r: 0.11 },
+    { x: 0.80, pin: 0xffd94d, label: 'RPM', r: 0.11 },
   ];
   const needles = [];
   for (const def of gaugeDefs) {
@@ -345,13 +372,15 @@ export function buildPlane(THREE) {
     // v8: the rim is a touch bigger (0.17, was 0.165) and the needle is
     // thicker and longer, so the instruments read at a glance even at
     // screenshot distance (Gemini v7).
+    // v9: the rim radius comes from the gauge definition — the two outer
+    // gauges are smaller (0.11) than the three main ones (0.17).
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.17, 0.017, 8, 28),
+      new THREE.TorusGeometry(def.r, def.r * 0.1, 8, 28),
       new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.4, metalness: 0.5 }),
     );
     g.add(rim);
     const face = new THREE.Mesh(
-      new THREE.CircleGeometry(0.16, 24),
+      new THREE.CircleGeometry(def.r * 0.94, 24),
       new THREE.MeshBasicMaterial({ map: makeDialFace(def.label) }),
     );
     face.position.z = 0.005;
@@ -365,6 +394,8 @@ export function buildPlane(THREE) {
     );
     needlePivot.add(needle);
     needlePivot.position.z = 0.012;
+    // Small gauges get a proportionally shorter needle.
+    if (def.r < 0.15) needlePivot.scale.setScalar(0.65);
     g.add(needlePivot);
     const pin = new THREE.Mesh(
       new THREE.CircleGeometry(0.018, 12),
@@ -374,6 +405,20 @@ export function buildPlane(THREE) {
     g.add(pin);
     needles.push(needlePivot);
     dash.add(g);
+  }
+  // v9: wing-root slabs at the bottom corners of the frame — the cream
+  // trailing edge of the high wing passing beside the cockpit — so the
+  // bottom of the view reads as aircraft structure, not empty frame.
+  // v9 (iterasi 2): smaller (0.38 x 0.5, was 0.5 x 0.7), lower (-0.31, was
+  // -0.25) and tilted harder (-0.22, was -0.1) — the v9 cockpit shot showed
+  // them as flat cream cards pasted in the bottom corners; now they peek
+  // in at an angle, like a wing surface passing beside the cabin.
+  for (const side of [-1, 1]) {
+    const root = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.5), cream);
+    root.position.set(side * 1.02, -0.31, 0.35);
+    root.rotation.z = -side * 0.22;
+    root.rotation.y = -side * 0.2;
+    dash.add(root);
   }
   group.add(dash);
 
@@ -386,9 +431,15 @@ export function buildPlane(THREE) {
   const nose = new THREE.Group();
   nose.position.set(0, -0.46, -2.55);
   nose.visible = false;
-  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.14, 0.9), dark);
+  // v9: wider (1.6 m, was 1.25) with a red centre stripe, so the cowling
+  // reads as the engine cover ahead of the panel when it peeks into view.
+  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.9), dark);
   noseTop.rotation.x = -0.12;
   nose.add(noseTop);
+  const noseStripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.9), red);
+  noseStripe.position.set(0, 0.08, 0);
+  noseStripe.rotation.x = -0.12;
+  nose.add(noseStripe);
   group.add(nose);
 
   /**
@@ -396,11 +447,15 @@ export function buildPlane(THREE) {
    * altitude (middle), heading (right). Angles sweep -120..+120 degrees over the
    * gauge range; the heading needle points like a compass, north straight up.
    */
-  function setGauges(altM, speedMs, headingDeg) {
+  // v9: the two outer gauges are live too — FUEL from the tank fraction,
+  // RPM from the throttle — so all five instruments move with the flight.
+  function setGauges(altM, speedMs, headingDeg, throttle = 0.7, fuelFrac = 1) {
     const sweep = (value, max) => (-120 + 240 * Math.min(1, Math.max(0, value / max))) * Math.PI / 180;
     needles[0].rotation.z = -sweep(speedMs, 100);
     needles[1].rotation.z = -sweep(altM, 900);
     needles[2].rotation.z = -headingDeg * Math.PI / 180;
+    if (needles[3]) needles[3].rotation.z = -sweep(fuelFrac, 1);
+    if (needles[4]) needles[4].rotation.z = -sweep(throttle, 1);
   }
 
   let propAngle = 0;

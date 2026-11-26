@@ -47,13 +47,15 @@
 
   /* --- Full-screen panels: title, pause, game over --- */
   .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
-  /* v4: the title panel sits on the left (max 440 px, about a third of the
-  frame), so the aircraft stays visible middle-right and the whole first ring
-  clears the panel's right edge instead of hiding behind it. */
+  /* v9: the title card is narrower (380 px, was 440) so the first ring
+  clears its right edge — the v8 ring hid behind the card. The aircraft
+  sits middle-right, the ring just right of centre, like the key-art
+  reference: plane + ring in the middle, palm islands below, mountains
+  behind. */
   #panel-title { justify-content: flex-start; }
-  #panel-title .card { margin-left: 4%; max-width: 440px; text-align: left; padding: 24px 34px; }
+  #panel-title .card { margin-left: 4%; max-width: 380px; text-align: left; padding: 22px 28px; }
   .card { pointer-events: auto; text-align: center; background: rgba(16, 20, 36, 0.72); border: 1px solid rgba(255, 217, 77, 0.45); border-radius: 16px; padding: 26px 44px; color: #fff7e8; max-width: 620px; backdrop-filter: blur(3px); }
-  .card h1 { margin: 0 0 4px; font-size: 38px; letter-spacing: 0.04em; color: #ffd94d; }
+  .card h1 { margin: 0 0 4px; font-size: 34px; letter-spacing: 0.04em; color: #ffd94d; }
   .card h2 { margin: 0 0 10px; font-size: 34px; color: #ffd94d; }
   .card .sub { margin: 0 0 18px; font-size: 17px; opacity: 0.9; }
   .card .lines { font-size: 19px; line-height: 1.65; }

@@ -610,13 +610,16 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   ];
   // A palm frond: a long tapered leaf with a droop curve baked into the
   // vertices, so it hangs from the crown instead of lying flat like a fan.
-  const frondGeo = new THREE.PlaneGeometry(2.6, 0.5, 6, 1);
+  // v9: wider fronds (3.2 m, was 2.6) with a stronger droop, so the palm
+  // crown reads as a full tropical canopy instead of thin sticks with
+  // sparse leaves (the key-art reference shows dense palm clusters).
+  const frondGeo = new THREE.PlaneGeometry(3.2, 0.6, 6, 1);
   {
     const fp = frondGeo.attributes.position;
     for (let i = 0; i < fp.count; i += 1) {
       const fx = fp.getX(i);
-      const t = (fx + 1.3) / 2.6; // 0 at the stem, 1 at the tip
-      fp.setY(i, fp.getY(i) * (1 - t * 0.7) - t * t * 0.9);
+      const t = (fx + 1.6) / 3.2; // 0 at the stem, 1 at the tip
+      fp.setY(i, fp.getY(i) * (1 - t * 0.7) - t * t * 1.1);
     }
     frondGeo.computeVertexNormals();
   }
@@ -721,8 +724,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const crown = new THREE.Group();
     crown.position.set(lean * 0.4 * s, 4.5 * s, 0);
     palm.add(crown);
-    for (let f = 0; f < 6; f += 1) {
-      const a = (f / 6) * Math.PI * 2 + vegRandom.range(-0.25, 0.25);
+    for (let f = 0; f < 8; f += 1) {
+      const a = (f / 8) * Math.PI * 2 + vegRandom.range(-0.25, 0.25);
       const arm = new THREE.Group();
       arm.rotation.y = -a;
       crown.add(arm);
@@ -757,7 +760,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       s * vegRandom.range(0.55, 1.1),
       s * vegRandom.range(0.8, 1.6),
     );
-    rock.position.set(px, meshHeight(px, pz) + 0.2 * s, pz);
+    rock.position.set(px, meshHeight(px, pz) + 0.08 * s, pz);
     rock.rotation.set(vegRandom.range(0, 3), vegRandom.range(0, 3), vegRandom.range(0, 3));
     group.add(rock);
     rocksPlanted += 1;
@@ -886,17 +889,23 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // title camera looks across, so the title shot's foreground beach is
     // planted, not thinly placed (Gemini v5 on shot 3).
     if (course.spawn) {
+      // v9: 22 planted (was 14) and mostly palms — the title shot looks
+      // across this beach, and the key-art reference is dense palm
+      // clusters, not one palm here and there with grey boulders between.
       let beachPlanted = 0;
-      for (let tries = 0; tries < 120 && beachPlanted < 14; tries += 1) {
+      for (let tries = 0; tries < 200 && beachPlanted < 22; tries += 1) {
         const a = vegRandom.range(0, Math.PI * 2);
         const r = vegRandom.range(50, 220);
         const px = course.spawn.x + Math.cos(a) * r;
         const pz = course.spawn.z + Math.sin(a) * r;
         const ph = groundAt(px, pz);
         if (ph >= 2 && ph < 12) {
-          plantPalm(px, pz, ph, vegRandom.range(1.5, 2.2));
+          // v9 (iterasi 2): bigger palms (1.8-2.6, was 1.5-2.2) — the v9
+          // title shot showed the beach palms as tiny green lollipops at
+          // camera distance; taller palms read as a real palm beach.
+          plantPalm(px, pz, ph, vegRandom.range(1.8, 2.6));
           beachPlanted += 1;
-        } else if (ph >= 1 && ph < 8 && vegRandom.range(0, 1) < 0.5) {
+        } else if (ph >= 1 && ph < 8 && vegRandom.range(0, 1) < 0.25) {
           plantRock(px, pz, ph, vegRandom.range(1.2, 2.4));
           beachPlanted += 1;
         }
@@ -1056,119 +1065,117 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     }
   }
 
-  // --- Landmark ridges: two true mountain ranges the cover camera can read
-  // from a kilometre away (v7 add-on, rebuilt in v8). The v7 peaks were
-  // single convex jittered blobs in one uniform dark green — Gemini v7
-  // read them as giant faceted boulders, not mountains. A mountain reads
-  // from four things a blob cannot give: a multi-peak silhouette with
-  // saddles between the summits, a sharp narrow ridgeline, height-based
-  // colour (rocky crest, green foot), and a foot that blends into the
-  // hills instead of sitting on them. So each landmark is now a RIDGE:
-  // 3 masses along one axis with different heights (summit, saddle,
-  // summit), each mass a tall narrow jittered icosahedron with its
-  // vertices coloured by height — grey-brown rock above the crest line,
-  // dark green on the flanks, forest green at the foot — plus wide flat
-  // skirt masses at the ends that sink the foot into the surrounding
-  // hills. Both ridges are pure scenery meshes, outside the runway clear
-  // zone and the approach cone; nothing in the flight model, the course
-  // or the ground height reads them, so the course and the landing are
-  // untouched. Ridge 1 runs across the strait past the far (eastern)
-  // threshold as the mountain backdrop behind the airfield — further out
-  // (1000 m, was 750), lower (190 m, was 280) and shifted 350 m sideways,
-  // so it no longer towers dead-centre behind the strip in the landing
-  // shot. Ridge 2 is a coastal range 850 m south of the strip, running
-  // along the shore on the right horizon of the cover shot.
-  // Each vertex is pushed radially by a hash of its own position, so
-  // duplicated face vertices move together and the mass stays watertight.
-  function jitterMass(geo, amount) {
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i += 1) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const z = pos.getZ(i);
-      const h = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
-      const n = (h - Math.floor(h)) * 2 - 1;
-      const k = 1 + n * amount;
-      pos.setX(i, x * k);
-      pos.setY(i, y * k);
-      pos.setZ(i, z * k);
-    }
-    geo.computeVertexNormals();
-  }
-  function ridgeColors(geo) {
-    // Colour each vertex by its own height in the unit icosahedron
-    // (local y in [-1, 1]): the crest is bare rock, the flanks are dark
-    // green, the foot is forest green — the altitude zoning a real
-    // mountain shows, so the silhouette reads as a mountain even at
-    // screenshot distance.
+  // --- Landmark ridges (v9): two true mountain ranges the cover camera can
+  // read from a kilometre away — rebuilt AGAIN, because the v8 ridge masses
+  // (wide flat icosahedron lenses, one of them past the world edge) read as
+  // flat-roofed slabs jutting and floating with a dark undercut gap (Gemini
+  // v8). The v9 ridge is a heightfield patch draped over the real terrain,
+  // so it is grounded by construction: peaks with saddle dips, a sharp
+  // crest spine, long valley slopes, and a foot that fades to zero at the
+  // footprint edge. Ridge 1 sits across the strait east of the airfield;
+  // ridge 2 is the coastal range south of the strip, on the cover shot's
+  // right horizon. Colours fade toward the horizon blue with height, so
+  // the ranges read as far away through the haze.
+  const ridgeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: false });
+  // v9: the ridge is a terrain-hugging heightfield patch, not a free mass.
+  // The v8 masses were wide flat lenses (4:1) with horizontal bottoms, and
+  // ridge 1 sat past the world edge (x 2475 > 2200) over open void — so they
+  // read as flat-roofed slabs jutting and floating, with a dark undercut gap
+  // beneath them (Gemini v8). A patch cannot float: every vertex sits on
+  // meshHeight(x, z) plus a ridge profile that fades to exactly zero at the
+  // footprint edge (plus a 0.4 m lift so it never z-fights the land), so the
+  // foot meets the ground everywhere. The profile is a sum of gaussians
+  // along the axis (summits with real saddle dips between them) times a
+  // smooth cross falloff, plus a narrow spine along the crest line, so the
+  // top is a sharp ridgeline and never a flat roof. Colours are height-zoned
+  // (rocky crest, green flanks, forest foot) and baked toward the sky-horizon
+  // colour — distant mountains fade blue with distance, which is what makes
+  // them read as far away instead of as dark geometry blocks parked behind
+  // the runway. Pure scenery: the flight model, the course and groundAt never
+  // read the patch, so the course and the landing are untouched.
+  function plantRidge(cx, cz, axisX, axisZ, length, heights, width) {
+    const n = heights.length;
+    const spacing = length / (n - 1);
+    const sigma = spacing * 0.45;
+    const perpX = -axisZ;
+    const perpZ = axisX;
+    const NU = 56;
+    const NV = 24;
+    const geo = new THREE.PlaneGeometry(length, width, NU, NV);
+    geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
-    const rock = new THREE.Color('#6e6258');
-    const dark = new THREE.Color('#2a5c2e');
-    const foot = new THREE.Color('#2f7a38');
+    const rockC = new THREE.Color('#6e6258');
+    const darkC = new THREE.Color('#2a5c2e');
+    const footC = new THREE.Color('#2f7a38');
+    const hazeC = new THREE.Color(PALETTE.fog);
     const tmpC = new THREE.Color();
+    const peakH = Math.max(...heights);
     for (let i = 0; i < pos.count; i += 1) {
-      const y = pos.getY(i);
-      if (y > 0.45) tmpC.copy(rock);
-      else if (y > -0.15) tmpC.copy(dark).lerp(rock, ((y + 0.15) / 0.6) * 0.7);
-      else tmpC.copy(foot).lerp(dark, ((y + 1) / 0.85) * 0.6);
+      const along = pos.getX(i);
+      const across = pos.getZ(i);
+      const wx = cx + axisX * along + perpX * across;
+      const wz = cz + axisZ * along + perpZ * across;
+      // Summit gaussians along the axis: peaks with saddle dips between.
+      let prof = 0;
+      for (let s = 0; s < n; s += 1) {
+        const at = (s / (n - 1) - 0.5) * length;
+        const d = (along - at) / sigma;
+        prof += heights[s] * Math.exp(-d * d);
+      }
+      // Smooth cross falloff: long gentle valley slopes, not a wall.
+      const cu = across / (width / 2);
+      const fall = Math.exp(-cu * cu * 2.2);
+      // Fade to exactly zero at every footprint edge, so the foot meets the ground.
+      const edge = 1 - smoothstep(0.72, 1.0, Math.abs(cu));
+      const endFade = 1 - smoothstep(0.8, 1.0, Math.abs(along) / (length / 2));
+      // A narrow spine along the crest line: the top is a sharp ridgeline.
+      const spine = 0.22 * prof * Math.exp(-((across / 70) * (across / 70)));
+      // v9 (iterasi 2): two noise harmonics (±20% total, was ±6%) so the
+      // skyline is jagged — several distinct summits instead of one smooth
+      // dome. The v9 cover shot read the ridge as smooth grey tents because
+      // the single-harmonic crest was too even.
+      const crest = 1 + (0.12 * (fbm(along * 0.008 + 5.5, across * 0.008 - 2.2, 2) - 0.5)
+        + 0.08 * (fbm(along * 0.021 + 7.3, across * 0.011 + 1.7, 2) - 0.5)) * 2;
+      const ridgeY = (prof * fall + spine) * edge * endFade * crest;
+      const base = meshHeight(wx, wz);
+      const y = base + ridgeY + 0.4;
+      pos.setXYZ(i, wx, y, wz);
+      // Colour by height: rocky crest, dark-green flanks, forest foot —
+      // then baked toward the horizon colour, palest at the crest, so the
+      // range reads as far away through the haze.
+      const hFrac = Math.min(1, Math.max(0, y / (peakH * 1.15)));
+      if (hFrac > 0.62) tmpC.copy(darkC).lerp(rockC, (hFrac - 0.62) / 0.38);
+      else if (hFrac > 0.25) tmpC.copy(footC).lerp(darkC, (hFrac - 0.25) / 0.37);
+      else tmpC.copy(footC);
+      tmpC.offsetHSL(0, 0, (fbm(wx * 0.01, wz * 0.01, 2) - 0.5) * 0.05);
+      // v9 (iterasi 2): lighter haze (0.12 + 0.22, was 0.25 + 0.35) — the
+      // first v9 pass washed the rock and green out almost completely, so
+      // the ranges read as pale snow hills; now the crest rock and the
+      // green flanks stay visible through the haze.
+      tmpC.lerp(hazeC, 0.12 + 0.22 * hFrac);
       colors[i * 3] = tmpC.r;
       colors[i * 3 + 1] = tmpC.g;
       colors[i * 3 + 2] = tmpC.b;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  }
-  const ridgeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
-  const skirtMat = new THREE.MeshStandardMaterial({ color: '#2f7a38', roughness: 0.95, flatShading: true });
-  function plantRidge(cx, cz, axisX, axisZ, length, heights) {
-    const base = meshHeight(cx, cz);
-    const ridge = new THREE.Group();
-    const n = heights.length;
-    // The ridge axis angle: rotate each mass so its long local X lies
-    // along the axis (local X maps to (cos t, 0, -sin t) under rotY t).
-    const rotY = Math.atan2(-axisZ, axisX);
-    for (let m = 0; m < n; m += 1) {
-      const h = heights[m];
-      // Masses overlap along the axis (spacing length/(n-1), each mass
-      // 1.35x that long) so the saddles dip between summits instead of
-      // leaving gaps — the skyline is peaks and saddles, not one blob.
-      // Each mass is tall and narrow across the axis (0.42x), so the
-      // crest reads as a sharp ridgeline, not a rounded dome.
-      const along = (m / (n - 1) - 0.5) * length;
-      const geo = new THREE.IcosahedronGeometry(1, 1);
-      jitterMass(geo, 0.22);
-      ridgeColors(geo);
-      const mass = new THREE.Mesh(geo, ridgeMat);
-      const massLen = (length / (n - 1)) * 1.35;
-      mass.scale.set(massLen, h * 0.55, massLen * 0.42);
-      mass.rotation.y = rotY;
-      mass.position.set(axisX * along, h * 0.5 - 45, axisZ * along);
-      ridge.add(mass);
-    }
-    // Skirt masses at both ends: wide, low and sunk, so the ridge's foot
-    // flows into the surrounding hills instead of ending in a hard edge.
-    for (const end of [-1, 1]) {
-      const sGeo = new THREE.IcosahedronGeometry(1, 1);
-      jitterMass(sGeo, 0.18);
-      const skirt = new THREE.Mesh(sGeo, skirtMat);
-      const sh = heights[0] * 0.35;
-      skirt.scale.set(length * 0.22, sh * 0.55, length * 0.16);
-      skirt.rotation.y = rotY;
-      skirt.position.set(axisX * end * (length / 2 + length * 0.08), sh * 0.5 - 30, axisZ * end * (length / 2 + length * 0.08));
-      ridge.add(skirt);
-    }
-    ridge.position.set(cx, base, cz);
+    geo.computeVertexNormals();
+    const ridge = new THREE.Mesh(geo, ridgeMat);
     group.add(ridge);
   }
+  // Ridge 1: across the strait east of the airfield, just off the runway
+  // island's eastern shore (x 2050, inside the world grid — the v8 ridge
+  // sat at x 2475, past the edge, over open void). Ridge 2: the coastal
+  // range south of the strip, on the cover shot's right horizon.
   plantRidge(
-    runway.x + dirX * (COURSE.runwayLength / 2 + 1000) + perpX * 350,
-    runway.z + dirZ * (COURSE.runwayLength / 2 + 1000) + perpZ * 350,
-    perpX, perpZ, 780, [190, 120, 165],
+    runway.x + dirX * 800 + perpX * 350,
+    runway.z + dirZ * 800 + perpZ * 350,
+    perpX, perpZ, 780, [190, 120, 165], 650,
   );
   plantRidge(
-    runway.x + dirX * 150 + perpX * 850,
-    runway.z + dirZ * 150 + perpZ * 850,
-    dirX, dirZ, 620, [210, 135, 180],
+    runway.x + dirX * 150 + perpX * 950,
+    runway.z + dirZ * 150 + perpZ * 950,
+    dirX, dirZ, 620, [210, 135, 180], 600,
   );
 
   // --- Sky dome: a gradient shader, warm at the horizon, deep blue above. ---
@@ -1216,11 +1223,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // of a loose floating rock.
   const clouds = [];
   const cloudRandom = createRandom(seed + 101);
-  const cloudMat = new THREE.MeshBasicMaterial({
-    color: '#ffffff', transparent: true, opacity: 0.92, fog: false,
+  // v9 (iterasi 2): LAMBERT, not basic — the v9 clouds were pure flat
+  // white (MeshBasicMaterial ignores light entirely), so every puff read
+  // as a white ball. Lambert shades each puff by its normals: bright top,
+  // soft grey underside — real cumulus volume.
+  const cloudMat = new THREE.MeshLambertMaterial({
+    color: '#ffffff', transparent: true, opacity: 0.95, fog: false,
   });
-  const puffGeo = new THREE.IcosahedronGeometry(1, 1);
-  for (let i = 0; i < 34; i += 1) {
+  const puffGeo = new THREE.IcosahedronGeometry(1, 2);
+  for (let i = 0; i < 12; i += 1) {
     const cloud = new THREE.Group();
     // v4: 5-6 rounder, fuller puffs per cloud (was 3-5 flat ones at 0.38
     // vertical, then 4-7 at 0.7), clustered tighter, so each cloud has volume
@@ -1232,24 +1243,27 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // smooth round ball, not a faceted polyhedron) and a taller vertical
     // scale (1.15) — the clouds finally read as soft stylised cumulus
     // instead of flat white plates (Gemini v6).
-    // v8: puffs are bigger (26 m minimum, was 20) and packed into a much
-    // tighter box (±13 m across, was ±22), so they overlap into one mass
-    // instead of drifting apart as separate balls with strays.
-    const puffs = 9 + cloudRandom.int(0, 4);
+    // v9: FEWER clouds (14, was 34) and each one a single tight volume:
+    // 5-7 big puffs whose centres sit within ±10 m of each other, so they
+    // overlap deep instead of reading as separate balls — and NO stray
+    // puffs at all. The base slab is wider and much thinner (140 x 10 m,
+    // was 104 x 28), so the flat underside reads as a thin cumulus base
+    // and never as a white mesa on the horizon when seen edge-on.
+    // v9 (iterasi 2): puffs are bigger (35-60 m) and FLATTER (vertical
+    // 0.75, was 1.0) and spread wider horizontally (±13 m) — a real
+    // cumulus is wider than it is tall, and the v9 clouds still read as
+    // balls because each one was as tall as it was wide.
+    const puffs = 5 + cloudRandom.int(0, 2);
     for (let p = 0; p < puffs; p += 1) {
       const puff = new THREE.Mesh(puffGeo, cloudMat);
-      const s = cloudRandom.range(26, 44);
-      puff.scale.set(s * 1.3, s * 1.15, s * 1.1);
-      puff.position.set(cloudRandom.range(-13, 13), cloudRandom.range(-1.5, 2.5), cloudRandom.range(-9, 9));
+      const s = cloudRandom.range(35, 60);
+      puff.scale.set(s * 1.5, s * 0.75, s * 1.2);
+      puff.position.set(cloudRandom.range(-13, 13), cloudRandom.range(-1.5, 1.5), cloudRandom.range(-10, 10));
       cloud.add(puff);
     }
-    // v8: a flat base slab under the puffs — one wide, shallow ellipsoid
-    // at the bottom of the cloud — so each cloud has a single coherent
-    // flat underside like real cumulus instead of a lumpy underside of
-    // separate balls.
     const baseSlab = new THREE.Mesh(puffGeo, cloudMat);
-    baseSlab.scale.set(52, 14, 34);
-    baseSlab.position.set(0, -8, 0);
+    baseSlab.scale.set(85, 3, 50);
+    baseSlab.position.set(0, -5, 0);
     cloud.add(baseSlab);
     cloud.position.set(
       cloudRandom.range(-WORLD.size / 2, WORLD.size / 2),

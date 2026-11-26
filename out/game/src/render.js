@@ -109,29 +109,28 @@ export function createRenderer(canvas, THREE, groups) {
     p.rotation.z = -s.roll;
     planeApi.update(dt, s.throttle, time);
     // The dashboard needles follow the flight, every frame, in both views.
-    if (planeApi.setGauges) planeApi.setGauges(s.y, s.speed, headingOf(s.yaw));
+    // v9: throttle and fuel drive the two outer gauges too.
+    if (planeApi.setGauges) planeApi.setGauges(s.y, s.speed, headingOf(s.yaw), s.throttle, s.fuel);
 
     tmpForward.set(Math.sin(s.yaw) * Math.cos(s.pitch), Math.sin(s.pitch), -Math.cos(s.yaw) * Math.cos(s.pitch));
 
     if (mode === CAMERA_COCKPIT) {
-      // Pilot's head: high and a touch back, so the nose sits low in the frame
-      // instead of filling it, and the dashboard reads at the bottom.
+      // Pilot's head: lower (+0.90, was +1.35) and further forward (0.1 m
+      // behind the centre, was 0.9), so the pilot sits close to the panel
+      // instead of three metres behind it — the v8 head position left the
+      // dashboard a small box spanning a fifth of the frame width, which
+      // is why it read as floating. Now the widened v9 panel spans over
+      // 40% of the frame width and the dials read at ~100 px. The camera
+      // aims further down (-6.5 m at 60 m out, was -3.2) to keep the panel
+      // band in the lower frame while the head sits lower.
       // The camera turns with the plane, so the horizon rolls as the wings do.
-      // v8 (revisi 2): the head sits further back (0.9 m, was 0.72) and a
-      // touch higher (+1.35), and the camera aims further down (-3.2 m at
-      // 60 m out, was -1.2) — the midpoint try still left the dial rims
-      // at 99% of the frame height with the yoke and the panel's bottom
-      // trim cut off (measured on the screenshot, not guessed). Aiming
-      // down lifts the whole dashboard ~4° in the frame without shrinking
-      // the dials; the sky above the nose loses ~2°, a fair trade for
-      // instruments that are fully in frame with breathing room.
       tmpUp.set(0, 1, 0);
       camera.position.set(
-        s.x - tmpForward.x * 0.9,
-        s.y + 1.35,
-        s.z - tmpForward.z * 0.9,
+        s.x - tmpForward.x * 0.1,
+        s.y + 0.9,
+        s.z - tmpForward.z * 0.1,
       );
-      lookTarget.set(s.x + tmpForward.x * 60, s.y + tmpForward.y * 60 - 3.2, s.z + tmpForward.z * 60);
+      lookTarget.set(s.x + tmpForward.x * 60, s.y + tmpForward.y * 60 - 6.5, s.z + tmpForward.z * 60);
       camera.up.copy(tmpUp);
       camera.lookAt(lookTarget);
       // v3: only 30% of the bank reaches the camera. The v2 shot rolled the
