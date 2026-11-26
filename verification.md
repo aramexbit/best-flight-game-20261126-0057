@@ -459,6 +459,7 @@ focused re-check above.
   (Reference 12/12 + landed 59.7 s; Weak 4/12 no finish — DOWN from
   v18's 9/12, noted honestly; Idle 2/12 no finish. Exit 0.)
 - [x] `node test/headless.test.mjs` all tests pass. (14/14.)
-- [ ] Local git commit.
-  (Pending — after the live-probe run 2 finishes and the gate entry
-  is written. Push by the coordinator — the builder does not push/submit.)
+- [x] Local git commit.
+  (Commit 1: v19 code + probes + docs + verification + gate entry.
+  Commit 2: this checklist update. Both exit 0. Push by the
+  coordinator — the builder does not push/submit.)
