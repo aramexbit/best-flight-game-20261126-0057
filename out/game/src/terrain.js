@@ -996,6 +996,75 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     }
   }
 
+  // --- Landmark silhouettes: two big dark peaks the cover camera can read
+  // from a kilometre away (v7 add-on, from the LAYANG reference entry).
+  // The cover critique was "too much empty green slope" — dense foliage
+  // fills the midground, but only a large silhouette gives the horizon a
+  // shape. Both peaks are pure scenery meshes: they sit outside the runway
+  // clear zone and the approach cone, and nothing in the flight model, the
+  // course or the ground height reads them, so the course and the landing
+  // are untouched. Peak 1 rises past the far (eastern) threshold as the
+  // mountain backdrop behind the airfield; peak 2 is a steep coastal cone
+  // 650 m south of the strip, on the right horizon of the cover shot.
+  // A peak is a mass of jittered icosahedra, not a cone. (Two earlier
+  // tries: a single cone, then three jittered cones — both still read as
+  // perfect green pyramids, because a cone's silhouette is always a
+  // triangle.) An icosahedron scaled tall has a rounded, irregular,
+  // craggy silhouette — the same shape language as the coastal cliffs,
+  // which already read as rock. Each vertex is pushed radially by a hash
+  // of its own position, so duplicated face vertices move together and
+  // the mass stays watertight.
+  function jitterMass(geo, amount) {
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i += 1) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      const h = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+      const n = (h - Math.floor(h)) * 2 - 1;
+      const k = 1 + n * amount;
+      pos.setX(i, x * k);
+      pos.setY(i, y * k);
+      pos.setZ(i, z * k);
+    }
+    geo.computeVertexNormals();
+  }
+  function plantPeak(px, pz, radius, height, color) {
+    const base = meshHeight(px, pz);
+    const peak = new THREE.Group();
+    const peakMat = new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true });
+    const shoulderMat = new THREE.MeshStandardMaterial({ color: '#245c2e', roughness: 0.95, flatShading: true });
+    const mainGeo = new THREE.IcosahedronGeometry(1, 1);
+    jitterMass(mainGeo, 0.18);
+    const main = new THREE.Mesh(mainGeo, peakMat);
+    main.scale.set(radius, height * 0.55, radius * 0.9);
+    main.position.y = height * 0.5 - 30;
+    peak.add(main);
+    const shoulderGeo = new THREE.IcosahedronGeometry(1, 1);
+    jitterMass(shoulderGeo, 0.18);
+    const shoulder = new THREE.Mesh(shoulderGeo, shoulderMat);
+    shoulder.scale.set(radius * 0.55, height * 0.3, radius * 0.5);
+    shoulder.position.set(radius * 0.55, height * 0.22 - 30, radius * 0.2);
+    peak.add(shoulder);
+    peak.position.set(px, base, pz);
+    peak.rotation.y = vegRandom.range(0, Math.PI * 2);
+    group.add(peak);
+  }
+  // v7 add-on, revised again: peak 1 is lower (280 m, was 320) and further
+  // out (750 m past the far threshold, was 650), so it reads as a distant
+  // mountain across the strait instead of a pyramid at the end of the
+  // runway; peak 2 is 240 m (was 280). Both are jittered now (see above).
+  plantPeak(
+    runway.x + dirX * (COURSE.runwayLength / 2 + 750) + perpX * 180,
+    runway.z + dirZ * (COURSE.runwayLength / 2 + 750) + perpZ * 180,
+    230, 280, '#2a6b32',
+  );
+  plantPeak(
+    runway.x + dirX * 150 + perpX * 850,
+    runway.z + dirZ * 150 + perpZ * 850,
+    190, 240, '#2a6b32',
+  );
+
   // --- Sky dome: a gradient shader, warm at the horizon, deep blue above. ---
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,

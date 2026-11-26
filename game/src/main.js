@@ -90,8 +90,12 @@ function runShot(name) {
   // the frame instead of empty green slope, and the landing camera moves
   // closer and lower still (12 m back, 2.2 m up, FOV 52 — was 15 m / 3.5 m /
   // FOV 56) so the threshold sits below the plane in clear view.
+  // v7 add-on (LAYANG framing): the cover chase rides higher (4.5 m, was
+  // 3.0 m), so the plane drops toward the lower third of the frame and the
+  // next ring, the runway and the new landmark peaks sit in the middle —
+  // the composition the reference entry uses.
   if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -24, 4.5); }
-  else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, 0, 3.0); }
+  else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, 0, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
   else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, 0, 2.2); }
   hud.hidePanels();

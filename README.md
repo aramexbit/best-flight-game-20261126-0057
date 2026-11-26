@@ -17,7 +17,7 @@ A bright daytime flight game: fly a propeller tourer through 12 glowing rings ov
 ## Features
 
 - Arcade flight model with thrust, drag, climb cost, stall and banked turns.
-- Seeded procedural archipelago: 9 islands, ridged heightmap terrain with a dry-grass patchwork and a graded dirt apron around the runway, turquoise shallows with reef lines and a speckled water surface, drifting volumetric clouds, midday sun and haze. Clustered 3D trees, palms, boulders and shrubs — every trunk snapped to the rendered ground — plus dense jungle canopies, clustered coastal cliffs and a soft sand-to-grass shoreline. A strict clear zone keeps every tree, bush and rock off the runway strip and the approach cone. `?seed=N` rebuilds the same world.
+- Seeded procedural archipelago: 9 islands, ridged heightmap terrain with a dry-grass patchwork and a graded dirt apron around the runway, turquoise shallows with reef lines and a speckled water surface, drifting volumetric clouds, midday sun and haze. Clustered 3D trees, palms, boulders and shrubs — every trunk snapped to the rendered ground — plus dense jungle canopies, clustered coastal cliffs and a soft sand-to-grass shoreline. A strict clear zone keeps every tree, bush and rock off the runway strip and the approach cone. Two craggy landmark peaks give the horizon its silhouette: one across the strait past the far threshold, one on the southern shore. `?seed=N` rebuilds the same world.
 - 12-ring course planned from the runway backwards, with a pulsing next-ring indicator.
 - Full HUD: altitude (ft), speed (kts), heading compass strip, attitude ball, fuel and throttle bars, timer, score, ring counter.
 - Procedural Web Audio: engine drone, wind, ring chimes, landing chord — no audio files.
