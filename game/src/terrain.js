@@ -137,6 +137,24 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     return a * c;
   }
 
+  // v7: the runway clear zone — nothing planted may stand inside it. The
+  // v6 landing shot caught a tree touching the strip's right edge mid-strip:
+  // the airport belt planted by raw radius from the runway centre and never
+  // checked the strip at all, so a tree 80 m out could sit 10 m off the
+  // centreline. The zone is the strip plus a 90 m margin along it and a
+  // 55 m margin across it, plus a 175 m approach cone on the extended
+  // centreline (45 m wide) so no tree blocks the final-approach view
+  // either. Every planter below must pass clearOfRunway().
+  function clearOfRunway(x, z) {
+    const rx = x - runway.x;
+    const rz = z - runway.z;
+    const along = Math.abs(rx * dirX + rz * dirZ);
+    const across = Math.abs(rx * perpX + rz * perpZ);
+    if (along < COURSE.runwayLength / 2 + 90 && across < COURSE.runwayWidth / 2 + 55) return false;
+    if (along < COURSE.runwayLength / 2 + 175 && across < 45) return false;
+    return true;
+  }
+
   function groundAt(x, z) {
     const h = islandHeight(islands, fbm, x, z);
     const b = runwayBlend(x, z);
@@ -619,7 +637,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   let junglePlanted = 0;
   let cliffsPlanted = 0;
 
-  /** An inland shade tree: a brown trunk and a canopy of 3-5 overlapping blobs. */
+  /** An inland shade tree: a brown trunk and a canopy of 4-6 overlapping blobs. */
   function plantShadeTree(px, pz, ph, s) {
     const tree = new THREE.Group();
     const trunkH = 2.6 * s;
@@ -627,11 +645,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     trunk.scale.set(s, trunkH / 3.2, s);
     trunk.position.y = trunkH / 2;
     tree.add(trunk);
-    const blobs = 3 + vegRandom.int(0, 2);
+    // v7: 4-6 blobs (was 3-5) with squashed vertical scale for shape
+    // variety, plus a smaller crown blob on top — the canopy reads as a
+    // full, layered crown instead of a few bare spheres (Gemini v6: the
+    // foliage still reads as raw primitives, not deliberate stylisation).
+    const blobs = 4 + vegRandom.int(0, 2);
     for (let b = 0; b < blobs; b += 1) {
       const blob = new THREE.Mesh(canopyGeo, canopyMats[vegRandom.int(0, 3)]);
       const r = (1.1 + vegRandom.range(0, 0.9)) * s;
-      blob.scale.setScalar(r);
+      blob.scale.set(r, r * vegRandom.range(0.72, 0.95), r);
       blob.position.set(
         vegRandom.range(-0.9, 0.9) * s,
         trunkH + vegRandom.range(-0.2, 0.9) * s,
@@ -639,6 +661,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       );
       tree.add(blob);
     }
+    const crown = new THREE.Mesh(canopyGeo, canopyMats[vegRandom.int(0, 3)]);
+    const cr = (0.9 + vegRandom.range(0, 0.5)) * s;
+    crown.scale.set(cr, cr * 0.85, cr);
+    crown.position.set(vegRandom.range(-0.4, 0.4) * s, trunkH + (1.1 + vegRandom.range(0, 0.4)) * s, vegRandom.range(-0.4, 0.4) * s);
+    tree.add(crown);
     // v5: snap to the MESH height — the passed ph is the analytic height,
     // which can sit metres above or below the rendered ground on a slope.
     tree.position.set(px, meshHeight(px, pz), pz);
@@ -704,6 +731,16 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     rock.rotation.set(vegRandom.range(0, 3), vegRandom.range(0, 3), vegRandom.range(0, 3));
     group.add(rock);
     rocksPlanted += 1;
+    // v7: half the boulders grow a smaller satellite stone leaning on them,
+    // so a rock reads as a textured cluster instead of one lone faceted lump.
+    if (vegRandom.range(0, 1) < 0.5) {
+      const sat = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+      const ss = s * vegRandom.range(0.35, 0.6);
+      sat.scale.set(ss, ss * vegRandom.range(0.6, 0.9), ss);
+      sat.position.set(px + vegRandom.range(-1.2, 1.2) * s, meshHeight(px, pz) + 0.15 * s, pz + vegRandom.range(-1.2, 1.2) * s);
+      sat.rotation.set(vegRandom.range(0, 3), vegRandom.range(0, 3), vegRandom.range(0, 3));
+      group.add(sat);
+    }
   }
 
   /** A low shrub blob on the grass, darker than the canopy greens. */
@@ -730,13 +767,13 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const cr = isl.radius * vegRandom.range(0.15, 0.55);
       const cx = isl.x + Math.cos(ca) * cr;
       const cz = isl.z + Math.sin(ca) * cr;
-      const count = 6 + vegRandom.int(0, 3);
+      const count = 8 + vegRandom.int(0, 4);
       for (let t = 0; t < count; t += 1) {
         const px = cx + vegRandom.range(-32, 32);
         const pz = cz + vegRandom.range(-32, 32);
         const ph = groundAt(px, pz);
         if (ph < 12 || ph > 160) continue;
-        if (Math.hypot(px - runway.x, pz - runway.z) < 350) continue;
+        if (!clearOfRunway(px, pz)) continue;
         plantShadeTree(px, pz, ph, vegRandom.range(1.2, 2.3));
       }
     }
@@ -756,7 +793,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         const pz = jz + vegRandom.range(-18, 18);
         const ph = groundAt(px, pz);
         if (ph < 30 || ph > 160) continue;
-        if (Math.hypot(px - runway.x, pz - runway.z) < 350) continue;
+        if (!clearOfRunway(px, pz)) continue;
         plantShadeTree(px, pz, ph, vegRandom.range(1.8, 2.6));
         junglePlanted += 1;
       }
@@ -774,7 +811,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const pz = isl.z + Math.sin(pa) * pr;
       const ph = groundAt(px, pz);
       if (ph < 2 || ph > 14) continue;
-      if (Math.hypot(px - runway.x, pz - runway.z) < 320) continue;
+      if (!clearOfRunway(px, pz)) continue;
       plantPalm(px, pz, ph, vegRandom.range(1.3, 2.0));
     }
   }
@@ -792,7 +829,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const px = ax + Math.cos(a) * r;
       const pz = az + Math.sin(a) * r;
       const ph = groundAt(px, pz);
-      if (Math.hypot(px - runway.x, pz - runway.z) < 350) continue;
+      if (!clearOfRunway(px, pz)) continue;
       if (ph >= 12 && ph <= 160) {
         plantShadeTree(px, pz, ph, vegRandom.range(1.5, 2.5));
         planted += 1;
@@ -803,13 +840,16 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     }
   }
   if (course && course.rings) {
-    // Rings 2, 6, 7, 10 and 12: ring 2 fills the cockpit shot, rings 6-7 sit
-    // ahead of the early cover camera, and rings 10 and 12 sit ahead of the
-    // 40 s cover camera over the runway island — their groves land in the
+    // Rings 2, 6, 7, 10, 11 and 12: ring 2 fills the cockpit shot, rings 6-7 sit
+    // ahead of the early cover camera, and rings 10, 11 and 12 sit ahead of
+    // the 40 s cover camera over the runway island — their groves land in the
     // midground of the frame instead of under the plane.
     // v6: 14 trees per hero grove (was 10), so the midground reads as real
     // forest instead of a few scattered trees.
-    const hero = [course.rings[1], course.rings[5], course.rings[6], course.rings[9], course.rings[11]];
+    // v7: ring 11 joins the hero list — the cover camera at 42 s flies
+    // straight at it over the runway island's western slopes, which the v6
+    // cover shot showed as empty green.
+    const hero = [course.rings[1], course.rings[5], course.rings[6], course.rings[9], course.rings[10], course.rings[11]];
     for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 14);
     if (course.spawn) plantHeroGrove(course.spawn.x, course.spawn.z, 10);
     // v6: a beach cluster at the spawn — palms and rocks on the shore the
@@ -833,6 +873,26 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       }
     }
   }
+  // v7: a palm fringe right around the runway island's shore — the v6
+  // cockpit shot showed a bare beach and horizon from the pilot's seat, so
+  // the island the course ends on gets its own planted coastline, clear of
+  // the runway zone (the clear-zone check keeps every palm off the strip
+  // and the approach cone).
+  {
+    const isl = islands[0];
+    let shorePalms = 0;
+    for (let tries = 0; tries < 300 && shorePalms < 18; tries += 1) {
+      const pa = vegRandom.range(0, Math.PI * 2);
+      const pr = isl.radius * vegRandom.range(1.05, 1.35);
+      const px = isl.x + Math.cos(pa) * pr;
+      const pz = isl.z + Math.sin(pa) * pr;
+      const ph = groundAt(px, pz);
+      if (ph < 2 || ph > 14) continue;
+      if (!clearOfRunway(px, pz)) continue;
+      plantPalm(px, pz, ph, vegRandom.range(1.4, 2.1));
+      shorePalms += 1;
+    }
+  }
   // v5: the airport belt — dense trees around the runway island, so the
   // landing shot shows a real airfield in a forest clearing instead of a grey
   // rectangle in an empty field. Kept 90 m clear of the strip itself.
@@ -846,6 +906,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const pz = runway.z + Math.sin(a) * r;
     const ph = groundAt(px, pz);
     if (ph < 12 || ph > 160) continue;
+    // v7: the belt finally checks the clear zone — in v6 it planted by raw
+    // radius alone, which is how a tree ended up touching the strip edge.
+    if (!clearOfRunway(px, pz)) continue;
     plantShadeTree(px, pz, ph, vegRandom.range(1.6, 2.6));
     airportTrees += 1;
   }
@@ -853,23 +916,25 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // of the runway strip. v6: 60 rocks (was 40) and 110 bushes (was 60), and
   // the bushes come in two greens now, so the grass carries texture instead
   // of reading as one flat colour between the trees.
+  // v7: 80 rocks and 160 bushes — the v6 cover shot still showed wide empty
+  // green slopes between the groves, so the scatter fills the gaps.
   const bushMat2 = new THREE.MeshStandardMaterial({ color: '#3f9142', roughness: 0.95 });
-  for (let tries = 0; tries < 1200 && rocksPlanted < 60; tries += 1) {
+  for (let tries = 0; tries < 1600 && rocksPlanted < 80; tries += 1) {
     const px = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const pz = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const ph = groundAt(px, pz);
     const onBeach = ph > 1 && ph < 8;
     const onSlope = ph > 80 && ph < 250;
     if (!onBeach && !onSlope) continue;
-    if (Math.hypot(px - runway.x, pz - runway.z) < 300) continue;
+    if (!clearOfRunway(px, pz)) continue;
     plantRock(px, pz, ph, vegRandom.range(0.9, 2.6));
   }
-  for (let tries = 0; tries < 1400 && bushesPlanted < 110; tries += 1) {
+  for (let tries = 0; tries < 1800 && bushesPlanted < 160; tries += 1) {
     const px = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const pz = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const ph = groundAt(px, pz);
     if (ph < 8 || ph > 140) continue;
-    if (Math.hypot(px - runway.x, pz - runway.z) < 300) continue;
+    if (!clearOfRunway(px, pz)) continue;
     // v6: every third bush uses the lighter green, for variety on the grass.
     const bush = new THREE.Mesh(bushGeo, bushesPlanted % 3 === 0 ? bushMat2 : bushMat);
     bush.scale.set(
@@ -898,7 +963,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const pz = isl.z + Math.sin(ca) * cr;
       const ph = groundAt(px, pz);
       if (ph < 2 || ph > 25) continue;
-      if (Math.hypot(px - runway.x, pz - runway.z) < 300) continue;
+      if (!clearOfRunway(px, pz)) continue;
       const cliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
       cliff.scale.set(
         vegRandom.range(6, 14),
@@ -915,7 +980,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         const nx = isl.x + Math.cos(na) * cr + vegRandom.range(-10, 10);
         const nz = isl.z + Math.sin(na) * cr + vegRandom.range(-10, 10);
         const nph = groundAt(nx, nz);
-        if (nph >= 2 && nph <= 25 && Math.hypot(nx - runway.x, nz - runway.z) >= 300) {
+        if (nph >= 2 && nph <= 25 && clearOfRunway(nx, nz)) {
           const ncliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
           ncliff.scale.set(
             vegRandom.range(4, 9),
@@ -979,7 +1044,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const cloudMat = new THREE.MeshBasicMaterial({
     color: '#ffffff', transparent: true, opacity: 0.92, fog: false,
   });
-  const puffGeo = new THREE.IcosahedronGeometry(1, 0);
+  const puffGeo = new THREE.IcosahedronGeometry(1, 1);
   for (let i = 0; i < 34; i += 1) {
     const cloud = new THREE.Group();
     // v4: 5-6 rounder, fuller puffs per cloud (was 3-5 flat ones at 0.38
@@ -988,11 +1053,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // v6: 7-10 puffs per cloud, rounder still (vertical scale 1.0, was 0.85)
     // and packed tighter, so the clouds read as soft grouped masses instead
     // of faceted slabs (Gemini v5: "low-poly faceted clouds").
-    const puffs = 7 + cloudRandom.int(0, 3);
+    // v7: 9-13 puffs, detail-1 geometry (subdivided, so each puff is a
+    // smooth round ball, not a faceted polyhedron) and a taller vertical
+    // scale (1.15) — the clouds finally read as soft stylised cumulus
+    // instead of flat white plates (Gemini v6).
+    const puffs = 9 + cloudRandom.int(0, 4);
     for (let p = 0; p < puffs; p += 1) {
       const puff = new THREE.Mesh(puffGeo, cloudMat);
       const s = cloudRandom.range(20, 44);
-      puff.scale.set(s * 1.3, s * 1.0, s * 1.1);
+      puff.scale.set(s * 1.3, s * 1.15, s * 1.1);
       puff.position.set(cloudRandom.range(-22, 22), cloudRandom.range(-3, 4), cloudRandom.range(-14, 14));
       cloud.add(puff);
     }

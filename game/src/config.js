@@ -112,6 +112,12 @@ export const PALETTE = {
   planeBelly: '#BCA887',
   planeRed: '#C83C32',
   planeGlass: '#9fd8e8',
+  // v7: the cockpit stops being one black slab — three separate greys, so
+  // the panel face, the dark glareshield and the lighter console read as
+  // distinct built parts (Gemini v6: "chunky, dark geometric slab").
+  cockpitPanel: '#4b515c',
+  cockpitFace: '#5d636e',
+  cockpitConsole: '#6b7078',
   hudText: '#fff7e8',
   hudPanel: 'rgba(20, 24, 40, 0.55)',
   hudWarn: '#ff5d4d',

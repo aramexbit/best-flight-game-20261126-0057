@@ -8,7 +8,11 @@ import { STEP } from './config.js';
 import { wrapAngle } from './flight.js';
 
 const START_SECONDS = 8;
-const PLAY_SECONDS = 40;
+// v7: 42 s (was 40) — two seconds further along the course puts the cover
+// camera closer to ring 11 and deeper over the runway island's tree-covered
+// western slopes, so the foreground is planted hills instead of the empty
+// green slope the v6 cover showed.
+const PLAY_SECONDS = 42;
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world
@@ -139,6 +143,13 @@ export function stageShot(name, game) {
     let throttleTarget = 0.72;
     if (name === 'landing' && !ring) {
       // Final approach: aim short of the threshold, then down to the strip.
+      // v7: the far target stays at +45 and the freeze window at 300 m /
+      // 50 m — the v6 values, which are proven to catch the plane on final.
+      // (First v7 try: +35 and 260 m / 38 m — the plane never met all four
+      // freeze conditions together and orbited the strip at a steep bank for
+      // the whole 140 s, so the landing frame showed a hillside instead of
+      // the runway. The closer landing camera below is what makes the
+      // threshold read bigger in v7, not a tighter freeze window.)
       const distToRunway = Math.hypot(runway.x - s.x, runway.z - s.z);
       target = distToRunway > 300
         ? { x: runway.x - runway.dirX * 260, y: runway.height + 45, z: runway.z - runway.dirZ * 260 }

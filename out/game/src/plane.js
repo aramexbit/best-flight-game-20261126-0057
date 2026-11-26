@@ -142,9 +142,17 @@ export function buildPlane(THREE) {
   const dash = new THREE.Group();
   dash.position.set(0, -0.30, -2.1);
   dash.visible = false;
-  const panelMat = new THREE.MeshStandardMaterial({ color: '#2a2f3a', roughness: 0.7, metalness: 0.15 });
+  // v7: the panel is a warm medium grey (was near-black #2a2f3a), with a
+  // lighter inset face, so the dash reads as a built instrument panel with
+  // material separation — panel face, dark glareshield, lighter console —
+  // instead of one black box (Gemini v6: "chunky, dark geometric slab").
+  const panelMat = new THREE.MeshStandardMaterial({ color: PALETTE.cockpitPanel, roughness: 0.7, metalness: 0.15 });
   const panel = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.42, 0.12), panelMat);
   dash.add(panel);
+  const faceMat = new THREE.MeshStandardMaterial({ color: PALETTE.cockpitFace, roughness: 0.65, metalness: 0.1 });
+  const face = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.34, 0.02), faceMat);
+  face.position.set(0, 0.01, 0.06);
+  dash.add(face);
   // Red trim along the top edge of the panel, so it is visibly built, not cut out.
   const trim = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.13), red);
   trim.position.set(0, 0.225, 0);
@@ -159,13 +167,21 @@ export function buildPlane(THREE) {
   // overhanging the dials. (First try: 0.45 deep at 0.5 rad overhung the panel
   // face and hid the lower half of every dial from the pilot's high seat;
   // the v5 first screenshots proved it, so the shield went shallow.)
-  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.04, 0.30), dark);
+  // v7: the shield is dark grey (#3a3e46, was near-black #22242a) — it still
+  // reads as the shaded top of the console, but it no longer merges with the
+  // black of the canopy frame into one heavy dark slab across the windshield.
+  const shield = new THREE.Mesh(
+    new THREE.BoxGeometry(1.45, 0.04, 0.30),
+    new THREE.MeshStandardMaterial({ color: '#3a3e46', roughness: 0.8, metalness: 0.1 }),
+  );
   shield.position.set(0, 0.26, 0.06);
   shield.rotation.x = 0.35;
   dash.add(shield);
-  // The lower console is a different, lighter grey than the dark panel, so
+  // The lower console is a different, lighter grey than the panel, so
   // the dash reads as separate built parts instead of one black mass.
-  const consoleMat = new THREE.MeshStandardMaterial({ color: '#565b64', roughness: 0.75, metalness: 0.1 });
+  // v7: a touch lighter still (#6b7078), widening the material gap between
+  // the console, the panel face and the dark glareshield.
+  const consoleMat = new THREE.MeshStandardMaterial({ color: PALETTE.cockpitConsole, roughness: 0.75, metalness: 0.1 });
   // Side cheeks: angled flanks at the panel ends, dropping back toward the
   // pilot — the panel now has sides, not just a front face.
   for (const side of [-1, 1]) {
@@ -202,8 +218,11 @@ export function buildPlane(THREE) {
   // run back toward the pilot; the walls stand at the panel's side edges,
   // angled in, so the view is framed left and right without blocking the
   // water and horizon below.
-  const frameMat = new THREE.MeshStandardMaterial({ color: '#22242a', roughness: 0.85 });
-  const arch = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.05, 0.06), frameMat);
+  const frameMat = new THREE.MeshStandardMaterial({ color: '#33363d', roughness: 0.85 });
+  // v7: the arch is thinner (0.04, was 0.05) and a touch lighter — it still
+  // frames the canopy, but no longer reads as a heavy black bar across the
+  // top of the windshield (Gemini v6).
+  const arch = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.04, 0.06), frameMat);
   arch.position.set(0, 0.44, 0.0);
   dash.add(arch);
   for (const side of [-1, 1]) {
@@ -239,14 +258,14 @@ export function buildPlane(THREE) {
     dash.add(grip);
   }
   // Three small indicator dots, FLUSH on the panel face below the middle
-  // gauge (z 0.065, just proud of the 0.06 face) — green, amber, red.
+  // gauge (z 0.075, just proud of the v7 inset face at 0.07) — green, amber, red.
   const dotColors = [0x2aff5e, 0xffd94d, 0xff5d4d];
   for (let d = 0; d < 3; d += 1) {
     const dot = new THREE.Mesh(
       new THREE.CircleGeometry(0.018, 12),
       new THREE.MeshBasicMaterial({ color: dotColors[d] }),
     );
-    dot.position.set(-0.08 + d * 0.08, -0.17, 0.065);
+    dot.position.set(-0.08 + d * 0.08, -0.17, 0.075);
     dash.add(dot);
   }
   // v6: the dial face is a canvas texture — ticks, numbers at 12/3/6/9, a
@@ -255,28 +274,38 @@ export function buildPlane(THREE) {
   // plain cream disc with separate tick meshes.) One texture per label:
   // airspeed, altitude, heading.
   function makeDialFace(label) {
+    // v7: 512 px canvas (was 256) with a subtle radial shade, 24 ticks
+    // (12 long + 12 short minors) and bolder numbers — the dial markings
+    // stay crisp and readable from the pilot's seat instead of blurring
+    // into the cream face at screenshot distance (Gemini v6).
     const c = document.createElement('canvas');
-    c.width = 256;
-    c.height = 256;
+    c.width = 512;
+    c.height = 512;
     const x = c.getContext('2d');
-    x.fillStyle = '#f2ead2';
-    x.fillRect(0, 0, 256, 256);
+    const shade = x.createRadialGradient(256, 256, 40, 256, 256, 256);
+    shade.addColorStop(0, '#faf3dd');
+    shade.addColorStop(0.75, '#f2ead2');
+    shade.addColorStop(1, '#e3d8b4');
+    x.fillStyle = shade;
+    x.fillRect(0, 0, 512, 512);
     // Redline arc across the top-right of the dial.
     x.strokeStyle = '#c83c32';
-    x.lineWidth = 10;
+    x.lineWidth = 18;
     x.beginPath();
-    x.arc(128, 128, 104, -Math.PI / 2 - 0.18, -Math.PI / 2 + 0.96);
+    x.arc(256, 256, 208, -Math.PI / 2 - 0.18, -Math.PI / 2 + 0.96);
     x.stroke();
-    // Twelve tick marks, longer at the quarters.
-    for (let t = 0; t < 12; t += 1) {
-      const a = (t / 12) * Math.PI * 2;
-      const long = t % 3 === 0;
-      const r0 = long ? 86 : 96;
+    // Twelve major tick marks, longer at the quarters, with a minor tick
+    // halfway between each pair.
+    for (let t = 0; t < 24; t += 1) {
+      const a = (t / 24) * Math.PI * 2;
+      const major = t % 2 === 0;
+      const long = major && (t / 2) % 3 === 0;
+      const r0 = long ? 172 : major ? 190 : 200;
       x.strokeStyle = '#2a2c33';
-      x.lineWidth = long ? 7 : 4;
+      x.lineWidth = long ? 13 : major ? 8 : 5;
       x.beginPath();
-      x.moveTo(128 + Math.sin(a) * r0, 128 - Math.cos(a) * r0);
-      x.lineTo(128 + Math.sin(a) * 108, 128 - Math.cos(a) * 108);
+      x.moveTo(256 + Math.sin(a) * r0, 256 - Math.cos(a) * r0);
+      x.lineTo(256 + Math.sin(a) * 216, 256 - Math.cos(a) * 216);
       x.stroke();
     }
     // Numbers at 12 / 3 / 6 / 9 and the instrument label at the bottom.
@@ -285,13 +314,13 @@ export function buildPlane(THREE) {
     x.fillStyle = '#2a2c33';
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.font = 'bold 34px system-ui, sans-serif';
-    x.fillText('12', 128, 52);
-    x.fillText('3', 204, 128);
-    x.fillText('6', 128, 204);
-    x.fillText('9', 52, 128);
-    x.font = 'bold 24px system-ui, sans-serif';
-    x.fillText(label, 128, 168);
+    x.font = 'bold 64px system-ui, sans-serif';
+    x.fillText('12', 256, 104);
+    x.fillText('3', 408, 256);
+    x.fillText('6', 256, 408);
+    x.fillText('9', 104, 256);
+    x.font = 'bold 44px system-ui, sans-serif';
+    x.fillText(label, 256, 336);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
@@ -304,7 +333,9 @@ export function buildPlane(THREE) {
   const needles = [];
   for (const def of gaugeDefs) {
     const g = new THREE.Group();
-    g.position.set(def.x, 0.02, 0.065);
+    // v7: z 0.08 (was 0.065) — the gauges sit proud of the new inset face
+    // plate (front at 0.07), so the rims and dials are never clipped by it.
+    g.position.set(def.x, 0.02, 0.08);
     // v6: big LIGHT dials — cream face, dark ticks, dark needle — so the
     // instruments read at a glance instead of hiding in the dark panel.
     const rim = new THREE.Mesh(

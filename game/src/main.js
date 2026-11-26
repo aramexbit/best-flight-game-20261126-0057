@@ -85,17 +85,15 @@ function runShot(name) {
   const scene = stageShot(name, { flight, course, terrain });
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
-  // v4: each shot gets its own framing. The title pulls the camera closer and
-  // further to the side (28 m back, 24 m lateral) so the aircraft sits clearly
-  // right of the panel — in v3 it hid behind the panel's right edge and the
-  // ring was half-covered too. The cockpit shot goes wider (FOV 66) so the
-  // smaller dashboard fits with the ring in the upper-middle. The landing
-  // shot goes closer and lower (15 m back, 3.5 m up, FOV 56) so the runway
-  // fills the central 60% of the frame instead of reading as a narrow strip.
+  // v7: the cover (play) camera moves closer and lower (13 m back, 3.0 m up,
+  // FOV 68 — was 16 m / 4.5 m / FOV 65) so the tree-covered foreground fills
+  // the frame instead of empty green slope, and the landing camera moves
+  // closer and lower still (12 m back, 2.2 m up, FOV 52 — was 15 m / 3.5 m /
+  // FOV 56) so the threshold sits below the plane in clear view.
   if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -24, 4.5); }
-  else if (name === 'play') { renderer.setFov(65); renderer.setChase(16, 0, 4.5); }
+  else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, 0, 3.0); }
   else if (name === 'cockpit') { renderer.setFov(66); }
-  else if (name === 'landing') { renderer.setFov(56); renderer.setChase(15, 0, 3.5); }
+  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, 0, 2.2); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;
