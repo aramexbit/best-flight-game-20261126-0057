@@ -9,19 +9,26 @@
 //
 // The scripted crashes are keyed to run time (RACE in config.js), so the
 // same seed and the same player line give the same race every run:
-//   R1 BIRU    dives at 10 s — the cockpit shot at 12 s catches it
-//              smoking ahead; then it rejoins and does the near-miss
-//              flyby down the player's left side at 39-42 s, so the cover
-//              shot at 41 s catches it overtaking.
+//   R1 BIRU    dives at 11.5 s — the cockpit shot at 12 s catches it
+//              smoking ahead, flying straight for the first 1.5 s; then
+//              it rejoins and does the near-miss flyby down the player's
+//              left side at 39-42 s, so the cover shot at 41 s catches
+//              it overtaking.
 //   R4 ORANYE  clips ring 11 at 35 s, spins, dives and hits the sea at
 //              ~41 s — the dive and its smoke trail cross the player's
 //              path during the run, but the wreck itself lands ~180 m
 //              behind the player, so it is NOT in the cover frame (the
 //              chase camera looks forward). The cover's visible crashes
 //              are BIRU's dive (cockpit shot) and the mid-air collision.
-//   R2 KUNING + R3 HIJAU cross paths and collide mid-air at ~40.8 s —
-//              the cover shot catches the fireball, the shockwave ring
-//              and both rivals tumbling with smoke.
+//   R2 KUNING + R3 HIJAU converge from ~30.8 s on a point tied to the
+//              player's live progress (player's ring + 2), HOLD there
+//              orbiting, and collide mid-air once the player closes to
+//              RACE.collisionTriggerDist (backstop: 60 s / 600 m) — the
+//              cover shot catches the fireball, the dark smoke and both
+//              airframes TORN IN TWO, tumbling and burning. v13 fired
+//              the collision on a fixed 40.8 s clock at fixed ring 11,
+//              so on a real player's line it went off kilometres away
+//              and nobody ever saw it.
 // A crashed rival is out for RACE.respawnDelay seconds, then rejoins
 // ahead of the player (see respawn), so the race never ends — and so the
 // landing shot, which freezes only seconds after the collision, still
@@ -35,14 +42,30 @@ import { buildPlane } from './plane.js';
 import { autopilotTo } from './shots.js';
 
 const LIVERIES = [
-  { name: 'BIRU', main: '#E8EEF2', accent: '#2563EB', speedBias: 1.02, weave: 0.0 },
-  { name: 'KUNING', main: '#FFD52A', accent: '#22242a', speedBias: 0.99, weave: 2.1 },
-  { name: 'HIJAU', main: '#F2E5C5', accent: '#2E9E33', speedBias: 1.0, weave: 4.2 },
-  { name: 'ORANYE', main: '#F2E5C5', accent: '#FF7F2A', speedBias: 0.97, weave: 1.3 },
+  // v14: speedBias up across the pack (was 1.02/0.99/1.00/0.97) — the
+  // rivals must LEAD the player from the start, visibly ahead of it, not
+  // trail behind where the chase camera never sees them.
+  // Gemini's fix prompt asks for 1.15-1.30x player cruise speed
+  // (145-165 KTS vs the player's 110-130); the low end of that range is
+  // used here, because the diag showed faster rivals miss more rings
+  // and arrive late to the collision — 1.15/1.13/1.12/1.10 keeps them
+  // ahead without breaking the ring-passing the tighter weave fixed.
+  { name: 'BIRU', main: '#E8EEF2', accent: '#2563EB', speedBias: 1.15, weave: 0.0 },
+  { name: 'KUNING', main: '#FFD52A', accent: '#22242a', speedBias: 1.13, weave: 2.1 },
+  { name: 'HIJAU', main: '#F2E5C5', accent: '#2E9E33', speedBias: 1.12, weave: 4.2 },
+  { name: 'ORANYE', main: '#F2E5C5', accent: '#FF7F2A', speedBias: 1.10, weave: 1.3 },
 ];
 
 export function createRivals(THREE, seed, islands, effects) {
   const group = new THREE.Group();
+  // v14 fix: ONE shared meeting point for the collision pair. Each rival
+  // used to compute its own point object from the player's live progress,
+  // so a rival that re-converged after a crash aimed at a NEW point (the
+  // player's ring + 2 by then) while its partner still held at the old
+  // one — the pair never met and the collision never fired (seeds 5 and 9
+  // in the probe). The first rival to converge fixes the point for the
+  // run; the partner reuses it, however late it arrives.
+  let sharedMeetPoint = null;
 
   function forwardOf(yaw) {
     return { x: Math.sin(yaw), y: 0, z: -Math.cos(yaw) };
@@ -56,19 +79,15 @@ export function createRivals(THREE, seed, islands, effects) {
     // the player's and of the other rivals'.
     const course = createCourse(createRandom(seed + 7), seed, islands);
     const flight = createFlight(course.spawn);
-    // Stagger the start line: BIRU starts 25 m AHEAD of the player, the
-    // rest 80-240 m behind, so the race reads as spread out from the
-    // first second — and so the cockpit shot at 12 s catches BIRU ahead
-    // in the windshield. 50 m was tried first: at 12 s BIRU was 44 m
-    // ahead, a tiny dark blob the cockpit camera could not read as a
-    // plane. At 25 m it is ~19 m ahead at 12 s — big enough to read as
-    // a rival plane without blocking the ring (it sits ~9 m right of
-    // the player's line). BIRU leads at the start, so the cockpit HUD
-    // honestly reads 2/5; it dives at 11.5 s and the player retakes
-    // the lead.
+    // Stagger the start line, v14: ALL FOUR rivals start AHEAD of the
+    // player (BIRU 50 m, KUNING 35 m, HIJAU 25 m, ORANYE 15 m), spread
+    // along the course line — the player chases the pack from behind and
+    // sees them the whole run, instead of the pack trailing where the
+    // chase camera never looks. (v13: only BIRU ahead at 25 m, the rest
+    // 80-240 m behind — the user never saw them while playing.)
     const fx = Math.sin(course.spawn.yaw);
     const fz = -Math.cos(course.spawn.yaw);
-    const back = i === 0 ? -25 : i * 80;
+    const back = [-50, -35, -25, -15][i];
     flight.state.x -= fx * back;
     flight.state.z -= fz * back;
     return {
@@ -208,9 +227,12 @@ export function createRivals(THREE, seed, islands, effects) {
    * One fixed step for the whole pack. `player` is the player's flight
    * object, `playerCourse` its course; `groundAt` and `runway` are the
    * terrain's. `audio` and `onShake` are for the flyby whoosh and camera
-   * shake. Rivals read the player, they never write to it.
+   * shake. `onEvent` (v14, optional) is called as onEvent(kind, detail)
+   * for race events the game should announce — currently 'collision',
+   * so main.js can flash the HUD message, play the boom and shake the
+   * camera. Rivals read the player, they never write to it.
    */
-  function update(dt, time, player, playerCourse, groundAt, runway, audio, onShake) {
+  function update(dt, time, player, playerCourse, groundAt, runway, audio, onShake, onEvent) {
     const ps = player.state;
     const pf = forwardOf(ps.yaw);
     const pr = { x: Math.cos(ps.yaw), y: 0, z: Math.sin(ps.yaw) };
@@ -229,28 +251,29 @@ export function createRivals(THREE, seed, islands, effects) {
         } else if (r.name === 'ORANYE' && !r.crashed.clip && time >= RACE.clipCrashAt) {
           startSpin(r);
         } else if ((r.name === 'KUNING' || r.name === 'HIJAU') && !r.crashed.collision
-          && time >= RACE.collisionAt - 10) {
-          // Converge on a FIXED point on the course for the last ~10 s,
-          // then collide: 60 m past ring 11, 25 m up. The rivals fall
-          // ~60 m short of the meeting point in the 10 s they have, so
-          // the blast lands near ring 11 itself — ~64 m ahead of the
-          // staged player in the cover frame (the staged player is ~64 m
-          // from ring 11 at 41 s), a 15 m fireball that reads clearly
-          // just past the ring. 200 m was tried first (blast ~330 m
-          // ahead, too far to read); 120 m next (blast ~184 m ahead,
-          // still too small). A meeting point from the player's live
-          // position goes stale (the player flies 65 m/s, so a point
-          // fixed 6 s early ends up ~390 m behind the player, out of
-          // frame). Ring 11 + 25 m was tried too: the blast landed 30 m
-          // from the player, on top of it. (Note: the Node probe runs
-          // ~1 s ahead of the staged run, so in the probe this blast
-          // reads ~40 m BEHIND the player — the staged screenshot is the
-          // ground truth, not the probe.)
+          && time >= RACE.collisionAt - 14) {
+          // Converge on a point on the course AHEAD OF THE PLAYER, not a
+          // fixed ring: the player's ring + 3, 60 m past it, 25 m up.
+          // v13 used fixed ring 11, so on a slow player line the blast
+          // went off kilometres ahead (or behind) — the user never saw
+          // it. A point tied to the player's live progress stays in
+          // front of the player, wherever the player actually is.
+          // The point is SHARED (see sharedMeetPoint above): the first
+          // rival to converge fixes it, the partner reuses it.
+          // v14 fix 2: the converge starts at collisionAt - 14 (was -10)
+          // and the point is one ring further out (+3, was +2) — the diag
+          // showed the second rival arriving ~7 s after the player had
+          // already passed the point, so the pair needs the extra seconds
+          // and the extra ring of lead.
           r.state = 'converging';
           r.stateT = 0;
-          const ring11 = r.course.rings[10];
-          const ax = ring11.axis;
-          r.meetPoint = { x: ring11.x + ax.x * 60, y: ring11.y + 25, z: ring11.z + ax.z * 60 };
+          if (!sharedMeetPoint) {
+            const idx = Math.min(playerCourse.rings.length - 1, ps.ringsPassed + 3);
+            const ring = playerCourse.rings[idx];
+            const ax = ring.axis;
+            sharedMeetPoint = { x: ring.x + ax.x * 60, y: ring.y + 25, z: ring.z + ax.z * 60 };
+          }
+          r.meetPoint = sharedMeetPoint;
         } else if (r.name === 'BIRU' && !r.flybyDone && time >= RACE.flybyAt - 5 && time <= RACE.flybyAt + 3) {
           // The flyby starts 5 s early. 7 s was tried first: BIRU reached
           // the shadow at ~39 s, overshot it, and by 41 s had drifted
@@ -266,29 +289,85 @@ export function createRivals(THREE, seed, islands, effects) {
       // --- state machine ---
       if (r.state === 'converging') {
         // Both rivals steer for the same meeting point ahead of the player,
-        // at full throttle — they need every metre per second to reach a
-        // point 200 m past ring 11 in the ~10 s they have.
+        // at full throttle. Once a rival gets within 120 m it HOLDS there,
+        // orbiting the point, until the collision fires — so the blast
+        // waits for the player instead of going off on a clock the player
+        // cannot see (v13: the fixed 40.8 s blast fired kilometres away).
+        // The fire itself lives in the 'holding' branch: both rivals
+        // within 80 m of the point AND the player within trigger range.
         const ev = r.flight.step(
           dt, autopilotTo(r.flight, r.meetPoint, 1.0, groundAt), groundAt, runway,
         );
         if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
           hide(r, RACE.respawnDelay);
-        } else if (time >= RACE.collisionAt) {
-          // The collision: fireball + shockwave + debris in the sky, and
-          // both rivals tumble away trailing smoke. The explosion point is
-          // the midpoint of the two rivals, wherever they actually are.
-          const other = rivals.find((o) => o !== r && (o.name === 'KUNING' || o.name === 'HIJAU') && o.state === 'converging');
-          const mx = other ? (s.x + other.flight.state.x) / 2 : s.x;
-          const my = other ? (s.y + other.flight.state.y) / 2 : s.y;
-          const mz = other ? (s.z + other.flight.state.z) / 2 : s.z;
+        } else {
+          const dMeet = Math.hypot(s.x - r.meetPoint.x, s.y - r.meetPoint.y, s.z - r.meetPoint.z);
+          if (dMeet < 120) {
+            r.state = 'holding';
+            r.stateT = 0;
+          }
+        }
+      } else if (r.state === 'holding') {
+        // Orbit the meeting point (15 m radius, slow 0.25 rad/s, opposite
+        // phases so the two rivals cross each other) until the player
+        // closes in — then the collision fires IN FRONT of the player, in
+        // view. v14 fix 2: the orbit was 25 m at 0.5 rad/s, so the target
+        // point raced around at 12.5 m/s and the rivals chased it in a
+        // ~118 m radius orbit, 237 m apart — no collision could ever read
+        // as two planes meeting. A slow small orbit keeps them near the
+        // point; throttle 0.4 (was 0.6) slows the orbit further.
+        const ang = time * 0.25 + (r.name === 'HIJAU' ? Math.PI : 0);
+        const target = {
+          x: r.meetPoint.x + Math.cos(ang) * 15,
+          y: r.meetPoint.y,
+          z: r.meetPoint.z + Math.sin(ang) * 15,
+        };
+        const ev = r.flight.step(dt, autopilotTo(r.flight, target, 0.4, groundAt), groundAt, runway);
+        // v14 fix 1: the partner lookup compared meetPoint objects by
+        // IDENTITY (o.meetPoint === r.meetPoint) — each rival builds its
+        // own point object, so the lookup NEVER matched and the collision
+        // never fired in any run (the probe caught it: events [] on all
+        // 12 seeds). Match on state only: both rivals converge on the
+        // same player-relative point in the same frame.
+        const other = rivals.find((o) => o !== r && (o.name === 'KUNING' || o.name === 'HIJAU')
+          && o.state === 'holding');
+        const playerDist = Math.hypot(ps.x - r.meetPoint.x, ps.y - r.meetPoint.y, ps.z - r.meetPoint.z);
+        // v14 fix 3: fire only when BOTH rivals are actually near the
+        // point (within 80 m), so the blast midpoint sits between two
+        // planes that are really meeting — not between two dots 200 m
+        // apart in empty sky.
+        const rNear = Math.hypot(s.x - r.meetPoint.x, s.y - r.meetPoint.y, s.z - r.meetPoint.z) < 80;
+        const oNear = other
+          && Math.hypot(other.flight.state.x - r.meetPoint.x, other.flight.state.y - r.meetPoint.y, other.flight.state.z - r.meetPoint.z) < 80;
+        const fire = other && rNear && oNear
+          && ((playerDist < RACE.collisionTriggerDist)
+            || (time >= RACE.collisionFallbackAt && playerDist < RACE.collisionCloseDist));
+        if (fire) {
+          // The collision: big dark-smoke fireball at the midpoint, and
+          // BOTH airframes torn in two, tumbling away burning. The other
+          // rival is switched to tumbling here too, so the blast only
+          // fires once (the loop reaches it next as 'tumbling', not
+          // 'holding').
+          const os = other.flight.state;
+          const mx = (s.x + os.x) / 2;
+          const my = (s.y + os.y) / 2;
+          const mz = (s.z + os.z) / 2;
           effects.explode(mx, my, mz, true);
-          const f = forwardOf(s.yaw);
-          r.vel = { x: f.x * 30, y: 8, z: f.z * 30 };
-          r.state = 'tumbling';
-          r.stateT = 0;
-          r.crashed.collision = true;
-          r.spinAngle = 0;
+          for (const [rv, st] of [[r, s], [other, os]]) {
+            effects.explodeSplit(st.x, st.y, st.z, st.yaw, { body: rv.livery.main, accent: rv.livery.accent });
+            const f = forwardOf(st.yaw);
+            rv.vel = { x: f.x * 30, y: 8, z: f.z * 30 };
+            rv.state = 'tumbling';
+            rv.stateT = 0;
+            rv.crashed.collision = true;
+            rv.spinAngle = 0;
+          }
+          if (onEvent) onEvent('collision', { x: mx, y: my, z: mz });
+          if (onShake) onShake(0.5);
+        } else if (ev & EVENT_CRASH) {
+          effects.explode(s.x, s.y, s.z, false);
+          hide(r, RACE.respawnDelay);
         }
       } else if (r.state === 'spinning') {
         // Clipped the ring edge: the airframe rolls violently for two
@@ -308,7 +387,12 @@ export function createRivals(THREE, seed, islands, effects) {
         // still in the windshield at 12 s, nosing down with smoke, and
         // it still reaches the sea a few seconds later.
         s.pitch = Math.max(-0.6, s.pitch - dt * 1.2);
-        s.roll = Math.sin(time * 3) * 0.3;
+        // v14: the first 1.5 s of the dive fly STRAIGHT (roll 0) — in v13
+        // the sin(time*3) roll started at full amplitude, so the cockpit
+        // shot at 12 s caught BIRU already banked hard at the frame edge,
+        // which Gemini read as a glitch / another plane overlapping the
+        // cockpit. Straight first, then the weave.
+        s.roll = r.stateT < 1.5 ? 0 : Math.sin(time * 3) * 0.3;
         const f = forwardOf(s.yaw);
         r.vel.y -= 7 * dt;
         s.x += f.x * s.speed * dt;
@@ -392,7 +476,16 @@ export function createRivals(THREE, seed, islands, effects) {
           const px = -dz / len;
           const pz = dx / len;
           const distRing = Math.hypot(next.x - s.x, next.y - s.y, next.z - s.z);
-          const weaveAmp = Math.min(22, distRing * 0.12);
+          // v14: weave amplitude 12 m max (was 22), shrinking FAST near
+          // the ring (0.05/m, was 0.12/m) — the diag showed one rival
+          // routinely 800+ m behind the player at converge time because
+          // it kept MISSING rings: a 12 m weave at 100 m out still aims
+          // up to 12 m off centre on a 13 m ring, so the crossing often
+          // lands outside the gate and the 400 m recovery costs ~10 s.
+          // With 0.05/m the weave is 5 m at 100 m out and dead centre on
+          // final — the weave still reads far out, but the rival actually
+          // passes its rings and keeps up with the player.
+          const weaveAmp = Math.min(12, distRing * 0.05);
           const weave = Math.sin(time * 0.6 + r.weavePhase) * weaveAmp;
           target = { x: next.x + px * weave, y: next.y, z: next.z + pz * weave, axis: next.axis };
         } else {
@@ -476,8 +569,9 @@ export function createRivals(THREE, seed, islands, effects) {
       const flight = createFlight(course.spawn);
       const fx = Math.sin(course.spawn.yaw);
       const fz = -Math.cos(course.spawn.yaw);
-      // Same stagger as creation: BIRU 25 m ahead, the rest behind.
-      const back = i === 0 ? -25 : i * 80;
+      // Same stagger as creation (v14): all four ahead of the player —
+      // BIRU 50 m, KUNING 35 m, HIJAU 25 m, ORANYE 15 m.
+      const back = [-50, -35, -25, -15][i];
       flight.state.x -= fx * back;
       flight.state.z -= fz * back;
       r.flight = flight;
@@ -493,6 +587,8 @@ export function createRivals(THREE, seed, islands, effects) {
       r.api.group.visible = true;
       syncMesh(r);
     }
+    // v14: the shared collision point resets with the pack.
+    sharedMeetPoint = null;
   }
 
   for (const r of rivals) syncMesh(r);
@@ -508,6 +604,7 @@ export function createRivals(THREE, seed, islands, effects) {
         y: r.flight.state.y,
         z: r.flight.state.z,
         visible: r.api.group.visible,
+        meetPoint: r.meetPoint,
       }));
     },
   };

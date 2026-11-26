@@ -131,20 +131,18 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const rz = z - runway.z;
     const along = rx * dirX + rz * dirZ;
     const across = rx * perpX + rz * perpZ;
-    // v13: a broad graded plateau, not a narrow shelf. The flat zone spans
-    // the strip plus a 30 m shoulder each side, then fades over 150 m along
-    // and across — so the strip sits in a wide airfield clearing with a
-    // gentle transition to the hills, instead of a shelf with an abrupt cut
-    // at its edges (Gemini v12: the runway's edges read as asymmetric
-    // because the strip sat on a ridge with an abrupt terrain cut, not
-    // because of the shoulder lines themselves). The old fade (60 m along /
-    // 55 m across) could not smooth the island's ±20 m ridge bumps, so the
-    // strip climbed a crest and its far threshold hid behind the hill.
-    const a = 1 - smoothstep(COURSE.runwayLength / 2 - 30, COURSE.runwayLength / 2 + 150, Math.abs(along));
+    // v14: a WIDER graded plateau, not a narrow shelf. The flat zone
+    // spans the strip plus a 60 m shoulder each side, then fades over
+    // 250 m along and across — so the strip sits in a wide airfield
+    // clearing with a gentle transition to the hills, instead of a shelf
+    // with an abrupt cut at its edges (Gemini v13: the runway's edges
+    // still read as raised / drop-off). The old fade (150 m) could not
+    // smooth the island's ridge bumps at the strip's sides.
+    const a = 1 - smoothstep(COURSE.runwayLength / 2 - 30, COURSE.runwayLength / 2 + 250, Math.abs(along));
     // v3: the flat zone spans the full strip width (it used to start fading
     // 6 m inside the edge, so the terrain poked through the strip's edges by
     // a hair); the shoulders sit on the blend just outside the strip.
-    const c = 1 - smoothstep(COURSE.runwayWidth / 2 + 30, COURSE.runwayWidth / 2 + 150, Math.abs(across));
+    const c = 1 - smoothstep(COURSE.runwayWidth / 2 + 60, COURSE.runwayWidth / 2 + 250, Math.abs(across));
     return a * c;
   }
 
@@ -1493,6 +1491,10 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const cloudMats = [
     new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, fog: false }),
     new THREE.MeshLambertMaterial({ color: '#f6eeda', transparent: true, opacity: 0.95, fog: false }),
+    // Gemini's fix prompt: shaded underside/base puffs in cool blue-grey
+    // #D7E2EE to #C4D2E0, as part of the cloud volume (never a separate
+    // flat disc) — the lower lobes below use this one.
+    new THREE.MeshLambertMaterial({ color: '#d7e2ee', transparent: true, opacity: 0.95, fog: false }),
   ];
   // detail-1: softly rounded (80 faces), smooth Lambert shading — the
   // detail-0 faceted lobes of iterasi 1 read as floating rocks.
@@ -1539,25 +1541,13 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     { x0: -300, x1: 600, z0: -1400, z1: -1100, alt: 300 },
     { x0: -1300, x1: -400, z0: 1000, z1: 1400, alt: 310 },
   ];
+  // v14: the shared skirt is GONE — deleted outright. The wide flat lobe
+  // (170×24×115 m) under each bank read from below as a flat grey disc
+  // floating under the clouds, and Gemini saw it in ALL FOUR v13 shots.
+  // The banks keep their merged look from tighter clouds and rounded
+  // lower lobes instead (below), with NO flat base at all.
   for (let b = 0; b < banks.length; b += 1) {
     const bank = banks[b];
-    // Shared skirt: one wide flat lobe under the whole bank, so the three
-    // clouds sit on a common base instead of floating as separate balls.
-    // It drifts at the bank's speed (captured from the first cloud), so
-    // it never slides out from under its own bank.
-    const skirtX = (bank.x0 + bank.x1) / 2;
-    const skirtZ = (bank.z0 + bank.z1) / 2;
-    let skirtMesh = null;
-    let bankSpeed = null;
-    if (distToPath(skirtX, skirtZ) >= 450) {
-      const skirt = new THREE.Mesh(lobeGeo, cloudMats[0]);
-      skirt.scale.set(170, 24, 115);
-      skirt.position.set(skirtX, bank.alt - 55, skirtZ);
-      skirt.rotation.y = cloudRandom.range(0, Math.PI * 2);
-      group.add(skirt);
-      clouds.push(skirt);
-      skirtMesh = skirt;
-    }
     for (let c = 0; c < 3; c += 1) {
       let cx = 0;
       let cz = 0;
@@ -1577,9 +1567,28 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         const rz = rx * cloudRandom.range(0.8, 1.1);
         lobe.scale.set(rx, ry, rz);
         lobe.position.set(
-          cloudRandom.range(-45, 45),
+          cloudRandom.range(-35, 35),
           ry * cloudRandom.range(0.9, 1.1),
           cloudRandom.range(-30, 30),
+        );
+        lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
+        cloud.add(lobe);
+      }
+      // v14: rounded LOWER lobes replace the deleted skirt — 3-4 wide,
+      // squashed (y 0.45-0.6) lobes hugging the cloud's underside, so the
+      // base reads as a billowing cumulus bottom, not a flat grey disc.
+      // Spread tighter (±35 m) so the bank merges. They use the cool
+      // blue-grey underside material (#d7e2ee) from Gemini's fix prompt.
+      const lowerLobes = 3 + cloudRandom.int(0, 1);
+      for (let p = 0; p < lowerLobes; p += 1) {
+        const lobe = new THREE.Mesh(lobeGeo, cloudMats[2]);
+        const rx = cloudRandom.range(55, 85);
+        const ry = rx * cloudRandom.range(0.45, 0.6);
+        lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.05));
+        lobe.position.set(
+          cloudRandom.range(-35, 35),
+          ry * cloudRandom.range(0.2, 0.5),
+          cloudRandom.range(-25, 25),
         );
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
         cloud.add(lobe);
@@ -1591,7 +1600,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         const ry = rx * cloudRandom.range(0.6, 0.85);
         lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.0));
         lobe.position.set(
-          cloudRandom.range(-30, 30),
+          cloudRandom.range(-25, 25),
           34 + cloudRandom.range(0, 16),
           cloudRandom.range(-22, 22),
         );
@@ -1600,13 +1609,12 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       }
       // Nearly one altitude inside a bank: the three clouds overlap in
       // the view at the same height, so the bank reads as merged.
-      cloud.position.set(cx, bank.alt + cloudRandom.range(-25, 25), cz);
+      // v14: ±15 m (was ±25) — tighter still, one layered mass.
+      cloud.position.set(cx, bank.alt + cloudRandom.range(-15, 15), cz);
       cloud.userData.speed = cloudRandom.range(1.5, 4);
-      if (bankSpeed === null) bankSpeed = cloud.userData.speed;
       clouds.push(cloud);
       group.add(cloud);
     }
-    if (skirtMesh) skirtMesh.userData.speed = bankSpeed ?? 2.5;
   }
 
   // v11: scene props from the title mockup — white sailboats gliding on
@@ -1841,7 +1849,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   }
 
   return {
-    group, groundAt, update, sunDir,
+    group, groundAt, meshHeight, update, sunDir,
     // How much scenery the generator planted (for the screenshot run's log).
     vegCounts: {
       trees: treesPlanted, palms: palmsPlanted, rocks: rocksPlanted, bushes: bushesPlanted,

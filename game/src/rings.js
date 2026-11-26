@@ -78,6 +78,24 @@ export function createCourse(random, seed, islands) {
     });
   }
 
+  // v14: clearance pass — the user's own playtest found ring 3 buried in a
+  // hillside, so every ring is lifted until its whole opening clears the
+  // ground. The check uses the analytic island height (the same function
+  // the terrain mesh is built from) with a 20 m margin over the 13 m ring
+  // radius (Gemini's fix prompt asks for 18-25 m; 20 m sits in the middle
+  // of that range), so the bottom of the ring sits at least 20 m above
+  // the slope even where the analytic height and the triangulated mesh
+  // disagree. The spawn is computed below from the (possibly lifted)
+  // first ring, so the player still starts 10 m above ring 1.
+  for (const ring of rings) {
+    const ground = islandHeightAt(islands, seed, ring.x, ring.z);
+    // 20 m over the ring radius: on a steep slope the triangulated mesh
+    // can sit a few metres above the analytic height, and the ring's lower
+    // rim must stay clear of that too.
+    const floor = ground + COURSE.ringRadius + 20;
+    if (ring.y < floor) ring.y = floor;
+  }
+
   const first = rings[0];
   const spawnHeading = headingTo(-1700, startZ, first.x, first.z);
   const spawn = {

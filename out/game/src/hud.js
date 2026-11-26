@@ -32,6 +32,9 @@ export function createHud() {
   }
 
   let msgTimer = 0;
+  // v14: the mid-air collision cue rides on this — main.js calls
+  // showMessage('MID-AIR COLLISION!', 2.5) when rivals.js fires the
+  // collision event, so the player is told even if the blast is far off.
   function showMessage(text, seconds) {
     msgEl.textContent = text;
     msgEl.style.opacity = '1';
@@ -187,5 +190,11 @@ export function createHud() {
     el('over-lines').innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
   }
 
-  return { update, showMessage, showObjective, showPanel, hidePanels, setOverLines };
+  /** v14: the game-over panel's title — "RACE COMPLETE!" on a finished
+   *  race, "Landed!" / "Crashed!" otherwise. */
+  function setOverTitle(text) {
+    el('over-title').textContent = text;
+  }
+
+  return { update, showMessage, showObjective, showPanel, hidePanels, setOverLines, setOverTitle };
 }

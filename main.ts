@@ -1,21 +1,32 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v13: the RACE — five planes on the same 12-ring
-// course, the player Caravan plus four AI rivals (blue, yellow, green,
-// orange liveries) that weave, bank and rubber-band around the player, with
-// scripted drama: a dive crash at 10 s, a ring-clip spin into the sea at
-// ~40 s, a mid-air collision at 40.8 s (fireball, shockwave, debris, falling
-// smoke), a near-miss flyby at 39-42 s with a whoosh and camera shake, and a
-// final-approach sea crash at ~130 s — every crash a real explosion with a
-// burning wreck and a smoke column, and the race HUD shows POS x/5. The
-// v12 Caravan stays (boxy cabin, high wing, tapered tail) but reads as a
-// plane from behind now: shorter wider fin, stronger dihedral with thicker
-// roots and bigger red tips, a bigger blur disc and red spinner, a longer
-// tail taper, a wider stabiliser and visible gear — and the cover/landing
-// chase cameras ride 5-6 m to the side, a 3/4 rear angle. The runway sits
-// on a flattened pad blended into the grass, the cockpit is a fuller
-// enclosed cabin (thin glareshield brow, bigger brighter dials, taller side
-// walls, longer headliner), the cloud banks merge into wide flat masses,
-// and the airfield grows a fence, a pickup truck and a terminal hut.
+// standard library only). v14: the race STAYS IN VIEW. The four rivals all
+// start AHEAD of the player (50/35/25/15 m) and faster (speedBias 1.10-1.15,
+// the low end of Gemini's 1.15-1.30x fix-prompt range), so the player
+// chases the pack from behind and sees them the whole run; the mid-air
+// collision is no longer a fixed 40.8 s clock at fixed ring 11 —
+// KUNING and HIJAU converge on a point tied to the player's live progress
+// (player's ring + 3), HOLD there orbiting, and collide only once the player
+// closes to 250 m (backstop 60 s / 800 m), so the blast goes off IN FRONT of
+// the player, in view. The blast is a classic explosion now: a big orange
+// fireball to 26 m, twenty dark smoke puffs, 28 debris shards, a small faint
+// shockwave — and both airframes are TORN IN TWO, front and rear halves
+// tumbling away burning and smoking for 8 s. A HUD flash ("MID-AIR
+// COLLISION!"), a boom and a camera shake announce it. The rings are
+// clearance-checked: every ring sits at least 20 m above the terrain (the
+// user's playtest found ring 3 buried in a hillside; Gemini's fix prompt
+// asks for 18-25 m). The cover freezes 1.5 s after the blast (35.5 s),
+// so the split halves and fresh smoke fill the frame ahead of the player.
+// all 12 rings shows "RACE COMPLETE!" with fireworks over the runway,
+// confetti, a fanfare and a results panel (position, score, time). The
+// cockpit closes tighter (bigger dial numerals at 100 px with anisotropy 8,
+// darker narrower headliner, second rear arch, glassier glazing, corner
+// gussets) and the dive flies straight for its first 1.5 s, so no rival
+// ever overlaps the cockpit frame. The cloud skirts are DELETED — the flat
+// grey discs Gemini saw in all four v13 shots are gone, replaced by
+// rounded lower lobes in cool blue-grey #d7e2ee; the banks merge tighter. The runway blend is wider still (60 m flat shoulders,
+// 250 m fades) so the strip sits flush in the grass. v13's race stays:
+// five planes, dive crash, ring-clip spin, near-miss flyby with whoosh and
+// shake, POS x/5 HUD, the v12 Caravan and the 3/4 rear chase cameras.
 // The v11 vibrant premium grade stays: bright blue sky #168BFA, tropical
 // turquoise sea #00C5D9, vivid green grass #42B83C, warm cream sand
 // #E8D39A, deep navy UI panels #063C85 with cyan glow outlines, glossy
@@ -26,6 +37,9 @@
 // RESCUE FLIGHT branding; the rings are thick gold with sparkle particles;
 // the sea has real depth (turquoise shallows to deep azure) and wave arcs;
 // sailboats, a lighthouse and beach houses fill the bay.
+// v14 probe: probe-v14.mjs checks ring clearance against the real mesh,
+// the full-run race (collision timing, split halves, rival visibility)
+// and a live-play keyboard run, and verifies the W/S pitch direction.
 // The game is
 // this directory's game/ folder: plain static browser loads offline
 // (game/index.html and its ES modules, plus the vendored Three.js build

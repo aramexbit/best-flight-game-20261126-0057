@@ -19,7 +19,7 @@ import { createAudio } from './audio.js';
 import { createRivals } from './rivals.js';
 import { createEffects } from './effects.js';
 import { ACTION_CAMERA, ACTION_CONFIRM, ACTION_MUTE, ACTION_PAUSE, ACTION_RESTART, createInput } from './input.js';
-import { stageShot } from './shots.js';
+import { stageShot, autopilotTo } from './shots.js';
 
 /** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped. */
 const MAX_FRAME = 0.25;
@@ -53,6 +53,14 @@ const audio = createAudio();
 const effects = createEffects(THREE, renderer.scene);
 const rivals = createRivals(THREE, seed, islands, effects);
 renderer.scene.add(rivals.group);
+
+// v14: debug handles for the probe (probe-v14.mjs) — the live world, the
+// autopilot helper and a log of race events (collisions, with time and
+// position), so a full run can be verified from outside the page.
+window.__debug = { flight, course, terrain, rivals, effects };
+window.__autopilotTo = autopilotTo;
+window.__raceEvents = [];
+window.__scene = renderer.scene;
 
 function readBest() {
   try {
@@ -95,7 +103,8 @@ function runShot(name) {
   // player, so the cover catches the flyby and the collisions and the
   // landing catches the burning wreck.
   const scene = stageShot(name, { flight, course, terrain }, (dt, t) => {
-    rivals.update(dt, t, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp));
+    rivals.update(dt, t, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp),
+      (kind, detail) => window.__raceEvents.push({ kind, time: t, ...detail }));
     effects.update(dt);
   });
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
@@ -126,7 +135,11 @@ function runShot(name) {
   if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -30, 4.5); }
   else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, -6, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
-  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, -5, 2.2); }
+  // v14: landing chase pulled back a touch (14 m back, 2.6 m up, was
+  // 12 m / 2.2 m) and closer to centre (lateral -4, was -5) — in v13 the
+  // player's plane sat too big and too close in the landing frame and
+  // covered part of the runway; a step back shows the whole strip.
+  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(14, -4, 2.6); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;
@@ -210,14 +223,38 @@ function runGame() {
       const timeBonus = Math.max(0, Math.round((COURSE.parTime - flight.state.elapsed) * SCORE.timeBonusPerSecond));
       const smooth = Math.abs(flight.state.verticalSpeed) < 3 ? SCORE.smoothLanding : 0;
       flight.state.score += SCORE.landing + smooth + timeBonus;
-      lines = [
-        `Landed! +${SCORE.landing} landing${smooth ? `, +${smooth} smooth` : ''}${timeBonus ? `, +${timeBonus} time` : ''}`,
-        `Score ${flight.state.score}`,
-        `Best ${Math.max(best, flight.state.score)}`,
-      ];
-      audio.landChord();
-      announce('Landed on the runway.');
+      const mins = Math.floor(flight.state.elapsed / 60);
+      const secs = Math.floor(flight.state.elapsed % 60);
+      const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
+      if (flight.state.ringsPassed >= COURSE.ringCount) {
+        // v14: THE FINISH — the user landed after all 12 rings and got
+        // nothing at all in v13, so the finish is now a moment: a
+        // RACE COMPLETE banner, fireworks over the runway, confetti over
+        // the plane, a fanfare, and a results panel with the race
+        // position, score and time.
+        hud.setOverTitle('🏁 RACE COMPLETE!');
+        lines = [
+          `Position ${rivals.playerPosition(flight, course)}`,
+          `Score ${flight.state.score}`,
+          `Time ${timeStr}`,
+          `Best ${Math.max(best, flight.state.score)}`,
+        ];
+        effects.fireworkShow(course.runway.x, course.runway.height, course.runway.z);
+        effects.confetti(flight.state.x, flight.state.y + 4, flight.state.z);
+        audio.fanfare();
+        announce('Race complete!');
+      } else {
+        hud.setOverTitle('Landed!');
+        lines = [
+          `Landed! +${SCORE.landing} landing${smooth ? `, +${smooth} smooth` : ''}${timeBonus ? `, +${timeBonus} time` : ''}`,
+          `Score ${flight.state.score}`,
+          `Best ${Math.max(best, flight.state.score)}`,
+        ];
+        audio.landChord();
+        announce('Landed on the runway.');
+      }
     } else {
+      hud.setOverTitle('Crashed!');
       lines = [
         `Crashed after ${flight.state.ringsPassed} of ${COURSE.ringCount} rings`,
         `Score ${flight.state.score}`,
@@ -307,7 +344,19 @@ function runGame() {
     else if (events & EVENT_CRASH) endGame(false);
     // v13: the race flies with the player — rivals step on the player's
     // clock, and the explosion smoke advances on the same fixed step.
-    rivals.update(STEP, s.elapsed, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp));
+    // v14: the collision callback — when rivals.js fires the mid-air
+    // collision, log it, flash the HUD, boom and shake, so the player
+    // KNOWS a blast went off even if it is at the edge of view (the
+    // user's playtest report: no explosion ever seen while playing).
+    rivals.update(STEP, s.elapsed, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp),
+      (kind, detail) => {
+        window.__raceEvents.push({ kind, time: s.elapsed, ...detail });
+        if (kind === 'collision') {
+          hud.showMessage('💥 MID-AIR COLLISION!', 2.5);
+          audio.boom();
+          renderer.triggerShake(0.5);
+        }
+      });
     effects.update(STEP);
     audio.update(s.throttle, s.speed);
   }
@@ -324,6 +373,10 @@ function runGame() {
       }
     } else {
       accumulator = 0;
+      // v14: the effects keep advancing on the game-over screen, so the
+      // finish fireworks and confetti animate behind the results panel
+      // instead of freezing on their first frame.
+      if (screen === 'over') effects.update(1 / 60);
     }
     hud.update(hudView(), 1 / 60);
     renderer.draw(flight, planeApi, ringMeshes, terrain, 1 / 60, now / 1000);

@@ -436,20 +436,31 @@ export function buildPlane(THREE, livery = null) {
   // was 0.55), with two cross ribs and a centre spine, so the roof reads
   // as a built cabin ceiling instead of a short shelf that stops above
   // the windshield.
-  const roofCentre = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.04, 0.85), shellMat);
+  // v14: the headliner centre is NARROWER (0.95 m, was 1.15) and DARKER
+  // (roofMat #5a5f68, was the pale shell grey) — in v13 the wide pale
+  // centre slab filled the top-right of the cockpit frame and read as a
+  // loose grey board. A narrower, darker roof reads as a molded ceiling.
+  // A second rear arch (half-torus at z 0.55) joins the roof to the rear
+  // posts, so the canopy cage closes at the back instead of ending open.
+  const roofMat = new THREE.MeshStandardMaterial({ color: '#5a5f68', roughness: 0.7, metalness: 0.1 });
+  const roofCentre = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.04, 0.85), roofMat);
   roofCentre.position.set(0, 0.71, 0.475);
   roofCentre.rotation.x = -0.30;
   dash.add(roofCentre);
   for (const ribZ of [0.70, 0.88]) {
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.03, 0.06), shellMat);
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.03, 0.06), roofMat);
     rib.position.set(0, 0.71 + (ribZ - 0.475) * 0.30 + 0.02, ribZ);
     rib.rotation.x = -0.30;
     dash.add(rib);
   }
-  const roofSpine = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.85), shellMat);
+  const roofSpine = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.85), roofMat);
   roofSpine.position.set(0, 0.73, 0.475);
   roofSpine.rotation.x = -0.30;
   dash.add(roofSpine);
+  const rearArch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.045, 8, 28, Math.PI), shellMat);
+  rearArch.scale.set(1, 0.24, 1);
+  rearArch.position.set(0, 0.42, 0.55);
+  dash.add(rearArch);
   for (const side of [-1, 1]) {
     const roofSide = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.85), shellMat);
     roofSide.position.set(side * 0.80, 0.55, 0.475);
@@ -459,9 +470,11 @@ export function buildPlane(THREE, livery = null) {
   }
   // v12: opacity 0.16 (was 0.10) — the glazing reads as glass, not open
   // sky, so the windshield and side windows are visible as panes.
+  // v14: opacity 0.22 — the v13 cockpit still read as open canopy in
+  // places; a touch more glass presence closes the cabin visually.
   const glassMat = new THREE.MeshStandardMaterial({
     color: PALETTE.cockpitGlass, roughness: 0.05, metalness: 0.2,
-    transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false,
+    transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false,
   });
   const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.84, 0.34), glassMat);
   windshield.position.set(0, 0.40, 0.0);
@@ -512,6 +525,13 @@ export function buildPlane(THREE, livery = null) {
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.5), frameMat);
     handle.position.set(-side * 0.04, -0.08, 0);
     wallGroup.add(handle);
+    // v14: gusset — a small block closing the front-bottom corner where
+    // the wall meets the console and the A-pillar, so no sliver of sky
+    // shows through at the cockpit's lower corners.
+    const gusset = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.24, 0.24), shellMat);
+    gusset.position.set(0, 0.02, -0.28);
+    gusset.rotation.x = 0.5;
+    wallGroup.add(gusset);
   }
   // v6: the control yoke — a short column rising out of the console shelf
   // with a crossbar handle and two grips, sitting just below the panel's
@@ -639,15 +659,23 @@ export function buildPlane(THREE, livery = null) {
     x.fillStyle = '#1a1c22';
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.font = 'bold 88px system-ui, sans-serif';
+    // v14: numbers 100 px (was 88) and labels 64 px (was 58) — the v13
+    // cockpit shot's dials still read small, and the main gauges are the
+    // hero of the cockpit frame; bigger numerals, same canvas.
+    x.font = 'bold 100px system-ui, sans-serif';
     x.fillText('12', 256, 104);
     x.fillText('3', 408, 256);
     x.fillText('6', 256, 408);
     x.fillText('9', 104, 256);
-    x.font = 'bold 58px system-ui, sans-serif';
+    x.font = 'bold 64px system-ui, sans-serif';
     x.fillText(label, 256, 336);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
+    // Gemini's fix prompt: high-DPI canvas textures with anisotropy so
+    // the dial numbers stay sharp at 1920x1080 and 1280x720 — the canvas
+    // is already 512x512; anisotropy 8 (three.js clamps it to the
+    // hardware maximum) keeps the numerals crisp at glancing angles.
+    tex.anisotropy = 8;
     return tex;
   }
   // v9: two smaller live gauges fill the widened panel ends — FUEL (left)

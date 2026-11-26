@@ -78,6 +78,14 @@ export const COURSE = {
 // All times are seconds from run start; the schedule is deterministic,
 // so the same seed and the same player line give the same race every run
 // (and the same screenshots). See rivals.js for what each event does.
+// v14: the mid-air collision is no longer a fixed clock time. The rivals
+// converge from 26.8 s (collisionAt - 14) and HOLD near the meeting point
+// until the player closes to collisionTriggerDist — so the blast goes off
+// IN FRONT of the player, in view, instead of kilometres away on a
+// schedule the player cannot see (the user's own playtest report: no
+// explosion ever visible while playing). collisionFallbackAt is the clock
+// backstop: after that, the rivals collide as soon as the player is
+// within collisionCloseDist.
 export const RACE = {
   rivalCount: 4,
   // R1 blue: extreme dive, so the cockpit shot at 12 s catches it smoking.
@@ -89,9 +97,32 @@ export const RACE = {
   diveCrashAt: 11.5,
   // R4 orange: clips ring 11, spins two seconds, dives, hits the sea.
   clipCrashAt: 35,
-  // R2 yellow + R3 green: mid-air collision — the cover shot at 41 s
-  // catches the fireball, the shockwave and both rivals tumbling.
+  // R2 yellow + R3 green: mid-air collision — the cover shot freezes
+  // ~1-2 s after the blast (PLAY_SECONDS in shots.js is set to the
+  // blast time + 1.5 s), so it catches the two split airframes tumbling
+  // through fresh dark smoke with the fireball still bright.
+  // v14: collisionAt is now only the nominal time (the converge starts
+  // 14 s earlier); the actual blast is player-triggered, see above.
   collisionAt: 40.8,
+  // v14: the player must be this close (metres) to the meeting point for
+  // the collision to fire — close enough that the fireball, the split
+  // halves and the dark smoke fill the forward view. 250 m (was 200):
+  // the diag showed the player slipping past 200 m in the seconds the
+  // second rival needed to arrive, while 250 m still reads clearly.
+  collisionTriggerDist: 250,
+  // v14: after this clock time, the collision fires as soon as the player
+  // is within collisionCloseDist — so a slow player still gets the blast
+  // in front of them instead of never seeing it at all.
+  // (A collisionEarliestAt floor of 37 s was tried and REMOVED: the
+  // player passes the meeting point at ~36-37 s, so a blast held to 37 s
+  // goes off behind the player and the cover freeze at 41 s sees nothing
+  // but empty sky ahead. The cover timing is fixed the other way — the
+  // cover freezes ~1.5 s after the blast instead, see PLAY_SECONDS.)
+  collisionFallbackAt: 60,
+  // v14: 800 m (was 600) — the diag showed the player orbiting the runway
+  // at 635-750 m from the meeting point after the course, so the 600 m
+  // backstop never caught it; 800 m does, as a last resort.
+  collisionCloseDist: 800,
   // R1 blue: near-miss flyby down the player's left side, 39-42 s.
   flybyAt: 39,
   // Seconds a crashed rival stays out before rejoining. 3 s (was 6):

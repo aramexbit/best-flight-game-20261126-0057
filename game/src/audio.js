@@ -138,6 +138,60 @@ export function createAudio() {
     src.stop(t + 0.7);
   }
 
+  /**
+   * v14: the mid-air collision boom — a noise burst through a low-pass
+   * plus a sine dropping 90→30 Hz, 1.2 s, so the blast is heard even
+   * when it is off-screen. Silent when muted or before the audio
+   * context exists (no gesture yet).
+   */
+  function boom() {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime;
+    const len = ctx.sampleRate * 1.2;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.7, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    src.start(t);
+    src.stop(t + 1.2);
+    const drop = ctx.createOscillator();
+    drop.type = 'sine';
+    drop.frequency.setValueAtTime(90, t);
+    drop.frequency.exponentialRampToValueAtTime(30, t + 1.0);
+    const dropGain = ctx.createGain();
+    dropGain.gain.setValueAtTime(0.5, t);
+    dropGain.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+    drop.connect(dropGain);
+    dropGain.connect(master);
+    drop.start(t);
+    drop.stop(t + 1.1);
+  }
+
+  /**
+   * v14: the finish fanfare — a rising C-E-G-C' arpeggio plus a final
+   * chord, for the RACE COMPLETE moment after landing with 12 rings.
+   */
+  function fanfare() {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime;
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => tone(freq, t + i * 0.12, 0.5, 'triangle', 0.2));
+    tone(523, t + 0.55, 1.2, 'sine', 0.14);
+    tone(659, t + 0.55, 1.2, 'sine', 0.14);
+    tone(784, t + 0.55, 1.2, 'sine', 0.16);
+    tone(1047, t + 0.55, 1.2, 'sine', 0.14);
+  }
+
   function landChord() {
     if (!ctx || muted) return;
     const t = ctx.currentTime;
@@ -158,5 +212,5 @@ export function createAudio() {
     windGain.gain.setTargetAtTime(0, t, 0.2);
   }
 
-  return { start, update, chime, thud, landChord, whoosh, setMuted, stopEngine };
+  return { start, update, chime, thud, landChord, whoosh, boom, fanfare, setMuted, stopEngine };
 }

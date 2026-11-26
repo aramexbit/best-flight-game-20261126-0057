@@ -16,12 +16,17 @@ const START_SECONDS = 8;
 // reads as hanging/stalled in pitch in the cover shot (Gemini v10). At 40 s
 // it is on the same leg but earlier, on a leveler stretch over the same
 // tree-covered western slopes, so the attitude reads as smooth flight.
-// v11 (iterasi 2): 41 s — the 40 s frame is level, but the ring sits small
-// and half behind a hill crest; one second further along brings the plane
-// ~55 m closer to ring 11 (bigger gate, clearer action) while the leg is
-// still level. This is staging only: the flight model and the shot
-// cameras are untouched.
-const PLAY_SECONDS = 41;
+// v14: 35.5 s (was 41) — the cover must freeze ~1.5 s AFTER the mid-air
+// blast, not 7 s after it. The collision now fires player-triggered at
+// ~34 s (seed 1: 33.9 s) at the meeting point past ring 10, and the
+// player flies past that point at ~36.5 s — so at 41 s the blast is
+// 300 m BEHIND the chase camera and the cover shows empty sky. At
+// 35.5 s the blast is 1.6 s old and ~55 m ahead: fireball near full
+// size, dark smoke fresh, the two split airframes still tumbling close
+// together in the centre of the frame, with the next ring beyond them.
+// This is staging only: the flight model and the shot cameras are
+// untouched.
+const PLAY_SECONDS = 35.5;
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world
