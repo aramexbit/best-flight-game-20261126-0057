@@ -5,7 +5,7 @@
 [![reward](https://make.fun/badge/best-flight-game-20261126-0057/aramexbit/best-flight-game-20261126-0057/reward.svg)](https://make.fun/bounty/best-flight-game-20261126-0057?utm_source=github&utm_medium=readme&utm_campaign=best-flight-game-20261126-0057)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A bright daytime flight game: fly a propeller tourer through 12 glowing rings over a tropical archipelago, then land on the runway of the big eastern island. Three.js, fully offline — no network requests, no assets to download. Version 5 adds a real 3D cockpit console, a ground shadow under the plane, and a working airfield around the runway.
+A bright daytime flight game: fly a propeller tourer through 12 glowing rings over a tropical archipelago, then land on the runway of the big eastern island. Three.js, fully offline — no network requests, no assets to download. Version 6 adds a richer tropical world — patchwork terrain, denser jungle and beach foliage, a framed cockpit with labelled dials and a yoke, a bigger ground shadow, and a cohesive airfield cluster.
 
 ## How to play
 
@@ -17,12 +17,12 @@ A bright daytime flight game: fly a propeller tourer through 12 glowing rings ov
 ## Features
 
 - Arcade flight model with thrust, drag, climb cost, stall and banked turns.
-- Seeded procedural archipelago: 9 islands, ridged heightmap terrain, turquoise shallows with reef lines, drifting volumetric clouds, midday sun and haze. Clustered 3D trees, palms, boulders and shrubs — every trunk snapped to the rendered ground — plus dense jungle canopies, coastal cliffs and a soft sand-to-grass shoreline. `?seed=N` rebuilds the same world.
+- Seeded procedural archipelago: 9 islands, ridged heightmap terrain with a dry-grass patchwork and a graded dirt apron around the runway, turquoise shallows with reef lines and a speckled water surface, drifting volumetric clouds, midday sun and haze. Clustered 3D trees, palms, boulders and shrubs — every trunk snapped to the rendered ground — plus dense jungle canopies, clustered coastal cliffs and a soft sand-to-grass shoreline. `?seed=N` rebuilds the same world.
 - 12-ring course planned from the runway backwards, with a pulsing next-ring indicator.
 - Full HUD: altitude (ft), speed (kts), heading compass strip, attitude ball, fuel and throttle bars, timer, score, ring counter.
 - Procedural Web Audio: engine drone, wind, ring chimes, landing chord — no audio files.
-- Chase and cockpit cameras — the cockpit is a real 3D console with big light dials and a sloped glareshield — title / pause / game-over screens, best score in localStorage. A soft blob shadow follows the plane over land and sea.
-- The runway island is a working airfield: full markings, flush light fixtures, a dirt taxiway, an apron, a hangar and a windsock, ringed by dense trees.
+- Chase and cockpit cameras — the cockpit is a real 3D console with labelled dials (ticks, numbers, redline), a canopy frame, side walls and a control yoke, under a sloped glareshield — title / pause / game-over screens, best score in localStorage. A big soft blob shadow follows the plane over land and sea.
+- The runway island is a working airfield: full markings, tyre marks and a speckled asphalt surface, flush light fixtures, a dirt taxiway, an apron, a hangar, a fuel shed with drums and a windsock, ringed by dense trees.
 - Deterministic screenshot scenes: `?shot=start|play|cockpit|landing&seed=N`.
 
 ## Run it

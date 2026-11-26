@@ -83,6 +83,9 @@ export const PALETTE = {
   // the user asked for a bright daytime scene that is pleasant to look at.
   // The sea now runs bright turquoise in the shallows to deep blue offshore,
   // so the coast reads as a tropical shore at a glance.
+  // v6: the ground gets two more colours (grassDry, dirt) because the v5
+  // blind test read the hills as one smooth green heightmap — the patchwork
+  // below is what breaks that up.
   skyTop: '#2E7FC2',
   skyHorizon: '#BFE3F2',
   fog: '#cfe8f5',
@@ -95,6 +98,11 @@ export const PALETTE = {
   grass: '#58a04e',
   forest: '#2f7a38',
   grassLight: '#7cb85c',
+  // v6: dry grass for the terrain patchwork and dirt for the graded apron
+  // around the runway — two more ground colours, so the hills read as
+  // worked island ground instead of one flat green wash.
+  grassDry: '#93b45a',
+  dirt: '#a98f66',
   rock: '#7a6a5e',
   snow: '#f2ede6',
   ring: '#FFD477',

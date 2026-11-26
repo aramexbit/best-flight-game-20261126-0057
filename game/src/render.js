@@ -179,11 +179,16 @@ export function createRenderer(canvas, THREE, groups) {
     const shadowZ = s.z + (sunDir ? -sunDir.z / sunH * offLen : 0);
     const floorY = Math.max(terrainApi && terrainApi.groundAt ? terrainApi.groundAt(shadowX, shadowZ) : 0, 0.6);
     const altAbove = Math.max(0, s.y - floorY);
-    const shadowScale = 1 + altAbove * 0.0015;
+    // v6: a bigger, darker shadow — the v5 blob was small and sat at the
+    // frame edge in the cover shot, so Gemini read "no visible ground
+    // shadow". It grows faster with altitude now and never fades below 0.12.
+    const shadowScale = 1 + altAbove * 0.0025;
     shadowGroup.position.set(shadowX, floorY + 0.5, shadowZ);
     shadowGroup.rotation.y = -s.yaw;
-    shadowMesh.scale.set(5.8 * shadowScale, 4.2 * shadowScale, 1);
-    shadowMesh.material.opacity = Math.max(0.05, Math.min(0.42, 0.42 - altAbove * 0.0011));
+    shadowMesh.scale.set(7.5 * shadowScale, 5.5 * shadowScale, 1);
+    // v6: opacity floor 0.12 and ceiling 0.55 (was 0.05 / 0.42) — the shadow
+    // stays readable at altitude instead of washing out to nothing.
+    shadowMesh.material.opacity = Math.max(0.12, Math.min(0.55, 0.55 - altAbove * 0.0013));
 
     // The ring guide chevron fades as the plane closes in, so it needs the
     // plane's position (the flight state carries x, y, z).

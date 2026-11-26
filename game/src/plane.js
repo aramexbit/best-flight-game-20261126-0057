@@ -149,6 +149,11 @@ export function buildPlane(THREE) {
   const trim = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.13), red);
   trim.position.set(0, 0.225, 0);
   dash.add(trim);
+  // v6: the same red trim along the bottom edge, so the panel is framed
+  // top and bottom and reads as one finished housing.
+  const trimBottom = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.13), red);
+  trimBottom.position.set(0, -0.225, 0);
+  dash.add(trimBottom);
   // Glareshield: wider than the panel, shallow and high, sloping gently down
   // toward the pilot — it gives the panel a real top surface without
   // overhanging the dials. (First try: 0.45 deep at 0.5 rad overhung the panel
@@ -189,6 +194,50 @@ export function buildPlane(THREE) {
     base.position.set(side * 0.60, -0.19, 0.03);
     dash.add(base);
   }
+  // v6: canopy framing — a top arch bar joining the pillar tops, side rails
+  // running back from it, and side walls at the panel ends, so the cockpit
+  // reads as a framed canopy built into the airframe instead of a lone box
+  // floating in front of the camera. (Gemini v5: "no canopy frame, side
+  // walls, yoke/stick".) The arch sits just above the panel top; the rails
+  // run back toward the pilot; the walls stand at the panel's side edges,
+  // angled in, so the view is framed left and right without blocking the
+  // water and horizon below.
+  const frameMat = new THREE.MeshStandardMaterial({ color: '#22242a', roughness: 0.85 });
+  const arch = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.05, 0.06), frameMat);
+  arch.position.set(0, 0.44, 0.0);
+  dash.add(arch);
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.55), frameMat);
+    rail.position.set(side * 0.64, 0.42, 0.28);
+    dash.add(rail);
+    // Side wall: an angled interior panel at the dash end, with a dark sill
+    // on top — the cockpit now has sides, not just a front face.
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.55), consoleMat);
+    wall.position.set(side * 0.70, -0.10, 0.15);
+    wall.rotation.y = -side * 0.3;
+    dash.add(wall);
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.55), frameMat);
+    sill.position.set(side * 0.70, 0.16, 0.15);
+    sill.rotation.y = -side * 0.3;
+    dash.add(sill);
+  }
+  // v6: the control yoke — a short column rising out of the console shelf
+  // with a crossbar handle and two grips, sitting just below the panel's
+  // bottom edge. It anchors the bottom of the cockpit view as part of the
+  // aircraft, and it does not cover the gauges or the indicator dots.
+  const yokeCol = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.26, 8), frameMat);
+  yokeCol.position.set(0, -0.32, 0.14);
+  yokeCol.rotation.x = 0.4;
+  dash.add(yokeCol);
+  const yokeBar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.045, 0.045), frameMat);
+  yokeBar.position.set(0, -0.22, 0.21);
+  dash.add(yokeBar);
+  for (const side of [-1, 1]) {
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.13, 0.05), frameMat);
+    grip.position.set(side * 0.14, -0.20, 0.21);
+    grip.rotation.z = -side * 0.12;
+    dash.add(grip);
+  }
   // Three small indicator dots, FLUSH on the panel face below the middle
   // gauge (z 0.065, just proud of the 0.06 face) — green, amber, red.
   const dotColors = [0x2aff5e, 0xffd94d, 0xff5d4d];
@@ -200,16 +249,63 @@ export function buildPlane(THREE) {
     dot.position.set(-0.08 + d * 0.08, -0.17, 0.065);
     dash.add(dot);
   }
+  // v6: the dial face is a canvas texture — ticks, numbers at 12/3/6/9, a
+  // redline arc and a small label drawn once — so each gauge reads as a
+  // real instrument instead of a blank cream clock. (The v5 face was a
+  // plain cream disc with separate tick meshes.) One texture per label:
+  // airspeed, altitude, heading.
+  function makeDialFace(label) {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const x = c.getContext('2d');
+    x.fillStyle = '#f2ead2';
+    x.fillRect(0, 0, 256, 256);
+    // Redline arc across the top-right of the dial.
+    x.strokeStyle = '#c83c32';
+    x.lineWidth = 10;
+    x.beginPath();
+    x.arc(128, 128, 104, -Math.PI / 2 - 0.18, -Math.PI / 2 + 0.96);
+    x.stroke();
+    // Twelve tick marks, longer at the quarters.
+    for (let t = 0; t < 12; t += 1) {
+      const a = (t / 12) * Math.PI * 2;
+      const long = t % 3 === 0;
+      const r0 = long ? 86 : 96;
+      x.strokeStyle = '#2a2c33';
+      x.lineWidth = long ? 7 : 4;
+      x.beginPath();
+      x.moveTo(128 + Math.sin(a) * r0, 128 - Math.cos(a) * r0);
+      x.lineTo(128 + Math.sin(a) * 108, 128 - Math.cos(a) * 108);
+      x.stroke();
+    }
+    // Numbers at 12 / 3 / 6 / 9 and the instrument label at the bottom.
+    // The needle never sweeps the bottom of the dial (its range is the
+    // upper ~240°), so the label down there stays uncovered.
+    x.fillStyle = '#2a2c33';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.font = 'bold 34px system-ui, sans-serif';
+    x.fillText('12', 128, 52);
+    x.fillText('3', 204, 128);
+    x.fillText('6', 128, 204);
+    x.fillText('9', 52, 128);
+    x.font = 'bold 24px system-ui, sans-serif';
+    x.fillText(label, 128, 168);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
   const gaugeDefs = [
-    { x: -0.44, pin: 0x7dff9a },
-    { x: 0, pin: 0xffd94d },
-    { x: 0.44, pin: 0x4fc3f7 },
+    { x: -0.44, pin: 0x7dff9a, label: 'KTS' },
+    { x: 0, pin: 0xffd94d, label: 'ALT' },
+    { x: 0.44, pin: 0x4fc3f7, label: 'HDG' },
   ];
   const needles = [];
   for (const def of gaugeDefs) {
     const g = new THREE.Group();
     g.position.set(def.x, 0.02, 0.065);
-    // v5: big LIGHT dials — cream face, dark ticks, dark needle — so the
+    // v6: big LIGHT dials — cream face, dark ticks, dark needle — so the
     // instruments read at a glance instead of hiding in the dark panel.
     const rim = new THREE.Mesh(
       new THREE.TorusGeometry(0.165, 0.016, 8, 28),
@@ -218,21 +314,10 @@ export function buildPlane(THREE) {
     g.add(rim);
     const face = new THREE.Mesh(
       new THREE.CircleGeometry(0.156, 24),
-      new THREE.MeshBasicMaterial({ color: 0xf2ead2 }),
+      new THREE.MeshBasicMaterial({ map: makeDialFace(def.label) }),
     );
     face.position.z = 0.005;
     g.add(face);
-    // Twelve tick marks around the dial, longer at the quarters.
-    for (let t = 0; t < 12; t += 1) {
-      const a = (t / 12) * Math.PI * 2;
-      const tick = new THREE.Mesh(
-        new THREE.BoxGeometry(0.01, t % 3 === 0 ? 0.042 : 0.028, 0.004),
-        new THREE.MeshBasicMaterial({ color: 0x2a2c33 }),
-      );
-      tick.position.set(Math.sin(a) * 0.132, Math.cos(a) * 0.132, 0.01);
-      tick.rotation.z = -a;
-      g.add(tick);
-    }
     const needlePivot = new THREE.Group();
     const needleGeo = new THREE.BoxGeometry(0.018, 0.115, 0.006);
     needleGeo.translate(0, 0.048, 0);

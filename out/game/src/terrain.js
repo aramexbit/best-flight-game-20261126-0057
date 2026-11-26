@@ -153,6 +153,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const sand = new THREE.Color(PALETTE.sand);
   const grass = new THREE.Color(PALETTE.grass);
   const grassLight = new THREE.Color(PALETTE.grassLight);
+  const grassDry = new THREE.Color(PALETTE.grassDry);
+  const dirt = new THREE.Color(PALETTE.dirt);
   const forest = new THREE.Color(PALETTE.forest);
   const rock = new THREE.Color(PALETTE.rock);
   const snow = new THREE.Color(PALETTE.snow);
@@ -178,12 +180,27 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     else if (h < beachTop + 10) tmp.copy(sand).lerp(grass, (h - beachTop) / 10);
     else if (h < 150) {
       // v3: light-grass patches break the flat green, then forest in the folds.
+      // v6: a finer patchwork on top — dry-grass patches at ~25 m scale and a
+      // high-frequency mottle with a hue shift, so the ground reads as
+      // textured island grass from the air instead of one smooth green wash
+      // (Gemini v5: "a bare heightmap test").
       tmp.copy(grass).lerp(grassLight, Math.max(0, fbm(x * 0.006 + 4.2, z * 0.006 - 2.8, 2)) * 0.6);
       tmp.lerp(forest, Math.max(0, fbm(x * 0.004, z * 0.004, 2)) * 0.7);
+      const dry = Math.max(0, fbm(x * 0.018 + 11.7, z * 0.018 - 6.3, 2));
+      tmp.lerp(grassDry, dry * 0.55);
+      const mottle = fbm(x * 0.045 + 3.3, z * 0.045 - 8.8, 2);
+      tmp.offsetHSL(mottle * 0.02, 0, mottle * 0.05);
     }
     else if (h < 270) tmp.copy(forest).lerp(rock, Math.min(1, slope / 22));
     else if (h < 350) tmp.copy(rock);
     else tmp.copy(rock).lerp(snow, Math.min(1, (h - 350) / 40));
+    // v6: the graded dirt apron around the runway — the flattened strip's
+    // blend zone reads as worked dirt instead of the same green as the
+    // hills, so the runway sits IN the hillside instead of floating on it
+    // (Gemini v5: "the runway looks a bit flat/floating where it meets the
+    // rolling green hill").
+    const rb = runwayBlend(x, z);
+    if (rb > 0.04 && h > beachTop) tmp.lerp(dirt, rb * 0.6);
     if (slope > 22) tmp.lerp(rock, 0.55);
     tmp.offsetHSL(0, 0, jitter);
     colors[i * 3] = tmp.r;
@@ -229,9 +246,33 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // and a short approach-light row before the western threshold — so the
   // runway reads from its shape and markings first, not from tiny lights. ---
   const stripAngle = -Math.atan2(dirZ, dirX);
+  // v6: the same speckle treatment on the asphalt — a near-white grain over
+  // the dark grey, so the runway has a surface instead of reading as one
+  // flat grey slab (Gemini v5: "the runway itself is completely devoid of
+  // texture detail").
+  const stripTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#e8e8e8';
+    ctx.fillRect(0, 0, 128, 128);
+    const rnd = createRandom(seed + 913);
+    for (let i = 0; i < 128 * 128 * 0.4; i += 1) {
+      const v = rnd.range(-0.16, 0.16);
+      ctx.fillStyle = v > 0 ? `rgba(255,255,255,${v})` : `rgba(0,0,0,${-v})`;
+      ctx.fillRect(rnd.int(0, 128), rnd.int(0, 128), 1, 1);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(12, 1);
+    return tex;
+  })();
   const strip = new THREE.Mesh(
     new THREE.PlaneGeometry(COURSE.runwayLength, COURSE.runwayWidth),
-    new THREE.MeshStandardMaterial({ color: '#555A55', roughness: 0.85 }),
+    new THREE.MeshStandardMaterial({ color: '#555A55', map: stripTex, roughness: 0.85 }),
   );
   strip.rotation.x = -Math.PI / 2;
   strip.rotation.z = stripAngle;
@@ -278,6 +319,20 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       runway.z + dirZ * along,
     );
     group.add(dash);
+  }
+  // v6: tyre marks — two dark wheel tracks down the strip, so the asphalt
+  // carries wear instead of reading as one untouched grey slab.
+  const tyreMat = new THREE.MeshStandardMaterial({ color: '#3d3f42', roughness: 0.9, transparent: true, opacity: 0.55 });
+  for (const side of [-1, 1]) {
+    const tyre = new THREE.Mesh(new THREE.PlaneGeometry(COURSE.runwayLength - 160, 1.1), tyreMat);
+    tyre.rotation.x = -Math.PI / 2;
+    tyre.rotation.z = stripAngle;
+    tyre.position.set(
+      runway.x + perpX * side * 3.4,
+      runway.height + 0.42,
+      runway.z + perpZ * side * 3.4,
+    );
+    group.add(tyre);
   }
   // Threshold piano keys (six 3 m stripes), aiming points and the runway
   // number at each end, in order from the threshold inward. v4: the keys are
@@ -417,6 +472,41 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   wsSock.rotation.z = -Math.PI / 2 - 0.25;
   wsSock.position.set(wsx + 1.1, meshHeight(wsx, wsz) + 5.7, wsz);
   group.add(wsSock);
+  // v6: a fuel shed and a drum cluster beside the hangar, so the airfield
+  // has a second building and the hangar is not a lone box on a bare slope
+  // (Gemini v5: "the red-roofed building off to the right sits isolated on
+  // a bare green slope"). The shed, drums, hangar and windsock now form one
+  // airfield cluster at the apron end of the taxiway.
+  const shedX = runway.x + perpX * 96 + dirX * 18;
+  const shedZ = runway.z + perpZ * 96 + dirZ * 18;
+  const shed = new THREE.Group();
+  const shedWalls = new THREE.Mesh(
+    new THREE.BoxGeometry(5, 3, 4),
+    new THREE.MeshStandardMaterial({ color: '#d8cfae', roughness: 0.85 }),
+  );
+  shedWalls.position.y = 1.2;
+  shed.add(shedWalls);
+  const shedRoof = new THREE.Mesh(
+    new THREE.BoxGeometry(5.6, 0.3, 4.6),
+    new THREE.MeshStandardMaterial({ color: '#4a4f55', roughness: 0.8 }),
+  );
+  shedRoof.position.y = 2.85;
+  shed.add(shedRoof);
+  shed.position.set(shedX, meshHeight(shedX, shedZ) - 0.3, shedZ);
+  shed.rotation.y = Math.atan2(perpX, perpZ);
+  group.add(shed);
+  const drumMat = new THREE.MeshStandardMaterial({ color: '#C83C32', roughness: 0.7 });
+  const drumMat2 = new THREE.MeshStandardMaterial({ color: '#5a6068', roughness: 0.7 });
+  for (let d = 0; d < 3; d += 1) {
+    const dx = runway.x + perpX * (86 + d * 2.2) + dirX * (6 + (d % 2) * 2);
+    const dz = runway.z + perpZ * (86 + d * 2.2) + dirZ * (6 + (d % 2) * 2);
+    const drum = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.55, 1.1, 10),
+      d === 1 ? drumMat2 : drumMat,
+    );
+    drum.position.set(dx, meshHeight(dx, dz) + 0.55, dz);
+    group.add(drum);
+  }
 
   // --- Sea: a depth-coloured grid just above the land's zero line. The colour
   // follows the terrain below it — turquoise in the shallows, deep teal
@@ -452,8 +542,32 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     seaColors[i * 3 + 2] = seaTmp.b;
   }
   seaGeo.setAttribute('color', new THREE.BufferAttribute(seaColors, 3));
+  // v6: a speckled canvas texture on the sea — near-white, so it keeps the
+  // depth colours and only adds grain. The v5 sea was one flat turquoise
+  // wash (Gemini: "flat, untextured teal water"); the speckle gives the
+  // water a surface instead of a solid fill.
+  const seaTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f4feff';
+    ctx.fillRect(0, 0, 128, 128);
+    const rnd = createRandom(seed + 911);
+    for (let i = 0; i < 128 * 128 * 0.35; i += 1) {
+      const v = rnd.range(-0.1, 0.1);
+      ctx.fillStyle = v > 0 ? `rgba(255,255,255,${v})` : `rgba(0,0,0,${-v})`;
+      ctx.fillRect(rnd.int(0, 128), rnd.int(0, 128), 1, 1);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(28, 28);
+    return tex;
+  })();
   const sea = new THREE.Mesh(seaGeo, new THREE.MeshStandardMaterial({
-    vertexColors: true, roughness: 0.3, metalness: 0.12, transparent: true, opacity: 0.92,
+    vertexColors: true, map: seaTex, roughness: 0.3, metalness: 0.12, transparent: true, opacity: 0.92,
   }));
   sea.position.y = 0.6;
   group.add(sea);
@@ -616,14 +730,14 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const cr = isl.radius * vegRandom.range(0.15, 0.55);
       const cx = isl.x + Math.cos(ca) * cr;
       const cz = isl.z + Math.sin(ca) * cr;
-      const count = 4 + vegRandom.int(0, 2);
+      const count = 6 + vegRandom.int(0, 3);
       for (let t = 0; t < count; t += 1) {
         const px = cx + vegRandom.range(-32, 32);
         const pz = cz + vegRandom.range(-32, 32);
         const ph = groundAt(px, pz);
         if (ph < 12 || ph > 160) continue;
         if (Math.hypot(px - runway.x, pz - runway.z) < 350) continue;
-        plantShadeTree(px, pz, ph, vegRandom.range(1.0, 1.9));
+        plantShadeTree(px, pz, ph, vegRandom.range(1.2, 2.3));
       }
     }
     // v5: one dense jungle cluster on the bigger islands — 8-12 trees packed
@@ -634,18 +748,22 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const jr = isl.radius * vegRandom.range(0.2, 0.5);
       const jx = isl.x + Math.cos(ja) * jr;
       const jz = isl.z + Math.sin(ja) * jr;
-      const jcount = 8 + vegRandom.int(0, 4);
+      // v6: 12-18 trees per jungle cluster (was 8-12), bigger, so the hills
+      // grow real jungle mass instead of scattered lone trees.
+      const jcount = 12 + vegRandom.int(0, 6);
       for (let t = 0; t < jcount; t += 1) {
         const px = jx + vegRandom.range(-18, 18);
         const pz = jz + vegRandom.range(-18, 18);
         const ph = groundAt(px, pz);
         if (ph < 30 || ph > 160) continue;
         if (Math.hypot(px - runway.x, pz - runway.z) < 350) continue;
-        plantShadeTree(px, pz, ph, vegRandom.range(1.6, 2.4));
+        plantShadeTree(px, pz, ph, vegRandom.range(1.8, 2.6));
         junglePlanted += 1;
       }
     }
-    const palmCount = 4 + vegRandom.int(0, 2);
+    // v6: more palms per island (6-9, was 4-6) and bigger, so the beaches
+    // read as palm-lined shores instead of a lone palm here and there.
+    const palmCount = 6 + vegRandom.int(0, 3);
     for (let p = 0; p < palmCount; p += 1) {
       const pa = vegRandom.range(0, Math.PI * 2);
       // The beach band (ground 2-14 m) sits at 1.05-1.4 island radii — at
@@ -657,7 +775,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const ph = groundAt(px, pz);
       if (ph < 2 || ph > 14) continue;
       if (Math.hypot(px - runway.x, pz - runway.z) < 320) continue;
-      plantPalm(px, pz, ph, vegRandom.range(1.1, 1.7));
+      plantPalm(px, pz, ph, vegRandom.range(1.3, 2.0));
     }
   }
   // Hero groves: the screenshot cameras fly a fixed path (seed 1), so a few
@@ -689,27 +807,54 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // ahead of the early cover camera, and rings 10 and 12 sit ahead of the
     // 40 s cover camera over the runway island — their groves land in the
     // midground of the frame instead of under the plane.
+    // v6: 14 trees per hero grove (was 10), so the midground reads as real
+    // forest instead of a few scattered trees.
     const hero = [course.rings[1], course.rings[5], course.rings[6], course.rings[9], course.rings[11]];
-    for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 10);
-    if (course.spawn) plantHeroGrove(course.spawn.x, course.spawn.z, 6);
+    for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 14);
+    if (course.spawn) plantHeroGrove(course.spawn.x, course.spawn.z, 10);
+    // v6: a beach cluster at the spawn — palms and rocks on the shore the
+    // title camera looks across, so the title shot's foreground beach is
+    // planted, not thinly placed (Gemini v5 on shot 3).
+    if (course.spawn) {
+      let beachPlanted = 0;
+      for (let tries = 0; tries < 120 && beachPlanted < 14; tries += 1) {
+        const a = vegRandom.range(0, Math.PI * 2);
+        const r = vegRandom.range(50, 220);
+        const px = course.spawn.x + Math.cos(a) * r;
+        const pz = course.spawn.z + Math.sin(a) * r;
+        const ph = groundAt(px, pz);
+        if (ph >= 2 && ph < 12) {
+          plantPalm(px, pz, ph, vegRandom.range(1.5, 2.2));
+          beachPlanted += 1;
+        } else if (ph >= 1 && ph < 8 && vegRandom.range(0, 1) < 0.5) {
+          plantRock(px, pz, ph, vegRandom.range(1.2, 2.4));
+          beachPlanted += 1;
+        }
+      }
+    }
   }
   // v5: the airport belt — dense trees around the runway island, so the
   // landing shot shows a real airfield in a forest clearing instead of a grey
   // rectangle in an empty field. Kept 90 m clear of the strip itself.
+  // v6: 40 trees (was 26), pulled closer (80-240 m, was 90-260) and bigger,
+  // so the airfield sits inside a forest edge instead of on a bare slope.
   let airportTrees = 0;
-  for (let tries = 0; tries < 300 && airportTrees < 26; tries += 1) {
+  for (let tries = 0; tries < 500 && airportTrees < 40; tries += 1) {
     const a = vegRandom.range(0, Math.PI * 2);
-    const r = vegRandom.range(90, 260);
+    const r = vegRandom.range(80, 240);
     const px = runway.x + Math.cos(a) * r;
     const pz = runway.z + Math.sin(a) * r;
     const ph = groundAt(px, pz);
     if (ph < 12 || ph > 160) continue;
-    plantShadeTree(px, pz, ph, vegRandom.range(1.5, 2.4));
+    plantShadeTree(px, pz, ph, vegRandom.range(1.6, 2.6));
     airportTrees += 1;
   }
   // Rocks on beaches and slopes, bushes on the grass — scattered, kept clear
-  // of the runway strip.
-  for (let tries = 0; tries < 900 && rocksPlanted < 40; tries += 1) {
+  // of the runway strip. v6: 60 rocks (was 40) and 110 bushes (was 60), and
+  // the bushes come in two greens now, so the grass carries texture instead
+  // of reading as one flat colour between the trees.
+  const bushMat2 = new THREE.MeshStandardMaterial({ color: '#3f9142', roughness: 0.95 });
+  for (let tries = 0; tries < 1200 && rocksPlanted < 60; tries += 1) {
     const px = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const pz = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const ph = groundAt(px, pz);
@@ -719,22 +864,36 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     if (Math.hypot(px - runway.x, pz - runway.z) < 300) continue;
     plantRock(px, pz, ph, vegRandom.range(0.9, 2.6));
   }
-  for (let tries = 0; tries < 900 && bushesPlanted < 60; tries += 1) {
+  for (let tries = 0; tries < 1400 && bushesPlanted < 110; tries += 1) {
     const px = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const pz = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const ph = groundAt(px, pz);
     if (ph < 8 || ph > 140) continue;
     if (Math.hypot(px - runway.x, pz - runway.z) < 300) continue;
-    plantBush(px, pz, ph, vegRandom.range(0.8, 1.5));
+    // v6: every third bush uses the lighter green, for variety on the grass.
+    const bush = new THREE.Mesh(bushGeo, bushesPlanted % 3 === 0 ? bushMat2 : bushMat);
+    bush.scale.set(
+      vegRandom.range(0.7, 1.4),
+      vegRandom.range(0.45, 0.75),
+      vegRandom.range(0.7, 1.4),
+    );
+    bush.position.set(px, meshHeight(px, pz) + 0.2, pz);
+    bush.rotation.y = vegRandom.range(0, Math.PI * 2);
+    group.add(bush);
+    bushesPlanted += 1;
   }
   // v5: coastal cliffs — big angular rock faces at the shoreline, half-sunk
   // into the slope, so the coast has vertical rock instead of only smooth
   // green hills meeting the sand.
+  // v6: 5-8 cliffs per island (was 3-5) in a tighter shoreline band, and
+  // most cliffs grow a neighbour 8-20 m along the shore, so the rock arrives
+  // in clusters instead of lone singles (Gemini v5 asked for clustered
+  // coastal rocks/cliffs).
   for (const isl of islands) {
-    const cliffCount = 3 + vegRandom.int(0, 2);
+    const cliffCount = 5 + vegRandom.int(0, 3);
     for (let c = 0; c < cliffCount; c += 1) {
       const ca = vegRandom.range(0, Math.PI * 2);
-      const cr = isl.radius * vegRandom.range(0.95, 1.15);
+      const cr = isl.radius * vegRandom.range(0.98, 1.08);
       const px = isl.x + Math.cos(ca) * cr;
       const pz = isl.z + Math.sin(ca) * cr;
       const ph = groundAt(px, pz);
@@ -750,6 +909,25 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       cliff.rotation.set(vegRandom.range(0, 0.4), vegRandom.range(0, 3), vegRandom.range(-0.2, 0.2));
       group.add(cliff);
       cliffsPlanted += 1;
+      // A neighbour cliff along the shore, so cliffs arrive in pairs.
+      if (vegRandom.range(0, 1) < 0.7) {
+        const na = ca + vegRandom.range(-0.12, 0.12);
+        const nx = isl.x + Math.cos(na) * cr + vegRandom.range(-10, 10);
+        const nz = isl.z + Math.sin(na) * cr + vegRandom.range(-10, 10);
+        const nph = groundAt(nx, nz);
+        if (nph >= 2 && nph <= 25 && Math.hypot(nx - runway.x, nz - runway.z) >= 300) {
+          const ncliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+          ncliff.scale.set(
+            vegRandom.range(4, 9),
+            vegRandom.range(6, 13),
+            vegRandom.range(4, 7),
+          );
+          ncliff.position.set(nx, meshHeight(nx, nz) - 2, nz);
+          ncliff.rotation.set(vegRandom.range(0, 0.4), vegRandom.range(0, 3), vegRandom.range(-0.2, 0.2));
+          group.add(ncliff);
+          cliffsPlanted += 1;
+        }
+      }
     }
   }
 
@@ -775,7 +953,10 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // plane's shadow ahead of it, so the shadow lands in the visible frame in
   // the landing and cover shots instead of hiding directly under the plane
   // (where the forward-looking chase camera can never see it).
-  const sunDir = new THREE.Vector3(-0.69, 0.56, -0.46).normalize();
+  // v6: elevation ~31° — a touch lower still, so the shadow stretches
+  // further into the cover frame (Gemini v5 saw no ground shadow at all in
+  // the cover shot).
+  const sunDir = new THREE.Vector3(-0.72, 0.50, -0.48).normalize();
   const sun = new THREE.Mesh(
     new THREE.CircleGeometry(190, 32),
     new THREE.MeshBasicMaterial({ color: PALETTE.sun, fog: false, transparent: true, opacity: 0.95 }),
@@ -804,12 +985,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // v4: 5-6 rounder, fuller puffs per cloud (was 3-5 flat ones at 0.38
     // vertical, then 4-7 at 0.7), clustered tighter, so each cloud has volume
     // instead of reading as a flat white slab floating over the sea.
-    const puffs = 5 + cloudRandom.int(0, 2);
+    // v6: 7-10 puffs per cloud, rounder still (vertical scale 1.0, was 0.85)
+    // and packed tighter, so the clouds read as soft grouped masses instead
+    // of faceted slabs (Gemini v5: "low-poly faceted clouds").
+    const puffs = 7 + cloudRandom.int(0, 3);
     for (let p = 0; p < puffs; p += 1) {
       const puff = new THREE.Mesh(puffGeo, cloudMat);
-      const s = cloudRandom.range(24, 52);
-      puff.scale.set(s * 1.4, s * 0.85, s * 1.1);
-      puff.position.set(cloudRandom.range(-30, 30), cloudRandom.range(-5, 5), cloudRandom.range(-18, 18));
+      const s = cloudRandom.range(20, 44);
+      puff.scale.set(s * 1.3, s * 1.0, s * 1.1);
+      puff.position.set(cloudRandom.range(-22, 22), cloudRandom.range(-3, 4), cloudRandom.range(-14, 14));
       cloud.add(puff);
     }
     cloud.position.set(
