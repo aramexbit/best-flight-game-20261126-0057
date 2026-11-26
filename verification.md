@@ -170,4 +170,7 @@ lat 0, roll 0, Space restart works). Errors: none, exit 0.
   (Reference 12/12 + landed 59.8 s; Weak 6/12 no finish; Idle 2/12
   no finish. Exit 0.)
 - [x] `node test/headless.test.mjs` all tests pass. (9/9.)
-- [ ] Local git commit.
+- [x] Local git commit.
+  (Commit 1: v17 core + OpenGame layers, exit 0. Commit 2: this
+  checklist update. Push by the coordinator — the builder does not
+  push/submit.)
