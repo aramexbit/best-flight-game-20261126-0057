@@ -84,6 +84,14 @@ function runShot(name) {
   const scene = stageShot(name, { flight, course, terrain });
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
+  // v3: each shot gets the blueprint's own framing — the title pulls the camera
+  // back and to the side so the aircraft sits middle-right, the mid-flight
+  // shot goes a touch wider, the landing shot goes closer and lower so the
+  // runway fills the central 60% of the frame.
+  if (name === 'start') { renderer.setFov(60); renderer.setChase(35, -16, 5); }
+  else if (name === 'play') { renderer.setFov(65); renderer.setChase(16, 0, 4.5); }
+  else if (name === 'cockpit') { renderer.setFov(62); }
+  else if (name === 'landing') { renderer.setFov(58); renderer.setChase(14, 0, 3.8); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;
@@ -127,6 +135,9 @@ function runGame() {
     accumulator = 0;
     screen = 'play';
     hud.hidePanels();
+    // v3: back to the flight framing (wide chase) once the player starts.
+    renderer.setFov(65);
+    renderer.setChase(16, 0, 4.5);
     audio.start();
     announce('Flying. Twelve rings, then land on the runway.');
     hud.showMessage('FLY THROUGH RING 1', 3);
@@ -260,6 +271,9 @@ function runGame() {
   });
 
   hud.showPanel('title');
+  // v3: the title orbit is framed wide and from the side, aircraft middle-right.
+  renderer.setFov(60);
+  renderer.setChase(35, -16, 5);
   announce('Langit Nusantara. Press Space or click to fly.');
   requestAnimationFrame(frame);
 }

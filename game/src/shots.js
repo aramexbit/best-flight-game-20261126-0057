@@ -7,7 +7,7 @@
 import { STEP } from './config.js';
 import { wrapAngle } from './flight.js';
 
-const START_SECONDS = 6;
+const START_SECONDS = 8;
 const PLAY_SECONDS = 26;
 const COCKPIT_SECONDS = 14;
 const LANDING_SECONDS = 140;
@@ -18,6 +18,7 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
   const s = flight.state;
   let aim = target;
   let recovering = false;
+  let tight = false;
   if (target.axis) {
     // Carrot-chasing on the approach line through the ring: aim at a point on
     // the line 150 m ahead of the plane's own projection onto it, so the plane
@@ -40,7 +41,21 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
     // 150 m lookahead left the first attempt 27.7 m off centre and the
     // recovery laps diverged from there.
     recovering = along > 0;
-    const carrot = along > 0 ? -400 : along + Math.min(150, Math.max(40, -along * 0.5));
+    // How far the plane sits off the approach line, sideways from it.
+    const distRing = Math.hypot(rx, ry, rz);
+    const lateral = Math.sqrt(Math.max(0, distRing * distRing - along * along));
+    // v3: the tight precision mode (short carrot, hard gains, slow throttle)
+    // only engages when the plane is already near the approach line. Far off
+    // the line — after a miss, or on a wide turn — the plane converges on the
+    // gentle v2 hands instead; tight hands that far off the line lock it into
+    // a max-bank orbit around the ring that never re-approaches.
+    tight = !recovering && distRing < 250 && lateral < 20;
+    // v3 tracking: the lookahead grows with the lateral error, so the plane
+    // intercepts the line at a shallow, stable angle. A short lookahead is
+    // only safe when already on the line; chasing a nearby point from far
+    // off the line makes the bearing swing and the plane weave.
+    const lookahead = Math.min(200, Math.max(50, lateral * 3));
+    const carrot = along > 0 ? -400 : along + lookahead;
     aim = {
       x: target.x + ax.x * carrot,
       y: target.y + ax.y * carrot,
@@ -54,9 +69,14 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
   const desiredHeading = Math.atan2(dx, -dz);
   const headingError = wrapAngle(desiredHeading - s.yaw);
   const desiredPitch = Math.max(-0.45, Math.min(0.45, Math.atan2(dy, Math.max(1, distH))));
+  // v3: near a ring and on the line, the hands get firmer — harder pitch and
+  // bank gains and a slower throttle — because the v3 ring is half the
+  // diameter of v2's and the old gentle hands left the plane 20 m off centre
+  // at ring 2. (`tight` was decided above, from the lateral offset.)
+  if (tight) throttleTarget = Math.min(throttleTarget, 0.55);
   // Gentle hands: a shallow bank and a soft pitch keep the turn from overshooting.
   // Slow down to turn tight when the nose is a long way off the target.
-  let pitchInput = Math.max(-1, Math.min(1, (desiredPitch - s.pitch) * 2.2));
+  let pitchInput = Math.max(-1, Math.min(1, (desiredPitch - s.pitch) * (tight ? 3.2 : 2.2)));
   // Terrain ahead: sample several points along the nose and climb out of the
   // way of the highest of them before the ground does the deciding. One sample
   // is too easy to fool on a rugged ridge.
@@ -72,7 +92,7 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
   // Bank with damping: steer by the heading error, but subtract the bank
   // already held, so the wings level the moment the nose is right instead of
   // holding a full bank for seconds after the turn is done and overshooting.
-  const rollInput = Math.max(-1, Math.min(1, headingError * 1.6 - s.roll * 1.5));
+  const rollInput = Math.max(-1, Math.min(1, headingError * (tight ? 2.4 : 1.6) - s.roll * (tight ? 1.8 : 1.5)));
   return {
     pitch: pitchInput,
     roll: rollInput,
@@ -115,7 +135,24 @@ export function stageShot(name, game) {
         ? { x: runway.x - runway.dirX * 260, y: runway.height + 45, z: runway.z - runway.dirZ * 260 }
         : { x: runway.x, y: runway.height + 6, z: runway.z };
       throttleTarget = 0.3;
-      if (distToRunway < 160 && s.y < runway.height + 55) break;
+      // v3: freeze the frame on final approach — inside 400 m, below 65 m
+      // above the strip, nose lined up with the runway and wings level, so
+      // the runway fills the central 60% of the frame with its threshold,
+      // number and lights in view. The v2 freeze (160 m out, 55 m up) put the
+      // plane over the strip looking down, and the runway read as a narrow
+      // road from up there. The freeze waits for alignment AND level wings:
+      // freezing mid-turn caught the plane in a steep bank and the whole
+      // frame tilted with it. (And the height must be generous: the plane is
+      // still descending through ~58 m when it lines up, and by the time it
+      // drops under 42 m it has overshot the runway centre and is orbiting
+      // it at a 77-degree bank instead of landing.)
+      const runwayHeading = Math.atan2(runway.dirX, -runway.dirZ);
+      const aligned = Math.abs(wrapAngle(s.yaw - runwayHeading)) < 0.25;
+      // ...and the wings are level. Heading alone is not enough: the plane
+      // can be on-heading while still banked mid-turn, and the whole frame
+      // tilts with it. The roll settles as the turn finishes.
+      const level = Math.abs(s.roll) < 0.15;
+      if (distToRunway < 400 && s.y < runway.height + 65 && aligned && level) break;
     } else if (ring) {
       target = ring;
     } else {

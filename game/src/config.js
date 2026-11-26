@@ -14,7 +14,7 @@ export const WORLD = {
   maxHeight: 330,
   // Fog starts here and swallows the far islands by this distance.
   fogNear: 900,
-  fogFar: 3800,
+  fogFar: 4200,
 };
 
 export const PLANE = {
@@ -45,20 +45,23 @@ export const COURSE = {
   // Rings are this far apart, give or take the jitter below.
   ringSpacing: 430,
   spacingJitter: 110,
-  // Each leg turns the course by up to this many degrees.
-  maxTurnDeg: 55,
+  // Each leg turns the course by up to the per-leg wander in rings.js
+  // (a config field used to live here but nothing read it, so it is gone).
   // Ring centres sit between these altitudes, in metres.
   minRingAlt: 120,
   maxRingAlt: 300,
-  // The glowing ring itself, in metres. v2: smaller (32 -> 26) so the ring
-  // no longer swallows the aircraft in the cover shot.
-  ringRadius: 26,
-  ringTube: 1.5,
+  // The glowing ring itself, in metres. v3: the blueprint scale — inner
+  // diameter ~22 m, about twice the 11 m wingspan, so the ring reads as a
+  // real air-race gate instead of a barn door (v2 was 26 m radius, 49 m across).
+  ringRadius: 11.5,
+  ringTube: 0.45,
   // The runway waits this far past the last ring, along the final heading.
   runwayPastRing: 520,
-  runwayLength: 340,
-  // v2: wider (26 -> 40) so the strip reads as a runway, not a dark line.
-  runwayWidth: 40,
+  // v3: the full-size strip from the blueprint, 450 m long and 28 m wide,
+  // with 3 m shoulders each side (the v2 strip was 340 x 40).
+  runwayLength: 450,
+  runwayWidth: 28,
+  runwayShoulder: 3,
   // Par time for the landing time bonus, in seconds.
   parTime: 240,
 };
@@ -73,22 +76,29 @@ export const SCORE = {
 };
 
 export const PALETTE = {
-  // Golden hour: warm sun, peach haze, teal sea, green islands.
-  skyTop: '#2e4a7a',
-  skyHorizon: '#ffb877',
+  // Golden hour: warm sun, peach haze, teal sea, green islands. v3: the
+  // blueprint palette — a deep mauve upper sky over a hot orange horizon,
+  // and a sea that runs turquoise in the shallows to near-black teal offshore.
+  skyTop: '#593D46',
+  skyHorizon: '#FF8B45',
   fog: '#f7b98a',
   sun: '#ffd9a0',
-  sea: '#1d6f7d',
-  seaDeep: '#14505f',
+  sea: '#0B5550',
+  seaDeep: '#073D39',
+  seaMid: '#167D78',
+  seaShallow: '#42A99B',
   sand: '#e8cf9a',
   grass: '#4d8a4a',
   forest: '#2f6b35',
+  grassLight: '#6a9a4a',
   rock: '#7a6a5e',
   snow: '#f2ede6',
-  ring: '#ffd94d',
-  ringNext: '#ffe98a',
-  planeCream: '#f4ead8',
-  planeRed: '#c0392b',
+  ring: '#FFD477',
+  ringNext: '#FFE98A',
+  ringDone: '#9DBE6E',
+  planeCream: '#F2E5C5',
+  planeBelly: '#BCA887',
+  planeRed: '#C83C32',
   planeGlass: '#9fd8e8',
   hudText: '#fff7e8',
   hudPanel: 'rgba(20, 24, 40, 0.55)',

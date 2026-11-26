@@ -16,7 +16,8 @@ export function createRenderer(canvas, THREE, groups) {
   renderer.setClearColor(PALETTE.skyHorizon);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  // v3: exposure 1.15 (blueprint) — the golden hour needs to glow, not sulk.
+  renderer.toneMappingExposure = 1.15;
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(PALETTE.fog, WORLD.fogNear, WORLD.fogFar);
@@ -32,6 +33,25 @@ export function createRenderer(canvas, THREE, groups) {
 
   let mode = CAMERA_CHASE;
   let firstFrame = true;
+  // Chase framing, set per scene by the game (title / flight / landing each
+  // want their own distance, lateral offset and height — see the blueprint).
+  let chaseDist = 15;
+  let chaseLateral = 0;
+  let chaseHeight = 4.5;
+
+  /** Field of view in degrees; the title wants it wider, the landing narrower. */
+  function setFov(fov) {
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+  }
+
+  /** Chase camera geometry: metres behind, sideways and above the plane. */
+  function setChase(dist, lateral, height) {
+    chaseDist = dist;
+    chaseLateral = lateral;
+    chaseHeight = height;
+    firstFrame = true;
+  }
 
   function resize() {
     const w = window.innerWidth;
@@ -80,13 +100,20 @@ export function createRenderer(canvas, THREE, groups) {
       lookTarget.set(s.x + tmpForward.x * 60, s.y + tmpForward.y * 60, s.z + tmpForward.z * 60);
       camera.up.copy(tmpUp);
       camera.lookAt(lookTarget);
-      camera.rotateZ(-s.roll);
+      // v3: only 30% of the bank reaches the camera. The v2 shot rolled the
+      // horizon with the full bank, so the dashboard sat at a wild angle and
+      // the horizon was extremely tilted; the pilot's head stays mostly level.
+      camera.rotateZ(-s.roll * 0.3);
     } else {
       // Chase: hover behind and above, eased so it never snaps, looking ahead.
+      // The lateral offset slides the plane across the frame (negative puts
+      // it to the right) without changing where the camera looks.
+      const rightX = Math.cos(s.yaw);
+      const rightZ = Math.sin(s.yaw);
       const want = new THREE.Vector3(
-        s.x - tmpForward.x * 15,
-        s.y - tmpForward.y * 15 + 4.5,
-        s.z - tmpForward.z * 15,
+        s.x - tmpForward.x * chaseDist + rightX * chaseLateral,
+        s.y - tmpForward.y * chaseDist + chaseHeight,
+        s.z - tmpForward.z * chaseDist + rightZ * chaseLateral,
       );
       if (firstFrame) {
         chasePos.copy(want);
@@ -103,10 +130,12 @@ export function createRenderer(canvas, THREE, groups) {
       camera.rotateZ(-s.roll * 0.35);
     }
 
-    ringsApi.refresh(time);
+    // The ring guide chevron fades as the plane closes in, so it needs the
+    // plane's position (the flight state carries x, y, z).
+    ringsApi.refresh(time, s);
     terrainApi.update(dt);
     renderer.render(scene, camera);
   }
 
-  return { draw, setCameraMode, get mode() { return mode; } };
+  return { draw, setCameraMode, setFov, setChase, get mode() { return mode; } };
 }

@@ -40,6 +40,12 @@ export function createCourse(random, seed, islands) {
   const rings = [];
   let x = -1700;
   let z = random.range(-500, 500);
+  // v3: remember the walk's starting z. The loop below mutates `z` all the
+  // way to the last ring, and the spawn heading used to be computed from that
+  // mutated value — so the spawn pointed the plane ~80 degrees away from the
+  // course's first leg, a turn no autopilot (and no human) can make in one
+  // 224 m leg. The spawn must line up with the walk's first step instead.
+  const startZ = z;
   let y = 150;
   for (let i = 0; i < COURSE.ringCount; i += 1) {
     const legsLeft = COURSE.ringCount - i;
@@ -49,7 +55,7 @@ export function createCourse(random, seed, islands) {
     const stepLen = i === COURSE.ringCount - 1
       ? dist
       : clamp(dist / legsLeft, 120, 400);
-    const wander = (1 - i / COURSE.ringCount) * 0.55;
+    const wander = (1 - i / COURSE.ringCount) * 0.30;
     const heading = headingTo(x, z, approach.x, approach.z) + random.range(-wander, wander);
     x += Math.sin(heading) * stepLen;
     z += -Math.cos(heading) * stepLen;
@@ -73,7 +79,7 @@ export function createCourse(random, seed, islands) {
   }
 
   const first = rings[0];
-  const spawnHeading = headingTo(-1700, z, first.x, first.z);
+  const spawnHeading = headingTo(-1700, startZ, first.x, first.z);
   const spawn = {
     x: first.x - Math.sin(spawnHeading) * 600,
     y: first.y + 10,
@@ -147,18 +153,34 @@ export function createCourse(random, seed, islands) {
   return { rings, runway, spawn, approach, nextRing, distanceToNext, checkPass, reset };
 }
 
-/** Build the visible rings and their light pillars; returns the group and a refresh(t). */
+/** Build the visible rings, their glow halos and the next-ring guide. */
 export function buildRingMeshes(THREE, course) {
   const group = new THREE.Group();
   const ringGeo = new THREE.TorusGeometry(COURSE.ringRadius, COURSE.ringTube, 12, 42);
+  // v3: a thin outer glow layer around each ring (a fatter, faint torus in the
+  // same gold), so the ring reads as light, not as a painted hoop.
+  const glowGeo = new THREE.TorusGeometry(COURSE.ringRadius, COURSE.ringTube * 2.1, 10, 42);
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: PALETTE.ring, transparent: true, opacity: 0.15, depthWrite: false,
+  });
   const nextMat = new THREE.MeshBasicMaterial({ color: PALETTE.ringNext });
   const futureMat = new THREE.MeshBasicMaterial({ color: PALETTE.ring, transparent: true, opacity: 0.55 });
-  const doneMat = new THREE.MeshBasicMaterial({ color: PALETTE.hudGood, transparent: true, opacity: 0.5 });
+  // Completed rings go muted green-gold (blueprint), not bright green.
+  const doneMat = new THREE.MeshBasicMaterial({ color: PALETTE.ringDone, transparent: true, opacity: 0.55 });
   // v2: the light pillars are gone (see below); no beacon geometry is built.
 
   // v2: no light pillars. The tall beacons read as debug graphics / rendering
   // artefacts to a fresh eye; the next ring's pulse and the HUD distance are
-  // the wayfinding now.
+  // the wayfinding now. v3 adds only a short chevron above the next ring —
+  // 4 m tall, fading out as the plane closes within 30 m — never a beam.
+  const guideMat = new THREE.MeshBasicMaterial({
+    color: PALETTE.ringNext, transparent: true, opacity: 0.5, depthWrite: false,
+  });
+  const guide = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 4), guideMat);
+  guide.rotation.x = Math.PI; // point down, toward the ring below it
+  guide.visible = false;
+  group.add(guide);
+
   const meshes = course.rings.map((ring) => {
     const mesh = new THREE.Mesh(ringGeo, futureMat);
     mesh.position.set(ring.x, ring.y, ring.z);
@@ -167,25 +189,45 @@ export function buildRingMeshes(THREE, course) {
       new THREE.Vector3(ring.axis.x, ring.axis.y, ring.axis.z),
     );
     group.add(mesh);
-    return { mesh };
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(mesh.position);
+    glow.quaternion.copy(mesh.quaternion);
+    group.add(glow);
+    return { mesh, glow };
   });
 
   /** Recolour rings by state; the next one pulses so it reads at a glance. */
-  function refresh(time) {
+  function refresh(time, planePos) {
+    const next = course.nextRing();
     for (let i = 0; i < meshes.length; i += 1) {
       const ring = course.rings[i];
-      const { mesh } = meshes[i];
+      const { mesh, glow } = meshes[i];
       if (ring.passed) {
         mesh.material = doneMat;
         mesh.scale.setScalar(1);
-      } else if (course.nextRing() === ring) {
+        glow.visible = false;
+      } else if (next === ring) {
         mesh.material = nextMat;
-        mesh.scale.setScalar(1 + 0.05 * Math.sin(time * 3.2));
+        // The final ring pulses a touch harder, so the finish reads as special.
+        const pulse = i === meshes.length - 1 ? 0.08 : 0.05;
+        mesh.scale.setScalar(1 + pulse * Math.sin(time * 3.2));
+        glow.visible = true;
+        glow.scale.copy(mesh.scale);
+        // Park the chevron above this ring and fade it as the plane closes in.
+        guide.visible = true;
+        guide.position.set(ring.x, ring.y + COURSE.ringRadius + 5, ring.z);
+        const dist = planePos
+          ? Math.hypot(planePos.x - ring.x, planePos.y - ring.y, planePos.z - ring.z)
+          : 999;
+        guideMat.opacity = 0.5 * Math.min(1, Math.max(0, dist / 30));
       } else {
         mesh.material = futureMat;
         mesh.scale.setScalar(1);
+        glow.visible = true;
+        glow.scale.setScalar(1);
       }
     }
+    if (!next) guide.visible = false;
   }
 
   return { group, refresh };

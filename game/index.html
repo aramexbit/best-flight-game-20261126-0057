@@ -11,8 +11,10 @@
 
   /* --- HUD: glassy panels over the 3D view --- */
   #hud { position: fixed; inset: 0; pointer-events: none; color: #fff7e8; transition: opacity 0.4s; }
-  /* v2: on the title screen the HUD dims to a whisper behind the panel. */
-  body.title-open #hud { opacity: 0.15; }
+  /* v3: on the title screen the HUD is fully hidden behind the panel — not
+  dimmed, gone (altitude, speed, heading, fuel, throttle, compass, ring
+  counter, timer). The v2 dim-to-0.15 still left the numbers readable. */
+  body.title-open #hud { opacity: 0; visibility: hidden; }
   .panel { position: absolute; background: rgba(20, 24, 40, 0.55); border: 1px solid rgba(255, 247, 232, 0.25); border-radius: 10px; padding: 10px 14px; backdrop-filter: blur(2px); }
   .label { font-size: 11px; letter-spacing: 0.14em; opacity: 0.75; }
   .value { font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -42,6 +44,10 @@
 
   /* --- Full-screen panels: title, pause, game over --- */
   .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
+  /* v3: the title panel sits on the left (max 520 px, under half the frame),
+  so the aircraft stays visible middle-right with a ring as the objective. */
+  #panel-title { justify-content: flex-start; }
+  #panel-title .card { margin-left: 4%; max-width: 520px; text-align: left; padding: 24px 34px; }
   .card { pointer-events: auto; text-align: center; background: rgba(16, 20, 36, 0.72); border: 1px solid rgba(255, 217, 77, 0.45); border-radius: 16px; padding: 26px 44px; color: #fff7e8; max-width: 620px; backdrop-filter: blur(3px); }
   .card h1 { margin: 0 0 4px; font-size: 38px; letter-spacing: 0.04em; color: #ffd94d; }
   .card h2 { margin: 0 0 10px; font-size: 34px; color: #ffd94d; }
