@@ -126,6 +126,18 @@ export function createFlight(spawn) {
       const level = PLANE.autoLevel * dt;
       state.roll = Math.abs(state.roll) <= level ? 0 : state.roll - Math.sign(state.roll) * level;
     }
+    // v18: the same gate for PITCH (v17 levelled roll only, so a W tap
+    // locked the climb and gust pitch random-walked the trim — the v17
+    // live playtest missed ring 1 by 28-45 m "ke kiri/atas" on a straight
+    // flight). The gate reads the RAW stick (stickPitch), not the
+    // gust-augmented pitch, exactly like stickRoll above. The autopilot
+    // passes a nonzero stickPitch whenever it is correcting, and 0 only
+    // when it wants level flight, so it is unaffected.
+    const stickPitch = input.stickPitch !== undefined ? input.stickPitch : input.pitch;
+    if (stickPitch === 0) {
+      const level = PLANE.pitchLevel * dt;
+      state.pitch = Math.abs(state.pitch) <= level ? 0 : state.pitch - Math.sign(state.pitch) * level;
+    }
 
     // A banked turn pulls the nose around; the rudder adds a little direct yaw.
     const speedFactor = clamp(state.speed / PLANE.cruiseSpeed, 0.3, 1.25);

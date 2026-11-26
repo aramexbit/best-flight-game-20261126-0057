@@ -61,18 +61,21 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // funnel read as a thin white wisp with almost no contrast against
   // the bright sky (Gemini v16: "funnel tornado + hujan pucat, kontras
   // rendah"). A storm funnel is dark slate against daylight.
+  // v18: the funnel is darker still (#8ba0b5 / #6b7f92, was #9fb2c2 /
+  // #7e93a8) and wider — Gemini's fix: the v17 funnel still read as a
+  // straight pale cone, not a rotating storm column.
   const funnelMat = new THREE.MeshStandardMaterial({
-    color: 0x9fb2c2, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
+    color: 0x8ba0b5, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
   });
   const funnelDark = new THREE.MeshStandardMaterial({
-    color: 0x7e93a8, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
+    color: 0x6b7f92, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
   });
   function buildFunnel(scale) {
     const funnel = new THREE.Group();
     const segs = 8;
     for (let i = 0; i < segs; i += 1) {
-      const rBot = (4 + i * 3.2) * scale;
-      const rTop = (6 + i * 3.2) * scale;
+      const rBot = (5 + i * 3.6) * scale;
+      const rTop = (7 + i * 3.6) * scale;
       const h = 34 * scale;
       const seg = new THREE.Mesh(
         new THREE.CylinderGeometry(rTop, rBot, h, 10, 1, true),
@@ -158,6 +161,26 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     lobe.rotation.y = rnd.range(0, Math.PI * 2);
     wall.add(lobe);
   }
+  // v18: a SECOND anvil tier above the wall (5 bigger lobes, y 360-430,
+  // darker #334155 / #475569) — Gemini's fix: the v17 storm read as a
+  // row of grey blobs with a flat top; a multi-tier anvil gives the
+  // cell a real thunderhead crown.
+  const anvilMats = [
+    new THREE.MeshLambertMaterial({ color: 0x334155, transparent: true, opacity: 0.98 }),
+    new THREE.MeshLambertMaterial({ color: 0x475569, transparent: true, opacity: 0.98 }),
+  ];
+  for (let i = 0; i < 5; i += 1) {
+    const lobe = new THREE.Mesh(lobeGeo, anvilMats[i % anvilMats.length]);
+    const rx = 140 + rnd.range(0, 60);
+    lobe.scale.set(rx, rx * rnd.range(0.45, 0.6), rx * rnd.range(0.7, 0.95));
+    lobe.position.set(
+      wallAnchor.x + (ax / alen) * (i - 2) * 110 + rnd.range(-25, 25),
+      375 + rnd.range(-15, 50),
+      wallAnchor.z + (az / alen) * (i - 2) * 110 + rnd.range(-25, 25),
+    );
+    lobe.rotation.y = rnd.range(0, Math.PI * 2);
+    wall.add(lobe);
+  }
   group.add(wall);
 
   // --- Slanted rain inside the cell: 350 streaks in a box over the ---
@@ -176,7 +199,10 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   const rainGeo = new THREE.BufferGeometry();
   rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
   const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({
-    color: 0xbcd8ee, transparent: true, opacity: 0.6,
+    // v18: pale ice-blue rain #E0F2FE at 0.45 opacity (was #BCD8EE at
+    // 0.6) — Gemini's spec: the rain reads as bright streaks against
+    // the dark cell, not grey smears.
+    color: 0xe0f2fe, transparent: true, opacity: 0.45,
   }));
   group.add(rain);
   function writeRain() {

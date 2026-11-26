@@ -187,7 +187,10 @@ function runShot(name) {
   // high wing and the struts read at a glance, so it is a plane.
   // v9: lateral -30 (was -24) — the scene sits a touch further right, so
   // the first ring clears the (now narrower) title card's right edge.
-  if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -30, 4.5); }
+  // v18: staging pushed further right and up (lateral -34, height 6.5) —
+  // Gemini's fix: the storm and the rings sat BEHIND the instruction pill
+  // on the title screen, so the staging camera steps aside and up.
+  if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -34, 6.5); }
   else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, -6, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
   // v14: landing chase pulled back a touch (14 m back, 2.6 m up, was
@@ -365,7 +368,11 @@ function runGame() {
       hud.hidePanels();
       announce('Flying.');
     }
-    if (actions & ACTION_CAMERA && screen === 'play') {
+    // v18: C also switches the camera while paused (v17 live playtest:
+    // C did nothing on the pause screen), and R restarts from play,
+    // paused or over (v17: R only worked on the game-over screen — the
+    // live playtest could not restart mid-flight at all).
+    if (actions & ACTION_CAMERA && (screen === 'play' || screen === 'paused')) {
       cameraMode = cameraMode === CAMERA_CHASE ? CAMERA_COCKPIT : CAMERA_CHASE;
       renderer.setCameraMode(cameraMode);
       planeApi.setCockpitMode(cameraMode === CAMERA_COCKPIT);
@@ -376,7 +383,7 @@ function runGame() {
       audio.setMuted(muted);
       hud.showMessage(muted ? 'SOUND OFF' : 'SOUND ON', 1.2);
     }
-    if (actions & ACTION_RESTART && screen === 'over') startGame();
+    if (actions & ACTION_RESTART && (screen === 'play' || screen === 'paused' || screen === 'over')) startGame();
   }
 
   function step() {
@@ -418,6 +425,9 @@ function runGame() {
     const gust = storm.gustAt(s.elapsed);
     const clamp1 = (v) => Math.max(-1, Math.min(1, v));
     const rawRoll = input.roll();
+    // v18: the raw pitch stick, passed to flight.js so the pitch
+    // auto-level can read it (same pattern as stickRoll above).
+    const rawPitch = input.pitch();
     // v17: FINAL-APPROACH ASSIST (cross-track fix). Once all 12 rings
     // are passed and the plane is within 700 m of the runway below
     // 200 m AGL, a gentle helper steers the wings level and the nose
@@ -453,11 +463,12 @@ function runGame() {
       gustScale = 0.2;
     }
     const events = flight.step(STEP, {
-      pitch: clamp1(input.pitch() + gust.pitch),
+      pitch: clamp1(rawPitch + gust.pitch),
       roll: clamp1(rollInput + gust.roll * gustScale),
       yaw: input.yaw(),
       throttle: input.throttle(),
       stickRoll: onFinal ? rollInput : rawRoll,
+      stickPitch: rawPitch,
     }, terrain.groundAt, course.runway);
     const pass = course.checkPass(prev, s);
     if (pass && pass.passed) {
@@ -505,7 +516,11 @@ function runGame() {
 
   function frame(now) {
     requestAnimationFrame(frame);
-    accumulator += Math.min((now - last) / 1000, MAX_FRAME);
+    // v18: the HUD message timer runs on REAL frame time now, not a
+    // fixed 1/60 per frame — at low FPS the v17 "2.5 s" collision
+    // message lingered 15-40 real seconds in the live playtest.
+    const frameDt = Math.min((now - last) / 1000, MAX_FRAME);
+    accumulator += frameDt;
     last = now;
     handleActions();
     if (screen === 'title' || screen === 'play') {
@@ -524,10 +539,17 @@ function runGame() {
         storm.update(1 / 60, flight.state.elapsed);
       }
     }
-    hud.update(hudView(), 1 / 60);
+    hud.update(hudView(), frameDt);
     // v15: the live draw gets the rivals too, so their blob shadows track
     // them in play — hidden on the title screen, where the pack sits out.
-    renderer.draw(flight, planeApi, ringMeshes, terrain, 1 / 60, now / 1000,
+    // v18c: draw gets the REAL frame dt now, not a fixed 1/60 — the chase
+    // camera lerp inside draw() ran once per rendered frame with a fixed
+    // 1/60 dt while the sim advanced several steps per frame at low FPS,
+    // so the camera lagged 25-150 m behind the plane in live play (the
+    // plane read as a tiny speck dead-centre in frame, NDC angle 3.5 deg,
+    // while the staged shots showed it big). The sim still steps on the
+    // fixed STEP accumulator above; only the visuals use real time.
+    renderer.draw(flight, planeApi, ringMeshes, terrain, frameDt, now / 1000,
       rivals.group.visible ? rivals.debug() : []);
   }
 
@@ -547,8 +569,9 @@ function runGame() {
   // card, objective pills, Start button) was laid out around this shot,
   // not the other way round; the ring still clears the card's right edge
   // and the plane still banks right of centre.
+  // v18: same staging as the title shot (lateral -34, height 6.5).
   renderer.setFov(62);
-  renderer.setChase(28, -30, 4.5);
+  renderer.setChase(28, -34, 6.5);
   announce('Langit Nusantara. Press Space or click to fly.');
   requestAnimationFrame(frame);
 }

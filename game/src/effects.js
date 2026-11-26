@@ -21,6 +21,11 @@ export function createEffects(THREE, scene) {
   // hexagonal/octagonal polygons" Gemini saw around every v15 blast.
   const puffGeo = new THREE.SphereGeometry(1, 12, 9);
   const ballGeo = new THREE.SphereGeometry(1, 12, 8);
+  // v18: faceted blast geometry — Gemini's fix: the v17 fireball read as
+  // "confetti" (smooth spheres + scattered puffs). Icosahedron and
+  // dodecahedron facets catch the light as hard shards of fire.
+  const facetGeo = new THREE.IcosahedronGeometry(1, 0);
+  const facetGeo2 = new THREE.DodecahedronGeometry(1, 0);
   const ringGeo = new THREE.TorusGeometry(1, 0.07, 8, 40);
   const debrisGeo = new THREE.BoxGeometry(1, 1, 1);
   const puffs = [];
@@ -157,10 +162,13 @@ export function createEffects(THREE, scene) {
     // drawn-on), with a yellow-white core, an orange-red mid layer and
     // charcoal smoke at soft edges. The smoke stays dark and outboard
     // of the flame, so the fire is never swallowed by it.
+    // v18: three FACETED layers (Gemini's spec) — pale core #FFF3B0,
+    // orange #FF9F1C, red shell #E63946 — so the blast reads as one
+    // cohesive faceted fireball, not scattered confetti blobs.
     const shellMat = new THREE.MeshBasicMaterial({
-      color: 0xff7a00, transparent: true, opacity: 0.95, depthWrite: false,
+      color: 0xe63946, transparent: true, opacity: 0.95, depthWrite: false,
     });
-    const shell = new THREE.Mesh(ballGeo, shellMat);
+    const shell = new THREE.Mesh(facetGeo2, shellMat);
     shell.position.set(x, y, z);
     shell.scale.setScalar(2);
     scene.add(shell);
@@ -169,17 +177,17 @@ export function createEffects(THREE, scene) {
     // fireball to a faint bubble while the black smoke dominated.
     balls.push({ mesh: shell, life: 0, maxLife: 2.8, from: 2, to: 34 });
     const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xffd52a, transparent: true, opacity: 0.95, depthWrite: false,
+      color: 0xff9f1c, transparent: true, opacity: 0.95, depthWrite: false,
     });
-    const core = new THREE.Mesh(ballGeo, coreMat);
+    const core = new THREE.Mesh(facetGeo, coreMat);
     core.position.set(x + 4, y + 2, z + 2);
     core.scale.setScalar(1.2);
     scene.add(core);
     balls.push({ mesh: core, life: 0, maxLife: 1.8, from: 1.2, to: 18 });
     const innerMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.98, depthWrite: false,
+      color: 0xfff3b0, transparent: true, opacity: 0.98, depthWrite: false,
     });
-    const inner = new THREE.Mesh(ballGeo, innerMat);
+    const inner = new THREE.Mesh(facetGeo, innerMat);
     inner.position.set(x - 3, y - 1, z - 2);
     inner.scale.setScalar(1);
     scene.add(inner);
@@ -187,17 +195,17 @@ export function createEffects(THREE, scene) {
     // v17: two extra lobes, offset sideways so the silhouette is
     // lopsided — a fireball with a single centre reads as a balloon.
     const lobeAMat = new THREE.MeshBasicMaterial({
-      color: 0xff5d1a, transparent: true, opacity: 0.95, depthWrite: false,
+      color: 0xff9f1c, transparent: true, opacity: 0.95, depthWrite: false,
     });
-    const lobeA = new THREE.Mesh(ballGeo, lobeAMat);
+    const lobeA = new THREE.Mesh(facetGeo2, lobeAMat);
     lobeA.position.set(x + 9, y - 3, z + 6);
     lobeA.scale.setScalar(1.5);
     scene.add(lobeA);
     balls.push({ mesh: lobeA, life: 0, maxLife: 2.2, from: 1.5, to: 20 });
     const lobeBMat = new THREE.MeshBasicMaterial({
-      color: 0xe63c00, transparent: true, opacity: 0.95, depthWrite: false,
+      color: 0xe63946, transparent: true, opacity: 0.95, depthWrite: false,
     });
-    const lobeB = new THREE.Mesh(ballGeo, lobeBMat);
+    const lobeB = new THREE.Mesh(facetGeo, lobeBMat);
     lobeB.position.set(x - 8, y + 4, z - 6);
     lobeB.scale.setScalar(1.2);
     scene.add(lobeB);
@@ -211,7 +219,7 @@ export function createEffects(THREE, scene) {
         color: f % 2 ? 0xff8c1a : 0xffb52e, transparent: true, opacity: 0.95,
         depthWrite: false, blending: THREE.AdditiveBlending,
       });
-      const tongue = new THREE.Mesh(ballGeo, tMat);
+      const tongue = new THREE.Mesh(facetGeo, tMat);
       tongue.position.set(x, y, z);
       tongue.scale.set(2, 6, 2);
       tongue.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
@@ -237,17 +245,18 @@ export function createEffects(THREE, scene) {
     // Debris: twenty dark shards and twelve burning ones at 10-26 m/s
     // (Gemini's fix prompt: 24-36 outward-streaking ember/flame chunks),
     // so the blast reads as shrapnel, not a clean puff. The shards are
-    // ELONGATED (2.0 x 0.45 x 0.45) and fly outward fast, so they streak
-    // instead of tumbling as cubes.
+    // CHUNKY (v18: 1.2 x 0.8 x 0.8, was elongated 2.0 x 0.45 x 0.45) in
+    // slate #334155 and red #C82828, tumbling with gravity — angled
+    // fragments, not streaks.
     for (let d = 0; d < 32; d += 1) {
       const burning = d < 12;
       const mat = new THREE.MeshBasicMaterial({
-        color: burning ? 0xff9e1b : 0x22242a,
+        color: burning ? 0xff9e1b : (d % 2 ? 0x334155 : 0xc82828),
         transparent: true, opacity: 1, depthWrite: false,
       });
       const piece = new THREE.Mesh(debrisGeo, mat);
-      const s = 0.5 + Math.random() * 1.1;
-      piece.scale.set(s * 2.0, s * 0.45, s * 0.45);
+      const s = 0.7 + Math.random() * 1.3;
+      piece.scale.set(s * 1.2, s * 0.8, s * 0.8);
       piece.position.set(x, y, z);
       piece.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
       scene.add(piece);
@@ -272,7 +281,9 @@ export function createEffects(THREE, scene) {
     // in the air, rising if it hit the sea or the ground. v17: the
     // puffs are smaller, thinner (0.55) and spread wider (±30 m) with
     // the soft texture, so the fire shows through them.
-    const smokeColors = [0x26292e, 0x2e3138, 0x3e434b];
+    // v18: slate smoke (#475569 / #64748B / #CBD5E1, Gemini's spec) —
+    // the old near-black puffs read as confetti flecks against the fire.
+    const smokeColors = [0x475569, 0x64748b, 0xcbd5e1];
     for (let p = 0; p < 14; p += 1) {
       smokePuff(
         x + (Math.random() - 0.5) * 60,
@@ -345,7 +356,7 @@ export function createEffects(THREE, scene) {
    */
   function flak(x, y, z) {
     const mat = new THREE.MeshBasicMaterial({
-      color: 0xff7a00, transparent: true, opacity: 0.9, depthWrite: false,
+      color: 0xff9f1c, transparent: true, opacity: 0.9, depthWrite: false,
     });
     const ball = new THREE.Mesh(ballGeo, mat);
     ball.position.set(x, y, z);
@@ -359,7 +370,7 @@ export function createEffects(THREE, scene) {
         z + (Math.random() - 0.5) * 8,
         2 + Math.random() * 1.5,
         {
-          color: p % 2 ? 0x2e3138 : 0x1f2126, life: 3 + Math.random() * 2,
+          color: p % 2 ? 0x64748b : 0x475569, life: 3 + Math.random() * 2,
           grow: 1.1, vel: { x: (Math.random() - 0.5) * 3, y: 1, z: (Math.random() - 0.5) * 3 },
           opacity: 0.65,
         },
@@ -729,7 +740,7 @@ export function createEffects(THREE, scene) {
           c.y + h,
           c.z + (Math.random() - 0.5) * 3,
           2 + Math.random() * 1.5,
-          { color: 0x3a3a3a, life: 4, grow: 1.4, vel: { x: 0, y: 2.5, z: 0 }, opacity: 0.7 },
+          { color: 0x475569, life: 4, grow: 1.4, vel: { x: 0, y: 2.5, z: 0 }, opacity: 0.7 },
         );
       }
       if (c.t >= c.dur) columns.splice(i, 1);
@@ -758,7 +769,7 @@ export function createEffects(THREE, scene) {
         h.smokeTimer = 0;
         const p = h.group.position;
         smokePuff(p.x, p.y, p.z, 2 + Math.random(), {
-          color: 0x2e2e2e, life: 3, grow: 1.2,
+          color: 0x475569, life: 3, grow: 1.2,
           vel: { x: 0, y: 0.5, z: 0 }, opacity: 0.8,
         });
       }

@@ -18,12 +18,16 @@ export function buildPlane(THREE, livery = null) {
   // v11: glossier premium materials (cream roughness 0.42, red 0.38, both
   // with more metalness) — the redesign prompt's improved material quality
   // and colour contrast, while the red-and-white scheme itself is kept.
-  const cream = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.42, metalness: 0.25 });
-  const red = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.38, metalness: 0.25 });
+  // v18: flatShading on the structural materials — Gemini's fix for
+  // the "stacked rectangular blocks" read: faceted cylinders and
+  // prisms catch the light as built parts, not smooth tubes.
+  const cream = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.42, metalness: 0.25, flatShading: true });
+  const red = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.38, metalness: 0.25, flatShading: true });
   const glass = new THREE.MeshStandardMaterial({
     color: PALETTE.planeGlass, roughness: 0.12, metalness: 0.4, transparent: true, opacity: 0.85,
   });
-  const dark = new THREE.MeshStandardMaterial({ color: '#22242a', roughness: 0.9 });
+  // v18: wheels/legs in dark slate #1F2937 (Gemini's spec, was #22242a).
+  const dark = new THREE.MeshStandardMaterial({ color: '#1F2937', roughness: 0.9, flatShading: true });
 
   const body = new THREE.Group();
   group.add(body);
@@ -63,7 +67,8 @@ export function buildPlane(THREE, livery = null) {
   // Cabin windows: four large dark glass panes per side, slightly proud of
   // the cabin wall, with the window rhythm of the real Caravan; two angled
   // windshield panes at the front of the cabin.
-  const windowMat = new THREE.MeshStandardMaterial({ color: '#22303f', roughness: 0.15, metalness: 0.35 });
+  // v18: cabin glass in dark slate #1E293B (Gemini's spec, was #22303f).
+  const windowMat = new THREE.MeshStandardMaterial({ color: '#1E293B', roughness: 0.15, metalness: 0.35 });
   for (const side of [-1, 1]) {
     for (let w = 0; w < 4; w += 1) {
       const win = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.42, 0.5), windowMat);
@@ -78,14 +83,19 @@ export function buildPlane(THREE, livery = null) {
   }
   // Nose transition: a short faceted section bridging the cabin front to
   // the red engine cowling.
-  const noseSec = new THREE.Mesh(new THREE.CylinderGeometry(0.60, 0.56, 0.5, 8), cream);
+  // v18: a much stronger taper (front 0.42, was 0.56) — Gemini's fix:
+  // the nose must narrow 1.0 -> 0.42, so the front reads as a
+  // turboprop nose, not a blunt tube end.
+  const noseSec = new THREE.Mesh(new THREE.CylinderGeometry(0.60, 0.42, 0.5, 8), cream);
   noseSec.rotation.x = Math.PI / 2;
   noseSec.position.set(0, 0.05, -2.35);
   body.add(noseSec);
   // Red nose cowling. The cowling, prop and blur disc live on the group
   // (not the body) so the cockpit view can hide the bodywork while the
   // nose stays in sight ahead of the pilot.
-  const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.55, 0.9, 14), red);
+  // v18: the cowling tapers too (0.58 -> 0.44, was 0.64 -> 0.55), so the
+  // nose-to-cowl line keeps narrowing toward the prop.
+  const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.44, 0.9, 14), red);
   cowl.rotation.x = Math.PI / 2;
   cowl.position.set(0, 0, -3.0);
   group.add(cowl);
@@ -106,37 +116,70 @@ export function buildPlane(THREE, livery = null) {
   // bigger red wingtips, so the wing is the first thing read from behind
   // — not the fuselage tube. The aileron seam is darker and thicker, and
   // a trailing-edge hinge line marks the flap split.
+  // v18: the wing is a TAPERED PRISM, not a slab box — chord 1.6 -> 1.15
+  // (0.72, Gemini's spec), thickness 0.18 -> 0.12, dihedral 3 deg
+  // (0.06 rad, was 0.11), so it reads as a faceted airfoil. The helper
+  // builds flat faces from root to tip; the left half mirrors by a
+  // negative length (its winding is reversed so the normals stay out).
+  function taperedPrism(len, hRoot, hTip, cRoot, cTip) {
+    const s = Math.sign(len) || 1;
+    const L = Math.abs(len);
+    const r = [
+      [0, -hRoot / 2, -cRoot / 2], [0, hRoot / 2, -cRoot / 2],
+      [0, hRoot / 2, cRoot / 2], [0, -hRoot / 2, cRoot / 2],
+      [s * L, -hTip / 2, -cTip / 2], [s * L, hTip / 2, -cTip / 2],
+      [s * L, hTip / 2, cTip / 2], [s * L, -hTip / 2, cTip / 2],
+    ];
+    // Faces wound outward: bottom, top, leading (-Z), trailing (+Z),
+    // tip cap, root cap.
+    const quads = [
+      [3, 0, 4, 7], [1, 2, 6, 5], [0, 1, 5, 4],
+      [3, 2, 7, 6], [4, 5, 6, 7], [1, 0, 3, 2],
+    ];
+    if (s < 0) for (const q of quads) q.reverse();
+    const pos = [];
+    for (const q of quads) {
+      const [a, b, cc, d] = q;
+      pos.push(...r[a], ...r[b], ...r[cc], ...r[a], ...r[cc], ...r[d]);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }
   for (const side of [-1, 1]) {
-    const half = new THREE.Mesh(new THREE.BoxGeometry(4.84, 0.18, 1.6), cream);
-    half.position.set(side * 2.42, 0.82, -0.4);
-    half.rotation.z = side * 0.11;
+    const half = new THREE.Mesh(taperedPrism(side * 4.6, 0.18, 0.12, 1.6, 1.15), cream);
+    half.position.set(0, 0.82, -0.4);
+    half.rotation.z = side * 0.06;
     body.add(half);
     const rootFairing = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.32, 1.75), cream);
     rootFairing.position.set(side * 0.85, 0.78, -0.4);
-    rootFairing.rotation.z = side * 0.11;
+    rootFairing.rotation.z = side * 0.06;
     body.add(rootFairing);
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 1.65), red);
-    tip.position.set(side * 5.05, 1.37, -0.4);
-    tip.rotation.z = side * 0.11;
+    // Red wingtip: a tapered prism continuing the wing's taper
+    // (chord 1.15 -> 1.05), spanning 4.6-5.5 m.
+    const tip = new THREE.Mesh(taperedPrism(side * 0.9, 0.12, 0.10, 1.15, 1.05), red);
+    tip.position.set(side * 4.6, 1.10, -0.4);
+    tip.rotation.z = side * 0.06;
     body.add(tip);
     // Aileron seam: a thin darker line near the trailing edge, so the wing
     // reads as control surfaces, not one blank plank.
     const aileronMat = new THREE.MeshStandardMaterial({ color: '#b8a888', roughness: 0.55, metalness: 0.25 });
     const aileron = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.03, 0.16), aileronMat);
-    aileron.position.set(side * 2.42, 0.92, 0.28);
-    aileron.rotation.z = side * 0.11;
+    aileron.position.set(side * 2.3, 1.05, 0.28);
+    aileron.rotation.z = side * 0.06;
     body.add(aileron);
     const hinge = new THREE.Mesh(
       new THREE.BoxGeometry(3.6, 0.03, 0.1),
       new THREE.MeshStandardMaterial({ color: '#8a8378', roughness: 0.6 }),
     );
-    hinge.position.set(side * 2.42, 0.9, 0.38);
-    hinge.rotation.z = side * 0.11;
+    hinge.position.set(side * 2.3, 1.04, 0.38);
+    hinge.rotation.z = side * 0.06;
     body.add(hinge);
     // Wing strut: red, from the lower fuselage side up to mid-span under
     // the wing — the Caravan's visible struts, readable from behind.
-    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.5, 6), red);
-    strut.position.set(side * 1.18, 0.31, -0.4);
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.7, 6), red);
+    strut.position.set(side * 1.18, 0.35, -0.4);
     strut.rotation.z = -side * 0.986;
     body.add(strut);
     // Wingtip navigation light: red on the left, green on the right.
@@ -144,7 +187,7 @@ export function buildPlane(THREE, livery = null) {
       new THREE.SphereGeometry(0.09, 8, 6),
       new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff2a1e : 0x2aff5e }),
     );
-    lamp.position.set(side * 5.5, 1.4, -0.4);
+    lamp.position.set(side * 5.5, 1.24, -0.4);
     body.add(lamp);
   }
 
@@ -155,12 +198,14 @@ export function buildPlane(THREE, livery = null) {
   // Caravan empennage, never as a cone.
   // v13: the stabiliser is wider and thicker, so it reads as a separate
   // tailplane from behind instead of merging into the fuselage tube.
-  const stabiliser = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.16, 1.15), cream);
-  stabiliser.position.set(0, 0.3, 4.2);
-  body.add(stabiliser);
+  // v18: the stabiliser tapers like the wing (chord 1.15 -> 0.8,
+  // thickness 0.16 -> 0.12) with red tapered tips — no more slab.
   for (const side of [-1, 1]) {
-    const stabTip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 1.18), red);
-    stabTip.position.set(side * 1.85, 0.3, 4.2);
+    const stabHalf = new THREE.Mesh(taperedPrism(side * 2.1, 0.16, 0.12, 1.15, 0.8), cream);
+    stabHalf.position.set(0, 0.3, 4.2);
+    body.add(stabHalf);
+    const stabTip = new THREE.Mesh(taperedPrism(side * 0.5, 0.12, 0.10, 0.8, 0.75), red);
+    stabTip.position.set(side * 1.6, 0.3, 4.2);
     body.add(stabTip);
   }
   // v13: the fin is shorter and wider than v12 — the old tall thin fin
@@ -290,13 +335,13 @@ export function buildPlane(THREE, livery = null) {
   face.position.set(0, 0.01, 0.06);
   dash.add(face);
   // Red trim along the top edge of the panel, so it is visibly built, not cut out.
-  const trim = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.035, 0.13), red);
-  trim.position.set(0, 0.225, 0);
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.025, 0.13), red);
+  trim.position.set(0, 0.22, 0);
   dash.add(trim);
   // v6: the same red trim along the bottom edge, so the panel is framed
   // top and bottom and reads as one finished housing.
-  const trimBottom = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.035, 0.13), red);
-  trimBottom.position.set(0, -0.225, 0);
+  const trimBottom = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.025, 0.13), red);
+  trimBottom.position.set(0, -0.22, 0);
   dash.add(trimBottom);
   // Glareshield: wider than the panel, shallow and high, sloping gently down
   // toward the pilot — it gives the panel a real top surface without
@@ -322,6 +367,11 @@ export function buildPlane(THREE, livery = null) {
   // cabin instead of separate dark bars; it is lighter than the old frame
   // grey, so the bright sky outside no longer fights the interior.
   const shellMat = new THREE.MeshStandardMaterial({ color: '#6e737c', roughness: 0.6, metalness: 0.2 });
+  // v18: dark-slate trim (#273244, Gemini's spec) for the THIN canopy
+  // frame elements — pillars, arch, struts, rails, rear posts — so the
+  // frame reads as structure, not slabs. The big shell parts (walls,
+  // roof, console) keep the lighter shell grey.
+  const trimMat = new THREE.MeshStandardMaterial({ color: '#273244', roughness: 0.6, metalness: 0.2 });
   // Glareshield: a shaped three-piece brow — a flat centre with two side
   // pieces sloping down to the A-pillars — so the instruments sit under a
   // hood that is part of the cabin, not a floating slab.
@@ -330,7 +380,10 @@ export function buildPlane(THREE, livery = null) {
   // red pinstripe along its front lip — so it reads as a brow over the
   // dials instead of the big dark slab that dominated the v12 cockpit
   // frame and hid the top half of every dial.
-  const shieldMat = new THREE.MeshStandardMaterial({ color: '#565b64', roughness: 0.8, metalness: 0.1 });
+  // v18: the glareshield is dark slate #1E293B (Gemini's spec, was
+  // #565b64) — it stays a THIN brow (0.03 thick), so it reads as a
+  // shaded brow over the dials, not the big dark slab of v12.
+  const shieldMat = new THREE.MeshStandardMaterial({ color: '#1E293B', roughness: 0.8, metalness: 0.1 });
   const shieldCentre = new THREE.Mesh(
     new THREE.BoxGeometry(1.71, 0.03, 0.20),
     shieldMat,
@@ -381,12 +434,15 @@ export function buildPlane(THREE, livery = null) {
   // v17: slimmer pillars (0.07 m, was 0.11; base 0.09, was 0.13) —
   // the v16 live playtest found the thick pillars eating the
   // windshield; the frame still reads as solid structure.
+  // v18: slimmer pillars (0.05 m, was 0.07; base 0.07, was 0.09) in
+  // dark-slate trim — Gemini's fix: the v17 pillars still ate the
+  // windshield; thin dark bars frame it without blocking it.
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.0, 0.09), shellMat);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 0.09), trimMat);
     pillar.position.set(side * 0.97, -0.02, 0.02);
     pillar.rotation.z = -side * 0.12;
     dash.add(pillar);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.10), shellMat);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.08, 0.10), trimMat);
     base.position.set(side * 0.95, -0.48, 0.03);
     dash.add(base);
   }
@@ -418,13 +474,14 @@ export function buildPlane(THREE, livery = null) {
   // divide the windshield into three panes, and a headliner slab runs back
   // from the bow — the top of the frame is now a cabin roof, not open sky.
   // v17: the arch tube is slimmer (0.04, was 0.05) with the pillars.
-  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.04, 8, 28, Math.PI), shellMat);
+  // v18: arch tube 0.035 (was 0.04) in dark-slate trim, with the pillars.
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.035, 8, 28, Math.PI), trimMat);
   arch.scale.set(1, 0.24, 1);
   arch.position.set(0, 0.42, 0.0);
   dash.add(arch);
   for (const side of [-1, 1]) {
-    // v17: slimmer struts (0.04, was 0.05) with the pillars.
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.26, 0.04), shellMat);
+    // v18: slimmer struts (0.035, was 0.04) in dark-slate trim.
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.26, 0.035), trimMat);
     strut.position.set(side * 0.5, 0.31, 0.0);
     dash.add(strut);
   }
@@ -468,7 +525,7 @@ export function buildPlane(THREE, livery = null) {
   roofSpine.position.set(0, 0.73, 0.475);
   roofSpine.rotation.x = -0.30;
   dash.add(roofSpine);
-  const rearArch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.045, 8, 28, Math.PI), shellMat);
+  const rearArch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.045, 8, 28, Math.PI), trimMat);
   rearArch.scale.set(1, 0.24, 1);
   rearArch.position.set(0, 0.42, 0.55);
   dash.add(rearArch);
@@ -504,12 +561,12 @@ export function buildPlane(THREE, livery = null) {
   // The side walls are TALLER (door 0.72 m, window 0.52 m), so the cabin
   // sides reach up to meet the roof instead of ending halfway.
   for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.85), shellMat);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.85), trimMat);
     rail.position.set(side * 0.98, 0.47, 0.42);
     rail.rotation.x = -0.12;
     dash.add(rail);
-    // v17: slimmer rear posts (0.04, was 0.05) with the pillars.
-    const rearPost = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), shellMat);
+    // v18: slimmer rear posts (0.035, was 0.04) in dark-slate trim.
+    const rearPost = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.5, 0.035), trimMat);
     rearPost.position.set(side * 0.98, 0.27, 0.80);
     dash.add(rearPost);
     // v12: the wall is a door frame, not a plate. A solid lower door panel
@@ -647,10 +704,12 @@ export function buildPlane(THREE, livery = null) {
     c.width = 512;
     c.height = 512;
     const x = c.getContext('2d');
+    // v18: a clean light face #F8FAFC (was cream #faf3dd) — Gemini's
+    // spec: dark numerals on a near-white face, no warm tint.
     const shade = x.createRadialGradient(256, 256, 40, 256, 256, 256);
-    shade.addColorStop(0, '#faf3dd');
-    shade.addColorStop(0.75, '#f2ead2');
-    shade.addColorStop(1, '#e3d8b4');
+    shade.addColorStop(0, '#ffffff');
+    shade.addColorStop(0.75, '#f8fafc');
+    shade.addColorStop(1, '#e2e8f0');
     x.fillStyle = shade;
     x.fillRect(0, 0, 512, 512);
     // Redline arc across the top-right of the dial.
@@ -680,7 +739,7 @@ export function buildPlane(THREE, livery = null) {
     // Numbers at 12 / 3 / 6 / 9 and the instrument label at the bottom.
     // The needle never sweeps the bottom of the dial (its range is the
     // upper ~240°), so the label down there stays uncovered.
-    x.fillStyle = '#1a1c22';
+    x.fillStyle = '#0f172a';
     x.textAlign = 'center';
     x.textBaseline = 'middle';
     // v14: numbers 100 px (was 88) and labels 64 px (was 58) — the v13
@@ -690,17 +749,27 @@ export function buildPlane(THREE, livery = null) {
     // for each instrument at 11-14% of viewport height with markings
     // unmistakable at a glance; the canvas stays 512 px, the ink gets
     // bigger on it.
-    // v17: numbers 120 px (was 112) and the label moved up to y 296
-    // (was 336) — the label sat on top of the '6' (the '6' spans
-    // y 352-464 on the 512 px face). The needle never sweeps the
-    // bottom of the dial, so the label is clear there.
-    x.font = 'bold 120px system-ui, sans-serif';
-    x.fillText('12', 256, 104);
-    x.fillText('3', 408, 256);
-    x.fillText('6', 256, 408);
-    x.fillText('9', 104, 256);
-    x.font = 'bold 72px system-ui, sans-serif';
-    x.fillText(label, 256, 296);
+    // v18: numbers 96 px (was 120) at radius 138 (centres 106/406) —
+    // Gemini's fix: the v17 numerals crowded the tick ring and read as
+    // overlapping at screenshot distance; smaller numerals with clear
+    // space around them read cleanly. The needle never sweeps the
+    // bottom of the dial, so the label badge down there stays uncovered.
+    x.font = 'bold 96px system-ui, sans-serif';
+    x.fillText('12', 256, 106);
+    x.fillText('3', 406, 256);
+    x.fillText('6', 256, 406);
+    x.fillText('9', 106, 256);
+    // v18: the sub-label sits in its own navy badge, clear of the '6'
+    // (which spans y 358-454) and clear of the needle pivot — Gemini's
+    // fix: the v17 label read as a decal overlapping the numerals.
+    const badgeW = 170; const badgeH = 64; const badgeY = 315;
+    x.fillStyle = '#0f172a';
+    x.beginPath();
+    x.roundRect(256 - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 16);
+    x.fill();
+    x.fillStyle = '#ffffff';
+    x.font = 'bold 52px system-ui, sans-serif';
+    x.fillText(label, 256, badgeY + 2);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     // Gemini's fix prompt: high-DPI canvas textures with anisotropy so

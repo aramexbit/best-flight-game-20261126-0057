@@ -10,11 +10,17 @@
 //      miss does not; a near-miss is a near-miss.
 //   4. Collision gate: two crossing rivals fire; far rivals do not;
 //      the player-relative second chance (relFire) fires on its terms.
+//   5. Pitch holds with no stick input + gust (v18: the v17 live
+//      playtest missed ring 1 by 28-45 m "ke kiri/atas" — pitch trim
+//      locked up and gust pitch random-walked it, no pitch auto-level).
+//   6. No-input straight flight passes ring 1 (v18: a human flying
+//      straight from spawn must clear ring 1 — the autopilot's 12/12
+//      is not enough on its own).
 //
 // Run: node test/headless.test.mjs   (exit 0 = all pass)
 import assert from 'node:assert/strict';
 import { createRandom } from '../game/src/random.js';
-import { planIslands } from '../game/src/terrain.js';
+import { planIslands, createGroundAt } from '../game/src/terrain.js';
 import { createCourse } from '../game/src/rings.js';
 import { createFlight } from '../game/src/flight.js';
 import { STEP } from '../game/src/config.js';
@@ -77,6 +83,7 @@ check('heading holds with zero stick + gust applied (20 s)', () => {
       yaw: 0,
       throttle: 0,
       stickRoll: 0, // raw stick: hands off (main.js passes this on final; here always)
+      stickPitch: 0, // v18: raw pitch stick, same gate as stickRoll
     }, FLAT_GROUND, null);
   }
   assert.equal(s.status, 'flying');
@@ -167,6 +174,78 @@ check('no partner rival: no fire', () => {
   assert.equal(g.relFire, false);
 });
 
-console.log(`\n${passed}/9 headless tests passed`);
+// --- 5. Pitch holds with no stick input + gust -------------------------
+// v18: the v17 live playtest missed ring 1 by 28-45 m "ke kiri/atas" —
+// a W tap locked the climb (pitchRate 0.9, no pitch auto-level) and the
+// gust pitch random-walked the trim. With the pitch auto-level gated on
+// the raw stick (stickPitch), hands off + gust must keep the nose level.
+check('pitch holds with zero stick + gust applied (20 s, cruise)', () => {
+  const course = buildCourse();
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  let maxPitch = 0;
+  for (let i = 0; i < 20 / STEP; i += 1) {
+    const gust = gustAt(s.elapsed);
+    flight.step(STEP, {
+      pitch: clamp1(0 + gust.pitch),
+      roll: clamp1(0 + gust.roll),
+      yaw: 0,
+      throttle: 0.7,
+      stickRoll: 0,
+      stickPitch: 0,
+    }, FLAT_GROUND, null);
+    maxPitch = Math.max(maxPitch, Math.abs(s.pitch));
+  }
+  assert.equal(s.status, 'flying');
+  console.log(`  pitch=${s.pitch.toFixed(3)} rad maxPitch=${maxPitch.toFixed(3)} rad`);
+  assert.ok(Math.abs(s.pitch) < 0.1, `pitch drifted to ${s.pitch.toFixed(3)} rad (limit 0.1)`);
+  assert.ok(maxPitch < 0.15, `pitch peaked at ${maxPitch.toFixed(3)} rad (limit 0.15)`);
+  // A locked-in trim (the v17 bug: one W tap locked the climb forever)
+  // must decay back to level hands-off, at the pitchLevel rate.
+  s.pitch = 0.3;
+  for (let i = 0; i < 5 / STEP; i += 1) {
+    const gust = gustAt(s.elapsed);
+    flight.step(STEP, {
+      pitch: clamp1(0 + gust.pitch),
+      roll: clamp1(0 + gust.roll),
+      yaw: 0,
+      throttle: 0.7,
+      stickRoll: 0,
+      stickPitch: 0,
+    }, FLAT_GROUND, null);
+  }
+  console.log(`  trim 0.30 rad decayed to ${s.pitch.toFixed(3)} rad in 5 s`);
+  assert.ok(Math.abs(s.pitch) < 0.05, `locked trim did not decay (pitch ${s.pitch.toFixed(3)} rad, limit 0.05)`);
+});
+
+// --- 6. No-input straight flight passes ring 1 -------------------------
+check('no-input straight flight passes ring 1', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  let rings = 0;
+  for (let i = 0; i < 30 / STEP; i += 1) {
+    if (s.status !== 'flying') break;
+    const prev = { x: s.x, y: s.y, z: s.z };
+    const gust = gustAt(s.elapsed);
+    flight.step(STEP, {
+      pitch: clamp1(0 + gust.pitch),
+      roll: clamp1(0 + gust.roll),
+      yaw: 0,
+      throttle: 0.7,
+      stickRoll: 0,
+      stickPitch: 0,
+    }, groundAt, course.runway);
+    const pass = course.checkPass(prev, s);
+    if (pass && pass.passed) rings += 1;
+    if (rings >= 1) break;
+  }
+  console.log(`  rings=${rings} time=${s.elapsed.toFixed(1)} s status=${s.status}`);
+  assert.ok(rings >= 1, `straight flight passed ${rings} rings in 30 s (expected >= 1)`);
+});
+
+console.log(`\n${passed}/11 headless tests passed`);
 if (process.exitCode) console.log('HEADLESS TESTS: FAIL');
 else console.log('HEADLESS TESTS: ALL PASS');

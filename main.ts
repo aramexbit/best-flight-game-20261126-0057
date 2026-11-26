@@ -1,5 +1,36 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v16: STORM BATTLE in broad daylight — no weapons,
+// standard library only). v18: the Gemini v17 blind-test fixes + the five
+// v17 live-playtest P0s. The Caravan is faceted + tapered now (nose
+// 1.0→0.42, wings tapered chord 1.6→1.15 with 3° dihedral, red tapered
+// wingtips, wing struts, tapered stabiliser, dark wheels, flatShading),
+// the cockpit has slimmer pillars (0.05 m), trim #273244, a dark
+// glareshield and dial faces on a light face with the sub-label in a
+// separate navy badge (numbers never overlap), the terrain is 2.5–3x
+// denser mid-course (hero groves, ring 3–5 groves, 320 bushes) with slate
+// cliffs and a deeper sea, runway 09 is dark asphalt #2B303A with sharp
+// canvas-texture "09"/"27" numbers and a fuel truck on the apron, the
+// explosion is a 3-layer faceted fireball (#FFF3B0/#FF9F1C/#E63946) with
+// slate smoke and chunky debris, and the storm has a second anvil tier
+// with a darker wider tornado. Flight: pitch auto-levels on the raw
+// stick (hands-off pitch holds 0.000 rad; a locked trim decays in 5 s),
+// softer tap rates, and the chase camera uses a yaw-only horizontal
+// forward — the v16/v17 live bug that dropped the camera below the plane
+// at steep pitch, staring at its nose, is gone. Ring 1 was NOT moved:
+// the spawn line already crosses it ~10 m from centre; the v17 misses
+// were trim lock-in + gust pitch random-walk, now fixed (no-input flight
+// passes ring 1 at 7.4 s). The collision message clears in ~2.5 s of
+// real time (was 15–40 s live), R restarts from play/paused/over, C
+// switches camera while paused, and crashed rivals keep a latched race
+// position instead of jumping 5/5 → 2/5 → 5/5. v18c: the chase camera
+// also got a feedforward (it translates with the plane's own
+// displacement each draw) and the live draw runs on the real frame dt
+// — the A5 numbers had passed on behind+above while the camera still
+// sat 25–150 m behind the plane at low FPS, so the plane read as a
+// tiny speck in live play; the re-check holds maxDist 12 m (chase
+// geometry 12.3 m) through turns and a steep climb. Title: structured navy-
+// bordered instruction card, text still dark navy #132238, hero title
+// with a navy outline, key-cap sub-labels on navy pills, rival badges
+// as compact navy pills. v16: STORM BATTLE in broad daylight — no weapons,
 // no night. A tornado (260 m lateral of the course, beside rings 5-8, never
 // covering a ring or the runway) plus a second waterspout, a dark storm-cell
 // wall, slanting rain, cloud-to-sea lightning, flak in the outer corridor

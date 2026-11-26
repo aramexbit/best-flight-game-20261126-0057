@@ -32,12 +32,17 @@ export const PLANE = {
   thrust: 26,
   drag: 0.0032,
   // How fast the stick turns the plane, in radians per second at full deflection.
-  pitchRate: 0.9,
-  rollRate: 1.9,
+  // v18: softer tap increments (v17 live playtest: 1 W tap locked pitch up
+  // forever, 2 A taps swung heading 60-70 deg).
+  pitchRate: 0.7,
+  rollRate: 1.5,
   // A banked turn pulls the nose around this hard (radians per second per unit bank).
   turnRate: 0.95,
   // The roll eases back toward level on its own when the stick is centred.
-  autoLevel: 0.55,
+  // v18: stronger roll level + a pitch level (v17 had roll auto-level only,
+  // so gust pitch random-walked the trim and a W tap locked the climb).
+  autoLevel: 0.7,
+  pitchLevel: 0.45,
   // Climbing costs speed, diving buys it, at this rate.
   climbCost: 9.5,
   // Throttle moves at this rate per second when the key is held.
@@ -213,9 +218,11 @@ export const PALETTE = {
   fog: '#cfe8f5',
   sun: '#ffffff',
   sea: '#00C5D9',
-  seaDeep: '#0B6FA8',
-  seaMid: '#00C5D9',
-  seaShallow: '#3ED8CF',
+  // v18: sea bands to Gemini's spec — shallow #00C5D9, mid #06A8D8,
+  // deep #0284C7 (was #3ED8CF / #00C5D9 / #0B6FA8).
+  seaDeep: '#0284C7',
+  seaMid: '#06A8D8',
+  seaShallow: '#00C5D9',
   sand: '#E8D39A',
   grass: '#42B83C',
   forest: '#2E9E33',
@@ -230,7 +237,7 @@ export const PALETTE = {
   // v11: the dry grass goes more vivid too, so the patchwork stays sunny.
   grassDry: '#A9C94E',
   dirt: '#a98f66',
-  rock: '#7a6a5e',
+  rock: '#64748B',
   snow: '#f2ede6',
   // v11: the rings go glossier gold (#FFD52A, next ring #FFE65C) to match
   // the redesign prompt's golden-yellow glow and the mockup's glowing ring.

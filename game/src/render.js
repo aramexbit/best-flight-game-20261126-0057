@@ -111,6 +111,13 @@ export function createRenderer(canvas, THREE, groups) {
 
   let mode = CAMERA_CHASE;
   let firstFrame = true;
+  // v18c: the plane's position on the previous draw, for the chase
+  // feedforward (see draw()). Reset whenever the camera is re-aimed so
+  // a teleport (title orbit -> spawn on start) never injects a stale jump.
+  let prevPlaneX = 0;
+  let prevPlaneY = 0;
+  let prevPlaneZ = 0;
+  let prevPlaneValid = false;
   // Chase framing, set per scene by the game (title / flight / landing each
   // want their own distance, lateral offset and height — see the blueprint).
   let chaseDist = 15;
@@ -144,6 +151,7 @@ export function createRenderer(canvas, THREE, groups) {
     chaseHeight = height;
     chaseLookAhead = lookAhead;
     firstFrame = true;
+    prevPlaneValid = false;
   }
 
   function resize() {
@@ -159,6 +167,7 @@ export function createRenderer(canvas, THREE, groups) {
   function setCameraMode(next) {
     mode = next;
     firstFrame = true;
+    prevPlaneValid = false;
   }
 
   /**
@@ -168,6 +177,17 @@ export function createRenderer(canvas, THREE, groups) {
   function draw(flight, planeApi, ringsApi, terrainApi, dt, time, rivalStates) {
     const s = flight.state;
     const p = groups.plane;
+
+    // v18c: the plane's displacement since the last draw, for the chase
+    // feedforward below. Tracked in both camera modes so switching back
+    // to chase never inherits a stale jump.
+    const planeDx = prevPlaneValid ? s.x - prevPlaneX : 0;
+    const planeDy = prevPlaneValid ? s.y - prevPlaneY : 0;
+    const planeDz = prevPlaneValid ? s.z - prevPlaneZ : 0;
+    prevPlaneX = s.x;
+    prevPlaneY = s.y;
+    prevPlaneZ = s.z;
+    prevPlaneValid = true;
 
     // The plane itself: position plus yaw/pitch/roll, in the order the model uses.
     p.position.set(s.x, s.y, s.z);
@@ -210,26 +230,64 @@ export function createRenderer(canvas, THREE, groups) {
       // it to the right) without changing where the camera looks.
       const rightX = Math.cos(s.yaw);
       const rightZ = Math.sin(s.yaw);
+      // v18: the chase offset and look target use the YAW-ONLY horizontal
+      // forward, never the pitch-inclusive forward. The old code put the
+      // camera at plane - forward*dist, so at steep pitch the forward was
+      // mostly vertical and the camera dropped UNDER the plane, looking up
+      // at its belly and prop — the v16+v17 live playtests both saw the
+      // camera "in front of the plane, staring at its nose" with the
+      // world ahead invisible, while the straight-flight seed shots
+      // looked fine. Now the camera always sits behind and above the
+      // plane, looking forward along the heading, at every pitch and bank;
+      // the look target keeps half the pitch so climbs still read.
+      const hFwdX = Math.sin(s.yaw);
+      const hFwdZ = -Math.cos(s.yaw);
       const want = new THREE.Vector3(
-        s.x - tmpForward.x * chaseDist + rightX * chaseLateral,
-        s.y - tmpForward.y * chaseDist + chaseHeight,
-        s.z - tmpForward.z * chaseDist + rightZ * chaseLateral,
+        s.x - hFwdX * chaseDist + rightX * chaseLateral,
+        s.y + chaseHeight,
+        s.z - hFwdZ * chaseDist + rightZ * chaseLateral,
       );
       if (firstFrame) {
         chasePos.copy(want);
         firstFrame = false;
       } else {
+        // v18c: FEEDFORWARD — translate the camera by the plane's own
+        // displacement first, so straight flight has zero steady-state
+        // lag at ANY frame rate; the lerp below then only smooths the
+        // offset error from turns and climbs. Without this, the lerp
+        // chased a target running away at 75 m/s: at headless ~5 fps
+        // the camera sat 25-150 m behind the plane (diagnosed 27 Nov
+        // with NDC projection + a 3x-scale test — the plane was dead
+        // centre in frame, angle 3.5 deg, but a 30-80 px speck lost in
+        // the storm clutter) and even at 60 fps it lagged ~10 m, which
+        // is the "plane small/lost" the v16/v17 playtests kept reporting.
+        // The lerp dt is the REAL frame dt in live play now (main.js
+        // passes frameDt; staged shots still pass 1/60), so the tracking
+        // rate no longer collapses at low FPS either.
+        chasePos.x += planeDx;
+        chasePos.y += planeDy;
+        chasePos.z += planeDz;
         // v17: tighter tracking (6.5, was 4.5) — the camera stays glued
         // to the plane in turns instead of lagging behind and letting
         // the plane drift out of frame.
-        const k = 1 - Math.exp(-dt * 6.5);
+        // v18: rate 8 (was 6.5) + a HEIGHT FLOOR. The lerp runs once
+        // per rendered frame with a FIXED 1/60 dt while the sim can
+        // advance several steps per frame at low FPS, so in a climb
+        // the camera lagged up to 8 m BELOW the plane (live probe A5:
+        // 30/120 bad samples, min above -8 m) — the plane's belly
+        // filled the frame and the world ahead vanished, the v16/v17
+        // complaint in a new shape. The floor holds the camera at
+        // least 2.5 m above the plane at all times; the lerp still
+        // governs the rest of the tracking.
+        const k = 1 - Math.exp(-dt * 8);
         chasePos.lerp(want, k);
+        if (chasePos.y < s.y + 2.5) chasePos.y = s.y + 2.5;
       }
       camera.position.copy(chasePos);
       lookTarget.set(
-        s.x + tmpForward.x * chaseLookAhead,
-        s.y + tmpForward.y * chaseLookAhead,
-        s.z + tmpForward.z * chaseLookAhead,
+        s.x + hFwdX * chaseLookAhead,
+        s.y + Math.sin(s.pitch) * chaseLookAhead * 0.5,
+        s.z + hFwdZ * chaseLookAhead,
       );
       camera.up.set(0, 1, 0);
       camera.lookAt(lookTarget);

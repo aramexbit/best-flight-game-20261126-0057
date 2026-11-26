@@ -16,15 +16,15 @@ const START_SECONDS = 8;
 // reads as hanging/stalled in pitch in the cover shot (Gemini v10). At 40 s
 // it is on the same leg but earlier, on a leveler stretch over the same
 // tree-covered western slopes, so the attitude reads as smooth flight.
-// v15: 35.0 s (was 35.5) — the cover must freeze ~1.2 s AFTER the
-// mid-air blast (seed 1: 33.8 s), when the fireball is still bright
-// orange: with the v15 (1 - k^2) fade the shell holds ~0.8 opacity at
-// 1.2 s, while at 1.7 s it had already washed to a faint bubble and the
-// black smoke owned the frame (the v14 "chimney" complaint). The blast
-// sits ~60 m ahead of the player at the freeze, the two split halves
-// ~35 m apart and tumbling, with the next ring beyond them. This is
-// staging only: the flight model and the shot cameras are untouched.
-const PLAY_SECONDS = 35.0;
+// v18: 51.6 s (was 35.0) — the cover must freeze ~1.2 s AFTER the
+// mid-air blast (seed 1: 50.37 s in the staged run, measured
+// 27 Nov — the v18 softer flight rates + pitch auto-level moved the
+// pair assembly from 33.8 s (v17) to ~50 s, so the old 35.0 s freeze
+// caught no fireball at all). At 51.6 s the player is on final past
+// ring 12, so the frame shows the fireball ahead over the runway
+// approach instead of a ring — the blast stays the hero moment. This
+// is staging only: the flight model and the shot cameras are untouched.
+const PLAY_SECONDS = 51.6;
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world

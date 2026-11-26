@@ -74,29 +74,41 @@ const MARKER_COLORS = ['#00E5FF', '#A855F7', '#A3E635', '#FF3B6B'];
 const MARKER_COLOR_HEX = [0x00e5ff, 0xa855f7, 0xa3e635, 0xff3b6b];
 function makeMarkerSprite(THREE, text, color) {
   const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 128;
+  c.width = 192;
+  c.height = 80;
   const x = c.getContext('2d');
+  // v18: a compact navy pill with a gold border and white text — Gemini's
+  // fix: the big round pink/blue pins read as default UI markers. The
+  // pill is the HUD's navy (#063C85) with a 1.5 px gold (#FACC15) border.
+  // The `color` argument is kept for the slipstream trail, not the badge.
+  const w = 192; const h = 80; const r = 38;
   x.beginPath();
-  x.arc(64, 64, 56, 0, Math.PI * 2);
-  x.fillStyle = color;
+  x.moveTo(r + 2, 2);
+  x.lineTo(w - r - 2, 2);
+  x.arcTo(w - 2, 2, w - 2, h - 2, r);
+  x.lineTo(w - 2, h - r - 2);
+  x.arcTo(w - 2, h - 2, r + 2, h - 2, r);
+  x.lineTo(r + 2, h - 2);
+  x.arcTo(2, h - 2, 2, r + 2, r);
+  x.lineTo(2, r + 2);
+  x.arcTo(2, 2, r + 2, 2, r);
+  x.closePath();
+  x.fillStyle = '#063C85';
   x.fill();
-  x.lineWidth = 8;
-  x.strokeStyle = '#ffffff';
+  x.lineWidth = 4;
+  x.strokeStyle = '#FACC15';
   x.stroke();
-  x.fillStyle = '#132238';
-  x.font = '900 64px system-ui, sans-serif';
+  x.fillStyle = '#ffffff';
+  x.font = '900 44px system-ui, sans-serif';
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.fillText(text, 64, 68);
+  x.fillText(text, 96, 42);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  // v15 (fix): scale 3.5 m (was 9) — at 9 m the disc subtended ~20° at
-  // race distance and COVERED the rival, the ring and half the cockpit
-  // windshield in the v15 shots; a 3.5 m badge reads as a race number
-  // without hiding the plane it marks.
-  sprite.scale.set(3.5, 3.5, 1);
+  // v18: pill 5.0 x 2.1 m (192:80 aspect) — compact, reads as a race
+  // number without hiding the plane it marks.
+  sprite.scale.set(5.0, 2.1, 1);
   return sprite;
 }
 
@@ -297,6 +309,7 @@ export function createRivals(THREE, seed, islands, effects) {
       flybyDone: false, flybyTriggered: false, prevAlong: -999,
       spinAngle: 0, vel: { x: 0, y: 0, z: 0 },
       smokeT: 0, trailT: 0, respawnT: 0, meetPoint: null, marker,
+      crashRings: null, crashDist: null,
       trailColor: MARKER_COLOR_HEX[i], showcaseSide: 1,
     };
   });
@@ -344,8 +357,33 @@ export function createRivals(THREE, seed, islands, effects) {
     if (r.marker) r.marker.visible = false;
   }
 
+  /** A rival's race progress (rings passed + distance to its next objective). */
+  function raceProgress(r) {
+    const rs = r.flight.state;
+    const rNext = r.course.nextRing();
+    const rDist = rNext
+      ? r.course.distanceToNext(rs.x, rs.y, rs.z)
+      : Math.hypot(rs.x - r.course.runway.x, rs.y - r.course.runway.y, rs.z - r.course.runway.z);
+    return { rings: rs.ringsPassed, dist: rDist };
+  }
+
+  // v18: latch a rival's race progress the moment it crashes — a crashed
+  // rival keeps counting at its crash position until it respawns behind
+  // the player. The old code skipped crashed rivals entirely, so the
+  // player jumped 5/5 -> 2/5 the instant the pair collided and fell back
+  // to 5/5 when they respawned (v17 live playtest).
+  function latchCrash(r) {
+    const p = raceProgress(r);
+    r.crashRings = p.rings;
+    r.crashDist = p.dist;
+  }
+
   function respawn(r, ps, pf) {
     const s = r.flight.state;
+    // v18: the crash latch clears on respawn — the rival rejoins behind
+    // the player and counts live again from here.
+    r.crashRings = null;
+    r.crashDist = null;
     // Rejoin on the player's heading, at the player's altitude, on the
     // course line — spread out by rival index, so the pack reads as
     // spread across the sky instead of stacked on one point. Two cases.
@@ -425,6 +463,7 @@ export function createRivals(THREE, seed, islands, effects) {
 
   function startDive(r, kind) {
     const s = r.flight.state;
+    latchCrash(r);
     r.state = 'diving';
     r.stateT = 0;
     r.crashed[kind] = true;
@@ -433,6 +472,7 @@ export function createRivals(THREE, seed, islands, effects) {
   }
 
   function startSpin(r) {
+    latchCrash(r);
     r.state = 'spinning';
     r.stateT = 0;
     r.crashed.clip = true;
@@ -571,6 +611,7 @@ export function createRivals(THREE, seed, islands, effects) {
         );
         if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          latchCrash(r);
           hide(r, RACE.respawnDelay);
         } else {
           const dMeet = Math.hypot(s.x - r.meetPoint.x, s.y - r.meetPoint.y, s.z - r.meetPoint.z);
@@ -682,6 +723,7 @@ export function createRivals(THREE, seed, islands, effects) {
             effects.explodeSplit(st.x, st.y, st.z, st.yaw, { body: rv.livery.main, accent: rv.livery.accent });
             const f = forwardOf(st.yaw);
             rv.vel = { x: f.x * 30, y: 8, z: f.z * 30 };
+            latchCrash(rv);
             rv.state = 'tumbling';
             rv.stateT = 0;
             rv.crashed.collision = true;
@@ -691,6 +733,7 @@ export function createRivals(THREE, seed, islands, effects) {
           if (onShake) onShake(0.5);
         } else if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          latchCrash(r);
           hide(r, RACE.respawnDelay);
         }
       } else if (r.state === 'spinning') {
@@ -800,6 +843,7 @@ export function createRivals(THREE, seed, islands, effects) {
           r.flybyDone = true;
         } else if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          latchCrash(r);
           hide(r, RACE.respawnDelay);
         }
       } else if (r.state === 'showcase') {
@@ -819,9 +863,9 @@ export function createRivals(THREE, seed, islands, effects) {
         if (r.trailT >= 0.25) {
           r.trailT = 0;
           const f = forwardOf(s.yaw);
-          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 1.0, {
+          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 0.8, {
             color: r.trailColor, life: 1.1, grow: 1.0,
-            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.30,
+            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.20,
           });
         }
         if (r.stateT >= 6) {
@@ -832,6 +876,7 @@ export function createRivals(THREE, seed, islands, effects) {
           r.stateT = 0;
         } else if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          latchCrash(r);
           hide(r, RACE.respawnDelay);
         }
       } else {
@@ -913,21 +958,25 @@ export function createRivals(THREE, seed, islands, effects) {
         // trail puff close to the cockpit camera washed a quarter of
         // the windshield pink in the v15 cockpit shot; smaller and
         // fainter still reads as a motion cue at race distance.
+        // v18: size 0.8, opacity 0.20 — the v17 cockpit shot still had
+        // a pink wash low-centre from the trail.
         r.trailT += dt;
         if (r.trailT >= 0.25) {
           r.trailT = 0;
           const f = forwardOf(s.yaw);
-          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 1.0, {
+          effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 0.8, {
             color: r.trailColor,
             life: 1.1, grow: 1.0,
-            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.30,
+            vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.20,
           });
         }
         if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          latchCrash(r);
           hide(r, RACE.respawnDelay);
         } else if (ev & EVENT_LAND) {
           // Finished the race — out for the rest of the run.
+          latchCrash(r);
           hide(r, 9999);
         }
       }
@@ -957,13 +1006,15 @@ export function createRivals(THREE, seed, islands, effects) {
       : Math.hypot(ps.x - playerCourse.runway.x, ps.y - playerCourse.runway.y, ps.z - playerCourse.runway.z);
     let ahead = 0;
     for (const r of rivals) {
-      if (r.state === 'gone' || r.state === 'diving' || r.state === 'spinning' || r.state === 'tumbling') continue;
+      // v18: a crashed rival counts at its LATCHED crash position (see
+      // latchCrash) until it respawns — the old code skipped crashed
+      // rivals entirely, so the player jumped 5/5 -> 2/5 on the collision
+      // and back to 5/5 on respawn.
+      const crashed = r.state === 'gone' || r.state === 'diving' || r.state === 'spinning' || r.state === 'tumbling';
+      const latched = crashed && r.crashRings !== null && r.crashRings !== undefined;
       const rs = r.flight.state;
-      const rRings = rs.ringsPassed;
-      const rNext = r.course.nextRing();
-      const rDist = rNext
-        ? r.course.distanceToNext(rs.x, rs.y, rs.z)
-        : Math.hypot(rs.x - r.course.runway.x, rs.y - r.course.runway.y, rs.z - r.course.runway.z);
+      const rRings = latched ? r.crashRings : rs.ringsPassed;
+      const rDist = latched ? r.crashDist : raceProgress(r).dist;
       if (rRings > pRings || (rRings === pRings && rDist < pDist)) ahead += 1;
     }
     return `${ahead + 1}/5`;
@@ -993,6 +1044,8 @@ export function createRivals(THREE, seed, islands, effects) {
       r.spinAngle = 0;
       r.respawnT = 0;
       r.meetPoint = null;
+      r.crashRings = null;
+      r.crashDist = null;
       r.api.group.visible = true;
       syncMesh(r);
     }

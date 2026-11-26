@@ -122,35 +122,31 @@ export function createGroundAt(islands, seed, runway) {
 
 // A 3x5 block font for runway numbers: each digit is 3 columns by 5 rows of
 // small white slabs, laid out flat with the digit tops toward local -Z, so the
-// caller rotates the group to face the approach that uses that threshold.
-const RUNWAY_DIGITS = {
-  '0': ['111', '101', '101', '101', '111'],
-  '2': ['111', '001', '111', '100', '111'],
-  '7': ['111', '001', '010', '010', '010'],
-  '9': ['111', '101', '111', '001', '111'],
-};
-
-function buildRunwayNumber(THREE, text, mat) {
+// v18: the runway number is a high-resolution canvas texture, not a 3x5
+// block font — Gemini's fix: the v17 "09" read as jagged blocks at
+// screenshot distance. One 512x256 canvas, bold numerals, anisotropy 8,
+// so it stays sharp at glancing approach angles.
+function buildRunwayNumber(THREE, text) {
   const group = new THREE.Group();
-  // v4: 1.4 m cells (was 1.2), so the number stays readable from the
-  // approach camera instead of dissolving into the asphalt.
-  const cell = 1.4;
-  const blockGeo = new THREE.PlaneGeometry(cell * 0.92, cell * 0.92);
-  const totalW = text.length * 3 * cell + (text.length - 1) * cell;
-  for (let d = 0; d < text.length; d += 1) {
-    const glyph = RUNWAY_DIGITS[text[d]];
-    if (!glyph) continue;
-    const x0 = -totalW / 2 + d * 4 * cell;
-    for (let r = 0; r < 5; r += 1) {
-      for (let c = 0; c < 3; c += 1) {
-        if (glyph[r][c] !== '1') continue;
-        const block = new THREE.Mesh(blockGeo, mat);
-        block.rotation.x = -Math.PI / 2;
-        block.position.set(x0 + (c + 0.5) * cell, 0, -2.5 * cell + (r + 0.5) * cell);
-        group.add(block);
-      }
-    }
-  }
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 256;
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, 512, 256);
+  x.fillStyle = '#f5f0dc';
+  x.font = '900 180px system-ui, sans-serif';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText(text, 256, 134);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const num = new THREE.Mesh(
+    new THREE.PlaneGeometry(12, 6),
+    new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8 }),
+  );
+  num.rotation.x = -Math.PI / 2;
+  group.add(num);
   return group;
 }
 
@@ -231,8 +227,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // then dry sand, then a wider 16 m sand-to-grass blend, so the shore
     // reads as stacked beach tiers instead of one flat sand ring.
     const beachTop = 8 + 5 * fbm(x * 0.008 + 9.1, z * 0.008 - 4.4, 2);
-    if (h < 1.2) tmp.copy(sand).offsetHSL(0, 0.08, -0.14);
-    else if (h < 2.5) tmp.copy(sand).offsetHSL(0, 0.05, -0.08);
+    // v18: the sand band is pure #E8D39A from y 0 to 1.6 (Gemini's spec)
+    // — only the waterline itself (h < 0.8) stays wet and dark.
+    if (h < 0.8) tmp.copy(sand).offsetHSL(0, 0.08, -0.14);
     else if (h < beachTop) tmp.copy(sand);
     // v5: a sand-to-grass gradient band above the beach, so the beach-to-grass
     // edge is a soft blend instead of the abrupt hard line the v4 shots showed.
@@ -314,8 +311,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
   }
 
-  // --- Runway, v3: a full airport strip, not a dark line. Asphalt #555A55,
-  // 450 m x 28 m, flat, with 3 m sand shoulders each side; white edge lines;
+  // --- Runway, v3: a full airport strip, not a dark line. Asphalt #2B303A
+  // (v18, was #555A55), 450 m x 28 m, flat, with 3 m sand shoulders each side; white edge lines;
   // a dashed centreline (12 m dashes, 18 m gaps); six piano-key threshold
   // stripes at each end; aiming points 30 m beyond each threshold; the runway
   // number at each threshold ("09" west, "27" east, built from a 3x5 block
@@ -347,9 +344,20 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     tex.repeat.set(12, 1);
     return tex;
   })();
+  // v18: a dark underlay (470 x 36 m, #23262b) under the strip — a neat
+  // graded shoulder framing the asphalt, replacing the faint hairline
+  // grass edge Gemini saw around the v17 strip.
+  const underlay = new THREE.Mesh(
+    new THREE.PlaneGeometry(COURSE.runwayLength + 8, COURSE.runwayWidth + 8),
+    new THREE.MeshStandardMaterial({ color: '#23262b', roughness: 0.95 }),
+  );
+  underlay.rotation.x = -Math.PI / 2;
+  underlay.rotation.z = stripAngle;
+  underlay.position.set(runway.x, runway.height + 0.2, runway.z);
+  group.add(underlay);
   const strip = new THREE.Mesh(
     new THREE.PlaneGeometry(COURSE.runwayLength, COURSE.runwayWidth),
-    new THREE.MeshStandardMaterial({ color: '#555A55', map: stripTex, roughness: 0.85 }),
+    new THREE.MeshStandardMaterial({ color: '#2B303A', map: stripTex, roughness: 0.85 }),
   );
   strip.rotation.x = -Math.PI / 2;
   strip.rotation.z = stripAngle;
@@ -367,7 +375,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const edgeMat = new THREE.MeshStandardMaterial({ color: '#f5f0dc', roughness: 0.8 });
   const shoulderMat = new THREE.MeshStandardMaterial({ color: '#BBA77F', roughness: 0.95 });
   const shoulderGeo = new THREE.BoxGeometry(COURSE.runwayLength / 12, 0.4, COURSE.runwayShoulder);
-  const shoulderLineGeo = new THREE.BoxGeometry(COURSE.runwayLength / 12, 0.08, 0.6);
+  const shoulderLineGeo = new THREE.BoxGeometry(COURSE.runwayLength / 12, 0.08, 0.8);
   for (const side of [-1, 1]) {
     for (let seg = 0; seg < 12; seg += 1) {
       const along = -COURSE.runwayLength / 2 + (seg + 0.5) * (COURSE.runwayLength / 12);
@@ -390,7 +398,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   }
   // Pale edge lines the full length, just inside the strip edges.
   for (const side of [-1, 1]) {
-    const edge = new THREE.Mesh(new THREE.PlaneGeometry(COURSE.runwayLength - 8, 0.6), edgeMat);
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(COURSE.runwayLength - 8, 0.8), edgeMat);
     edge.rotation.x = -Math.PI / 2;
     edge.rotation.z = stripAngle;
     edge.position.set(
@@ -401,7 +409,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     group.add(edge);
   }
   // Centreline: 12 m dashes with 18 m gaps, kept clear of the aiming points.
-  const dashGeo = new THREE.PlaneGeometry(12, 0.6);
+  const dashGeo = new THREE.PlaneGeometry(12, 0.8);
   for (let along = -COURSE.runwayLength / 2 + 70; along <= COURSE.runwayLength / 2 - 70; along += 30) {
     const dash = new THREE.Mesh(dashGeo, edgeMat);
     dash.rotation.x = -Math.PI / 2;
@@ -456,7 +464,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       group.add(aim);
     }
     // Runway number, readable from the approach that uses this threshold.
-    const num = buildRunwayNumber(THREE, end < 0 ? '09' : '27', edgeMat);
+    const num = buildRunwayNumber(THREE, end < 0 ? '09' : '27');
     num.rotation.y = Math.atan2(end * dirX, end * dirZ);
     num.position.set(
       runway.x + dirX * end * (COURSE.runwayLength / 2 - 26),
@@ -631,6 +639,36 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     drum.position.set(dx, meshHeight(dx, dz) + 0.55, dz);
     group.add(drum);
   }
+  // v18: a small fuel truck parked on the apron by the shed — Gemini's
+  // fix: the v17 apron was empty. Cab + tank + four wheels, ~10 meshes.
+  {
+    const tx = runway.x + perpX * 78 + dirX * 26;
+    const tz = runway.z + perpZ * 78 + dirZ * 26;
+    const ty = meshHeight(tx, tz);
+    const truck = new THREE.Group();
+    const truckWhite = new THREE.MeshStandardMaterial({ color: '#e8e4d8', roughness: 0.7 });
+    const truckRed = new THREE.MeshStandardMaterial({ color: '#C83C32', roughness: 0.6 });
+    const truckDark = new THREE.MeshStandardMaterial({ color: '#1F2937', roughness: 0.9 });
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 1.8), truckWhite);
+    cab.position.set(0, 1.15, -2.0);
+    truck.add(cab);
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 3.2, 12), truckRed);
+    tank.rotation.x = Math.PI / 2;
+    tank.position.set(0, 1.25, 0.6);
+    truck.add(tank);
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 5.6), truckDark);
+    chassis.position.set(0, 0.55, -0.2);
+    truck.add(chassis);
+    for (const [wx, wz] of [[-0.85, -2.2], [0.85, -2.2], [-0.85, 1.4], [0.85, 1.4]]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 10), truckDark);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wx, 0.42, wz);
+      truck.add(wheel);
+    }
+    truck.position.set(tx, ty, tz);
+    truck.rotation.y = Math.atan2(dirX, dirZ);
+    group.add(truck);
+  }
 
   // --- Sea: a depth-coloured grid just above the land's zero line. The colour
   // follows the terrain below it — turquoise in the shallows, deep teal
@@ -770,10 +808,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   });
   const rockGeo = new THREE.IcosahedronGeometry(1, 0);
   const rockMats = [
-    new THREE.MeshStandardMaterial({ color: '#8a8378', roughness: 0.95 }),
-    new THREE.MeshStandardMaterial({ color: '#7a6a5e', roughness: 0.95 }),
-    // v11: a warm sandstone for varied low-poly rock formations.
-    new THREE.MeshStandardMaterial({ color: '#9a8f7a', roughness: 0.95 }),
+    // v18: faceted slate cliffs (#64748B / #4B5563, Gemini's spec) —
+    // the old warm browns read as dirt, not rock.
+    new THREE.MeshStandardMaterial({ color: '#64748B', roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: '#4B5563', roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: '#7a8a9a', roughness: 0.95 }),
   ];
   const bushGeo = new THREE.IcosahedronGeometry(1, 0);
   const bushMat = new THREE.MeshStandardMaterial({ color: '#2a6b32', roughness: 0.95 });
@@ -1004,9 +1043,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         junglePlanted += 1;
       }
     }
-    // v6: more palms per island (6-9, was 4-6) and bigger, so the beaches
+    // v6: more palms per island (9-13, was 6-9) and bigger, so the beaches
     // read as palm-lined shores instead of a lone palm here and there.
-    const palmCount = 6 + vegRandom.int(0, 3);
+    // v18: 9-13 (was 6-9) — Gemini's fix: the midground foliage is still
+    // too sparse in v17.
+    const palmCount = 9 + vegRandom.int(0, 4);
     for (let p = 0; p < palmCount; p += 1) {
       const pa = vegRandom.range(0, Math.PI * 2);
       // The beach band (ground 2-14 m) sits at 1.05-1.4 island radii — at
@@ -1029,7 +1070,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // of points around the anchor and keeps the ones on grass or beach.
   function plantHeroGrove(ax, az, count) {
     let planted = 0;
-    for (let tries = 0; tries < 90 && planted < count; tries += 1) {
+    for (let tries = 0; tries < 140 && planted < count; tries += 1) {
       const a = vegRandom.range(0, Math.PI * 2);
       const r = vegRandom.range(30, 200);
       const px = ax + Math.cos(a) * r;
@@ -1058,8 +1099,14 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     // v12: 16 trees per hero grove — the midground still thins out between
     // the groves in the v11 cover shot.
     // v13: 20 trees per hero grove — the midground must read as forest.
+    // v18: 26 trees per hero grove (was 20), plus mid-course groves at
+    // rings 3-5 (16 each) — Gemini's fix: the midground between the
+    // hero groves still read as empty green in v17. The runway clear
+    // zone keeps every grove off the strip and the approach cone.
     const hero = [course.rings[1], course.rings[5], course.rings[6], course.rings[9], course.rings[10], course.rings[11]];
-    for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 20);
+    for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 26);
+    const mid = [course.rings[2], course.rings[3], course.rings[4]];
+    for (const ring of mid) if (ring) plantHeroGrove(ring.x, ring.z, 16);
     if (course.spawn) plantHeroGrove(course.spawn.x, course.spawn.z, 10);
     // v6: a beach cluster at the spawn — palms and rocks on the shore the
     // title camera looks across, so the title shot's foreground beach is
@@ -1096,7 +1143,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   {
     const isl = islands[0];
     let shorePalms = 0;
-    for (let tries = 0; tries < 300 && shorePalms < 18; tries += 1) {
+    for (let tries = 0; tries < 400 && shorePalms < 24; tries += 1) {
       const pa = vegRandom.range(0, Math.PI * 2);
       const pr = isl.radius * vegRandom.range(1.05, 1.35);
       const px = isl.x + Math.cos(pa) * pr;
@@ -1166,7 +1213,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // cover foreground must read as real forest edge, not scattered props.
   {
     let westTrees = 0;
-    for (let tries = 0; tries < 300 && westTrees < 30; tries += 1) {
+    for (let tries = 0; tries < 300 && westTrees < 40; tries += 1) {
       const along = vegRandom.range(-750, -250);
       const across = vegRandom.range(-260, 260);
       const px = runway.x + dirX * along + perpX * across;
@@ -1178,7 +1225,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       westTrees += 1;
     }
     let westBushes = 0;
-    for (let tries = 0; tries < 200 && westBushes < 30; tries += 1) {
+    for (let tries = 0; tries < 200 && westBushes < 40; tries += 1) {
       const along = vegRandom.range(-750, -250);
       const across = vegRandom.range(-260, 260);
       const px = runway.x + dirX * along + perpX * across;
@@ -1211,7 +1258,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   {
     const tuftMat = new THREE.MeshStandardMaterial({ color: '#7ed957', roughness: 0.9, metalness: 0, flatShading: true });
     const tuftGeo = new THREE.IcosahedronGeometry(1, 0);
-    for (let tries = 0; tries < 300 && tuftsPlanted < 120; tries += 1) {
+    for (let tries = 0; tries < 300 && tuftsPlanted < 160; tries += 1) {
       const along = vegRandom.range(-800, -250);
       const across = vegRandom.range(-280, 280);
       const px = runway.x + dirX * along + perpX * across;
@@ -1276,7 +1323,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     if (!clearOfRunway(px, pz)) continue;
     plantRock(px, pz, ph, vegRandom.range(0.9, 2.6));
   }
-  for (let tries = 0; tries < 1800 && bushesPlanted < 220; tries += 1) {
+  for (let tries = 0; tries < 2600 && bushesPlanted < 320; tries += 1) {
     const px = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const pz = vegRandom.range(-WORLD.size / 2, WORLD.size / 2);
     const ph = groundAt(px, pz);
@@ -1384,7 +1431,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
-    const rockC = new THREE.Color('#6e6258');
+    const rockC = new THREE.Color('#64748B');
     const darkC = new THREE.Color('#2a5c2e');
     const footC = new THREE.Color('#2f7a38');
     const hazeC = new THREE.Color(PALETTE.fog);

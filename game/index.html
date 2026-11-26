@@ -76,15 +76,15 @@
   /* v15: the hero title floats over the scene — huge gold gradient type
   with a hard dark shadow, so it reads on bright sky and sea. */
   #title-hero { position: absolute; left: 4%; top: 11%; pointer-events: none; }
-  #title-hero .hero-title { font-size: clamp(48px, 6.6vw, 84px); font-weight: 900; letter-spacing: 0.01em; line-height: 0.95; background: linear-gradient(#FFE65C, #FFB800); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.6)); }
-  #title-hero .hero-sub { font-size: clamp(26px, 3.3vw, 42px); font-weight: 900; letter-spacing: 0.16em; color: #FFD52A; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.6); margin-top: 6px; }
+  #title-hero .hero-title { font-size: clamp(48px, 6.6vw, 84px); font-weight: 900; letter-spacing: 0.01em; line-height: 0.95; background: linear-gradient(#FFE65C, #FFB800); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 2px #063C85; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.6)); }
+  #title-hero .hero-sub { font-size: clamp(26px, 3.3vw, 42px); font-weight: 900; letter-spacing: 0.16em; color: #FFD52A; text-shadow: 2px 0 0 #063C85, -2px 0 0 #063C85, 0 2px 0 #063C85, 0 -2px 0 #063C85, 0 2px 6px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.6); margin-top: 6px; }
   /* v17: the three rules sit on a LIGHT translucent pill (warm white
      0.66 + white border + blur + soft shadow) with DARK NAVY text
      #132238 — the user's direct instruction (26 Nov 23:49 WIB): the
      white text was unreadable against the bright sky. Navy alone
      would vanish under a dark storm cloud, so the light pill is what
      keeps the rules readable in every sky condition. */
-  #title-rules { position: absolute; left: 4%; top: 47%; max-width: 540px; pointer-events: none; background: rgba(255, 253, 245, 0.66); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 10px 18px 10px 14px; backdrop-filter: blur(6px); box-shadow: 0 4px 18px rgba(10, 30, 60, 0.18); }
+  #title-rules { position: absolute; left: 4%; top: 47%; max-width: 540px; pointer-events: none; background: rgba(248, 250, 252, 0.92); border: 2px solid #063C85; border-radius: 16px; padding: 18px 22px; backdrop-filter: blur(6px); box-shadow: 0 4px 18px rgba(10, 30, 60, 0.18); }
   #title-rules .rule { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; font-size: 18px; font-weight: 600; line-height: 1.4; color: #132238; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5); }
   #title-rules .rule-icon { flex: 0 0 auto; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 1px 2px rgba(19, 34, 56, 0.35)); }
   /* v17: the pill's first/last rules hug its edges — the 14px rule
@@ -117,7 +117,7 @@
      Start button label) — the user's final choice, 26 Nov 16:10 WIB. The
      navy SVG icons inside the keys stay navy, so they read on yellow. */
   .keycap .key { display: flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(#FFE65C, #FFC93C); color: #132238; font-weight: 800; font-size: 14px; border-radius: 6px; border-bottom: 3px solid #B45309; padding: 6px 4px 5px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); }
-  .keycap .key-label { display: block; font-size: 11px; color: rgba(255, 255, 255, 0.78); margin-top: 4px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
+  .keycap .key-label { display: inline-block; font-size: 11px; color: #ffffff; margin-top: 4px; background: rgba(6, 60, 133, 0.78); border-radius: 999px; padding: 2px 8px; text-shadow: none; }
   .card .keys { margin-top: 20px; font-size: 14px; line-height: 1.8; opacity: 0.85; }
   .card .prompt { margin-top: 18px; font-size: 18px; font-weight: 700; color: #2CE65B; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
   /* v11: the big glossy Start button from the mockup — golden-amber to
