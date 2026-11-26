@@ -26,6 +26,31 @@ export function createRenderer(canvas, THREE, groups) {
   scene.add(groups.rings);
   scene.add(groups.plane);
 
+  // v5: the plane's blob shadow — a soft dark ellipse on the ground below the
+  // plane. The v4 shots had no shadow at all, so the plane read as floating
+  // and its altitude was unreadable. A radial-gradient canvas texture gives
+  // the soft edge; the ellipse scales up and fades as the plane climbs, and
+  // stays aligned with the wings, so the eye can read height at a glance.
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = 128;
+  shadowCanvas.height = 128;
+  const sctx = shadowCanvas.getContext('2d');
+  const grad = sctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(0,0,0,0.85)');
+  grad.addColorStop(0.6, 'rgba(0,0,0,0.45)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  sctx.fillStyle = grad;
+  sctx.fillRect(0, 0, 128, 128);
+  const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+  const shadowGroup = new THREE.Group();
+  const shadowMesh = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.4, depthWrite: false }),
+  );
+  shadowMesh.rotation.x = -Math.PI / 2;
+  shadowGroup.add(shadowMesh);
+  scene.add(shadowGroup);
+
   const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 9000);
   const chasePos = new THREE.Vector3(0, 200, 0);
   const lookTarget = new THREE.Vector3();
@@ -136,6 +161,29 @@ export function createRenderer(canvas, THREE, groups) {
       // Lean a third of the bank into the camera so turns feel banked, not flat.
       camera.rotateZ(-s.roll * 0.35);
     }
+
+    // v5: blob shadow, placed where the sun actually puts it — offset from the
+    // plane's ground point away from the sun by altitude / tan(sun elevation).
+    // A shadow straight below the plane is never in frame (the chase camera
+    // looks forward, and the ground below the plane sits ~70° down); the
+    // sun-offset shadow lands ahead of the plane on the runway and hills,
+    // where the camera can see it. The ground height is sampled at the
+    // shadow's own position, and it grows and fades with altitude.
+    const sunDir = terrainApi && terrainApi.sunDir ? terrainApi.sunDir : null;
+    const sunElev = sunDir ? Math.asin(Math.max(0.1, Math.min(0.99, sunDir.y))) : 0.8;
+    const sunH = sunDir ? Math.hypot(sunDir.x, sunDir.z) : 1;
+    const groundY0 = terrainApi && terrainApi.groundAt ? terrainApi.groundAt(s.x, s.z) : 0;
+    const altRough = Math.max(0, s.y - Math.max(groundY0, 0.6));
+    const offLen = altRough / Math.tan(sunElev);
+    const shadowX = s.x + (sunDir ? -sunDir.x / sunH * offLen : 0);
+    const shadowZ = s.z + (sunDir ? -sunDir.z / sunH * offLen : 0);
+    const floorY = Math.max(terrainApi && terrainApi.groundAt ? terrainApi.groundAt(shadowX, shadowZ) : 0, 0.6);
+    const altAbove = Math.max(0, s.y - floorY);
+    const shadowScale = 1 + altAbove * 0.0015;
+    shadowGroup.position.set(shadowX, floorY + 0.5, shadowZ);
+    shadowGroup.rotation.y = -s.yaw;
+    shadowMesh.scale.set(5.8 * shadowScale, 4.2 * shadowScale, 1);
+    shadowMesh.material.opacity = Math.max(0.05, Math.min(0.42, 0.42 - altAbove * 0.0011));
 
     // The ring guide chevron fades as the plane closes in, so it needs the
     // plane's position (the flight state carries x, y, z).

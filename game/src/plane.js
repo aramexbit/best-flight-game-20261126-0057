@@ -125,72 +125,100 @@ export function buildPlane(THREE) {
   blur.position.set(0, 0, -3.6);
   group.add(blur);
 
-  // Cockpit dashboard, v2: a wide panel that reads as part of the aircraft,
-  // with three real instruments — dark dial faces, pale rims, tick marks and
-  // live needles — plus a red trim strip, toggle switches and a warning lamp.
-  // The v1 panel was three plain coloured circles on a black bar, which a fresh
-  // eye read as a debug object, not a cockpit.
+  // Cockpit dashboard, v5: rebuilt as a real 3D console, not a flat card.
+  // The v4 panel was a thin dark box with three small dark dials pasted on it
+  // — a fresh eye (DeepSeek v4) read it as "a black rectangular box with
+  // three clip-art dials pasted on it... zero depth". So the v5 dash is a
+  // console with thickness: a deeper panel, a wide sloped glareshield, side
+  // cheeks, and a sloped lower console dropping toward the pilot, all sitting
+  // LOWER (y -0.30, was -0.15) so the water and horizon below the plane show
+  // through the windshield instead of hiding behind the panel. The dials are
+  // bigger (rim 0.165, was 0.12) and LIGHT — cream faces with dark needles —
+  // so they read clearly against the dark panel instead of vanishing into it.
+  // The two grey toggle sticks and the red warning dot are GONE: they floated
+  // in front of the panel with nothing holding them, and read as debug
+  // placeholders. In their place, three small indicator dots sit FLUSH on
+  // the panel face below the middle gauge.
   const dash = new THREE.Group();
-  dash.position.set(0, -0.15, -2.1);
+  dash.position.set(0, -0.30, -2.1);
   dash.visible = false;
-  // v4: a smaller panel (1.35 x 0.38, was 1.6 x 0.5 — 25% less height) with
-  // a shorter glareshield and thinner, shorter pillars, so all three gauges
-  // fit inside the cockpit frame instead of being cropped at the bottom
-  // (the v3 shot cut the dials in half). The panel still reads as a cockpit
-  // structure, not a flat slab floating in front of the camera.
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.38, 0.08), dark);
+  const panelMat = new THREE.MeshStandardMaterial({ color: '#2a2f3a', roughness: 0.7, metalness: 0.15 });
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.42, 0.12), panelMat);
   dash.add(panel);
   // Red trim along the top edge of the panel, so it is visibly built, not cut out.
-  const trim = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.09), red);
-  trim.position.set(0, 0.205, 0);
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.13), red);
+  trim.position.set(0, 0.225, 0);
   dash.add(trim);
-  // Glareshield: a sloped shelf over the panel top, highest at the panel and
-  // falling away toward the pilot.
-  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.05, 0.26), dark);
-  shield.position.set(0, 0.21, 0.09);
-  shield.rotation.x = 0.45;
+  // Glareshield: wider than the panel, shallow and high, sloping gently down
+  // toward the pilot — it gives the panel a real top surface without
+  // overhanging the dials. (First try: 0.45 deep at 0.5 rad overhung the panel
+  // face and hid the lower half of every dial from the pilot's high seat;
+  // the v5 first screenshots proved it, so the shield went shallow.)
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.04, 0.30), dark);
+  shield.position.set(0, 0.26, 0.06);
+  shield.rotation.x = 0.35;
   dash.add(shield);
-  // Windshield pillars at the panel edges, leaning out toward the top. v4:
-  // 0.035 wide and 0.42 tall (was 0.05 x 0.55) — they frame the view instead
-  // of reading as heavy dark posts.
+  // The lower console is a different, lighter grey than the dark panel, so
+  // the dash reads as separate built parts instead of one black mass.
+  const consoleMat = new THREE.MeshStandardMaterial({ color: '#565b64', roughness: 0.75, metalness: 0.1 });
+  // Side cheeks: angled flanks at the panel ends, dropping back toward the
+  // pilot — the panel now has sides, not just a front face.
   for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.42, 0.05), dark);
-    pillar.position.set(side * 0.62, 0.24, 0.02);
+    const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.35), consoleMat);
+    cheek.position.set(side * 0.68, -0.05, 0.08);
+    cheek.rotation.x = 0.35;
+    dash.add(cheek);
+  }
+  // Lower console: a sloped shelf under the panel, dropping back toward the
+  // pilot — the dash now continues down into the airframe instead of ending
+  // at a flat bottom edge.
+  const consoleShelf = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.28, 0.3), consoleMat);
+  consoleShelf.position.set(0, -0.30, 0.10);
+  consoleShelf.rotation.x = 0.5;
+  dash.add(consoleShelf);
+  // Windshield pillars at the panel edges, leaning out toward the top. v5:
+  // 0.035 wide and 0.62 tall, spanning from the panel bottom to above the
+  // glareshield, with a small base block where each meets the panel — they
+  // are part of the airframe now, connected top and bottom, not floating posts.
+  for (const side of [-1, 1]) {
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.62, 0.05), dark);
+    pillar.position.set(side * 0.62, 0.10, 0.02);
     pillar.rotation.z = -side * 0.22;
     dash.add(pillar);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.07), dark);
+    base.position.set(side * 0.60, -0.19, 0.03);
+    dash.add(base);
   }
-  // Two toggle switches under the left gauge, one warning lamp under the right.
-  for (const sx of [-0.52, -0.42]) {
-    const sw = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, 0.03), glass);
-    sw.position.set(sx, -0.14, 0.06);
-    sw.rotation.z = 0.25;
-    dash.add(sw);
+  // Three small indicator dots, FLUSH on the panel face below the middle
+  // gauge (z 0.065, just proud of the 0.06 face) — green, amber, red.
+  const dotColors = [0x2aff5e, 0xffd94d, 0xff5d4d];
+  for (let d = 0; d < 3; d += 1) {
+    const dot = new THREE.Mesh(
+      new THREE.CircleGeometry(0.018, 12),
+      new THREE.MeshBasicMaterial({ color: dotColors[d] }),
+    );
+    dot.position.set(-0.08 + d * 0.08, -0.17, 0.065);
+    dash.add(dot);
   }
-  const lamp = new THREE.Mesh(
-    new THREE.SphereGeometry(0.035, 10, 8),
-    new THREE.MeshBasicMaterial({ color: 0xff5d4d }),
-  );
-  lamp.position.set(0.52, -0.14, 0.06);
-  dash.add(lamp);
   const gaugeDefs = [
-    { x: -0.44, needle: 0x7dff9a },
-    { x: 0, needle: 0xffd94d },
-    { x: 0.44, needle: 0x4fc3f7 },
+    { x: -0.44, pin: 0x7dff9a },
+    { x: 0, pin: 0xffd94d },
+    { x: 0.44, pin: 0x4fc3f7 },
   ];
   const needles = [];
   for (const def of gaugeDefs) {
     const g = new THREE.Group();
-    g.position.set(def.x, 0.02, 0.05);
-    // v4: dials 0.12 rim (was 0.135) to match the smaller panel, with room
-    // to breathe top and bottom — the whole dial must clear the frame edge.
+    g.position.set(def.x, 0.02, 0.065);
+    // v5: big LIGHT dials — cream face, dark ticks, dark needle — so the
+    // instruments read at a glance instead of hiding in the dark panel.
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.12, 0.014, 8, 28),
+      new THREE.TorusGeometry(0.165, 0.016, 8, 28),
       new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.4, metalness: 0.5 }),
     );
     g.add(rim);
     const face = new THREE.Mesh(
-      new THREE.CircleGeometry(0.113, 24),
-      new THREE.MeshBasicMaterial({ color: 0x10131c }),
+      new THREE.CircleGeometry(0.156, 24),
+      new THREE.MeshBasicMaterial({ color: 0xf2ead2 }),
     );
     face.position.z = 0.005;
     g.add(face);
@@ -198,26 +226,26 @@ export function buildPlane(THREE) {
     for (let t = 0; t < 12; t += 1) {
       const a = (t / 12) * Math.PI * 2;
       const tick = new THREE.Mesh(
-        new THREE.BoxGeometry(0.008, t % 3 === 0 ? 0.032 : 0.021, 0.004),
-        new THREE.MeshBasicMaterial({ color: 0xfff7e8 }),
+        new THREE.BoxGeometry(0.01, t % 3 === 0 ? 0.042 : 0.028, 0.004),
+        new THREE.MeshBasicMaterial({ color: 0x2a2c33 }),
       );
-      tick.position.set(Math.sin(a) * 0.092, Math.cos(a) * 0.092, 0.01);
+      tick.position.set(Math.sin(a) * 0.132, Math.cos(a) * 0.132, 0.01);
       tick.rotation.z = -a;
       g.add(tick);
     }
     const needlePivot = new THREE.Group();
-    const needleGeo = new THREE.BoxGeometry(0.012, 0.085, 0.006);
-    needleGeo.translate(0, 0.035, 0);
+    const needleGeo = new THREE.BoxGeometry(0.018, 0.115, 0.006);
+    needleGeo.translate(0, 0.048, 0);
     const needle = new THREE.Mesh(
       needleGeo,
-      new THREE.MeshBasicMaterial({ color: def.needle }),
+      new THREE.MeshBasicMaterial({ color: 0x1c1e24 }),
     );
     needlePivot.add(needle);
     needlePivot.position.z = 0.012;
     g.add(needlePivot);
     const pin = new THREE.Mesh(
-      new THREE.CircleGeometry(0.014, 12),
-      new THREE.MeshBasicMaterial({ color: 0xfff7e8 }),
+      new THREE.CircleGeometry(0.018, 12),
+      new THREE.MeshBasicMaterial({ color: def.pin }),
     );
     pin.position.z = 0.016;
     g.add(pin);
@@ -229,11 +257,13 @@ export function buildPlane(THREE) {
   // The nose, seen from the pilot's seat: a low dark shape below the panel,
   // the top of the engine cowling. v3 replaces the floating red spinner with
   // this — it anchors the bottom of the cockpit view as part of the aircraft.
-  // v4: 1.15 m wide (was 1.3) to match the smaller panel.
+  // v5: 1.25 m wide (was 1.15) and a touch lower, so it meets the lowered
+  // console and the panel's bottom edge reads as one continuous airframe
+  // instead of two separate dark shapes.
   const nose = new THREE.Group();
-  nose.position.set(0, -0.44, -2.55);
+  nose.position.set(0, -0.46, -2.55);
   nose.visible = false;
-  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.14, 0.9), dark);
+  const noseTop = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.14, 0.9), dark);
   noseTop.rotation.x = -0.12;
   nose.add(noseTop);
   group.add(nose);

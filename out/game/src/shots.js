@@ -9,7 +9,11 @@ import { wrapAngle } from './flight.js';
 
 const START_SECONDS = 8;
 const PLAY_SECONDS = 40;
-const COCKPIT_SECONDS = 14;
+// v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
+// fills the whole windshield; at 12 s it is ~160 m out, modest in the
+// upper-middle of the windshield, so the cockpit frame shows the world
+// instead of one giant ring.
+const COCKPIT_SECONDS = 12;
 const LANDING_SECONDS = 140;
 // v4: the cover (play) scene runs 40 s, not 26 s — at 26 s the plane is still
 // over open sea with the nearest land 600 m away, so no tree can read in the

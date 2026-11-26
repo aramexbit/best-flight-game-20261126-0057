@@ -173,6 +173,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const beachTop = 8 + 5 * fbm(x * 0.008 + 9.1, z * 0.008 - 4.4, 2);
     if (h < 2.5) tmp.copy(sand).offsetHSL(0, 0.05, -0.08);
     else if (h < beachTop) tmp.copy(sand);
+    // v5: a sand-to-grass gradient band above the beach, so the beach-to-grass
+    // edge is a soft blend instead of the abrupt hard line the v4 shots showed.
+    else if (h < beachTop + 10) tmp.copy(sand).lerp(grass, (h - beachTop) / 10);
     else if (h < 150) {
       // v3: light-grass patches break the flat green, then forest in the folds.
       tmp.copy(grass).lerp(grassLight, Math.max(0, fbm(x * 0.006 + 4.2, z * 0.006 - 2.8, 2)) * 0.6);
@@ -193,6 +196,29 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     vertexColors: true, roughness: 0.95, metalness: 0,
   }));
   group.add(land);
+
+  // v5: the MESH height at (x, z) — bilinear over the displaced grid. The
+  // analytic groundAt() and the rendered mesh disagree by metres on steep
+  // slopes (the grid is 27.5 m per cell), which is why v4 trees floated above
+  // the grass or sank halfway into it. Vegetation and airport buildings snap
+  // to THIS height, so every trunk sits exactly on the ground the camera sees.
+  const meshH = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i += 1) meshH[i] = pos.getY(i);
+  const cellStep = WORLD.size / SEG;
+  function meshHeight(x, z) {
+    const gx = Math.min(SEG - 0.001, Math.max(0, (x + WORLD.size / 2) / cellStep));
+    const gz = Math.min(SEG - 0.001, Math.max(0, (z + WORLD.size / 2) / cellStep));
+    const ix = Math.floor(gx);
+    const iz = Math.floor(gz);
+    const fx = gx - ix;
+    const fz = gz - iz;
+    const row = SEG + 1;
+    const h00 = meshH[iz * row + ix];
+    const h10 = meshH[iz * row + ix + 1];
+    const h01 = meshH[(iz + 1) * row + ix];
+    const h11 = meshH[(iz + 1) * row + ix + 1];
+    return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
+  }
 
   // --- Runway, v3: a full airport strip, not a dark line. Asphalt #555A55,
   // 450 m x 28 m, flat, with 3 m sand shoulders each side; white edge lines;
@@ -293,9 +319,13 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   }
   // Edge lights: white along the sides, red at the far (east) end, green at
   // the threshold (west) end — the colours a pilot expects on final approach.
-  // v4: radius 1.15 (was 0.9) and riding a touch higher, so the lights clearly
-  // follow the runway boundary from the approach camera instead of vanishing.
-  const lightGeo = new THREE.SphereGeometry(1.15, 8, 6);
+  // v5: proper light FIXTURES, not glowing balls. Each light is a low dark
+  // base plate flush with the ground with a small coloured dome on top — the
+  // v4 spheres (1.15 m radius, floating a metre up) read as untextured
+  // placeholder balls. Same positions and colours, a tenth of the presence.
+  const baseGeo = new THREE.BoxGeometry(0.7, 0.12, 0.7);
+  const baseMat = new THREE.MeshStandardMaterial({ color: '#3a3f45', roughness: 0.8 });
+  const domeGeo = new THREE.SphereGeometry(0.22, 10, 8);
   const whiteLight = new THREE.MeshBasicMaterial({ color: 0xfff2d8 });
   const redLight = new THREE.MeshBasicMaterial({ color: 0xff2a1e });
   const greenLight = new THREE.MeshBasicMaterial({ color: 0x2aff5e });
@@ -303,23 +333,90 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const mat = along > COURSE.runwayLength / 2 - 30 ? redLight
       : along < -COURSE.runwayLength / 2 + 30 ? greenLight : whiteLight;
     for (const side of [-1, 1]) {
-      const lamp = new THREE.Mesh(lightGeo, mat);
-      lamp.position.set(
-        runway.x + dirX * along + perpX * side * (COURSE.runwayWidth / 2 + 1.5),
-        runway.height + 1.2,
-        runway.z + dirZ * along + perpZ * side * (COURSE.runwayWidth / 2 + 1.5),
-      );
-      group.add(lamp);
+      const lx = runway.x + dirX * along + perpX * side * (COURSE.runwayWidth / 2 + 1.5);
+      const lz = runway.z + dirZ * along + perpZ * side * (COURSE.runwayWidth / 2 + 1.5);
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.set(lx, runway.height + 0.36, lz);
+      group.add(base);
+      const dome = new THREE.Mesh(domeGeo, mat);
+      dome.scale.y = 0.6;
+      dome.position.set(lx, runway.height + 0.5, lz);
+      group.add(dome);
     }
   }
-  // v4: NO approach lights. The short centreline row and crossbar that used
-  // to sit here were the two white dots under the aircraft in the v3 landing
-  // shot — six small white spheres floating on the grass before the threshold,
-  // with no structure tying them to the runway, so a fresh eye read them as
-  // stray debris (or debug markers). The runway's edge, threshold and green
-  // threshold lights already carry the landing sequence; the floating dots
-  // cost more than they gave, so they are gone. (lightGeo / whiteLight are
-  // still used by the edge lights above.)
+  // v5: airport context — a dirt taxiway, an apron and a small hangar, so the
+  // strip reads as a working airfield instead of a grey rectangle in an empty
+  // field. The taxiway is short sand-coloured segments, each snapped to the
+  // mesh height at its own centre, so it follows the ground instead of
+  // floating over it or sinking into it. (The old approach-light row that
+  // used to sit here was removed in v4 — its floating white spheres read as
+  // stray debris in the landing shot.)
+  const taxiMat = new THREE.MeshStandardMaterial({ color: '#BBA77F', roughness: 0.95 });
+  const taxiGeo = new THREE.BoxGeometry(9, 0.3, 12);
+  for (let seg = 0; seg < 5; seg += 1) {
+    const dist = 24 + seg * 12;
+    const tx = runway.x + perpX * dist;
+    const tz = runway.z + perpZ * dist;
+    const slab = new THREE.Mesh(taxiGeo, taxiMat);
+    slab.rotation.y = Math.atan2(perpX, perpZ);
+    slab.position.set(tx, meshHeight(tx, tz) + 0.15, tz);
+    group.add(slab);
+  }
+  // Apron: four sand slabs beside the hangar end of the taxiway.
+  for (let ax = 0; ax < 2; ax += 1) {
+    for (let az = 0; az < 2; az += 1) {
+      const apx = runway.x + perpX * (84 + ax * 12) + dirX * (az - 0.5) * 12;
+      const apz = runway.z + perpZ * (84 + ax * 12) + dirZ * (az - 0.5) * 12;
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(12, 0.3, 12), taxiMat);
+      slab.position.set(apx, meshHeight(apx, apz) + 0.15, apz);
+      group.add(slab);
+    }
+  }
+  // Hangar: cream walls, a red roof slab and a dark door facing the apron,
+  // sunk half a metre into the ground at its own spot so it sits, not floats.
+  const hx = runway.x + perpX * 108;
+  const hz = runway.z + perpZ * 108;
+  const hy = meshHeight(hx, hz);
+  const hangar = new THREE.Group();
+  const hangarWalls = new THREE.Mesh(
+    new THREE.BoxGeometry(16, 6, 10),
+    new THREE.MeshStandardMaterial({ color: '#e8dcc0', roughness: 0.8 }),
+  );
+  hangarWalls.position.y = 2.5;
+  hangar.add(hangarWalls);
+  const hangarRoof = new THREE.Mesh(
+    new THREE.BoxGeometry(17, 0.5, 11),
+    new THREE.MeshStandardMaterial({ color: '#C83C32', roughness: 0.7 }),
+  );
+  hangarRoof.position.y = 5.75;
+  hangar.add(hangarRoof);
+  const hangarDoor = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, 5),
+    new THREE.MeshStandardMaterial({ color: '#3a3f45', roughness: 0.9 }),
+  );
+  hangarDoor.position.set(0, 2.5, -5.05);
+  hangarDoor.rotation.y = Math.PI;
+  hangar.add(hangarDoor);
+  hangar.position.set(hx, hy - 0.5, hz);
+  hangar.rotation.y = Math.atan2(perpX, perpZ);
+  group.add(hangar);
+  // Windsock on a pole at the apron corner, so the airfield has one more
+  // thing a pilot would expect to see.
+  const wsx = runway.x + perpX * 78 + dirX * 14;
+  const wsz = runway.z + perpZ * 78 + dirZ * 14;
+  const wsPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 6, 6),
+    new THREE.MeshStandardMaterial({ color: '#dddddd', roughness: 0.6 }),
+  );
+  wsPole.position.set(wsx, meshHeight(wsx, wsz) + 3, wsz);
+  group.add(wsPole);
+  const wsSock = new THREE.Mesh(
+    new THREE.ConeGeometry(0.5, 2.2, 8),
+    new THREE.MeshStandardMaterial({ color: '#ff7f2a', roughness: 0.7 }),
+  );
+  wsSock.rotation.z = -Math.PI / 2 - 0.25;
+  wsSock.position.set(wsx + 1.1, meshHeight(wsx, wsz) + 5.7, wsz);
+  group.add(wsSock);
 
   // --- Sea: a depth-coloured grid just above the land's zero line. The colour
   // follows the terrain below it — turquoise in the shallows, deep teal
@@ -333,6 +430,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const seaShallow = new THREE.Color(PALETTE.seaShallow);
   const seaMid = new THREE.Color(PALETTE.seaMid);
   const seaDeep = new THREE.Color(PALETTE.seaDeep);
+  const reefColor = new THREE.Color('#0d5f63');
   const seaTmp = new THREE.Color();
   for (let i = 0; i < seaPos.count; i += 1) {
     const sx = seaPos.getX(i);
@@ -342,6 +440,13 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     else if (depth < 12) seaTmp.copy(seaShallow).lerp(seaMid, (depth - 3) / 9);
     else if (depth < 40) seaTmp.copy(seaMid).lerp(seaDeep, (depth - 12) / 28);
     else seaTmp.copy(seaDeep);
+    // v5: reef lines — a darker teal band at 4-9 m depth, following the depth
+    // contour, so the shallows show reef stripes running parallel to the shore
+    // instead of one flat turquoise wash.
+    if (depth >= 4 && depth <= 9) {
+      const band = 1 - Math.abs(depth - 6.5) / 2.5;
+      seaTmp.lerp(reefColor, band * 0.65);
+    }
     seaColors[i * 3] = seaTmp.r;
     seaColors[i * 3 + 1] = seaTmp.g;
     seaColors[i * 3 + 2] = seaTmp.b;
@@ -368,6 +473,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     new THREE.MeshStandardMaterial({ color: '#2f7a38', roughness: 0.9 }),
     new THREE.MeshStandardMaterial({ color: '#3f9142', roughness: 0.9 }),
     new THREE.MeshStandardMaterial({ color: '#57a04a', roughness: 0.9 }),
+    // v5: a dark jungle green for the dense canopy clusters.
+    new THREE.MeshStandardMaterial({ color: '#1f5c28', roughness: 0.9 }),
   ];
   // A palm frond: a long tapered leaf with a droop curve baked into the
   // vertices, so it hangs from the crown instead of lying flat like a fan.
@@ -395,6 +502,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   let palmsPlanted = 0;
   let rocksPlanted = 0;
   let bushesPlanted = 0;
+  let junglePlanted = 0;
+  let cliffsPlanted = 0;
 
   /** An inland shade tree: a brown trunk and a canopy of 3-5 overlapping blobs. */
   function plantShadeTree(px, pz, ph, s) {
@@ -406,7 +515,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     tree.add(trunk);
     const blobs = 3 + vegRandom.int(0, 2);
     for (let b = 0; b < blobs; b += 1) {
-      const blob = new THREE.Mesh(canopyGeo, canopyMats[vegRandom.int(0, 2)]);
+      const blob = new THREE.Mesh(canopyGeo, canopyMats[vegRandom.int(0, 3)]);
       const r = (1.1 + vegRandom.range(0, 0.9)) * s;
       blob.scale.setScalar(r);
       blob.position.set(
@@ -416,7 +525,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       );
       tree.add(blob);
     }
-    tree.position.set(px, ph, pz);
+    // v5: snap to the MESH height — the passed ph is the analytic height,
+    // which can sit metres above or below the rendered ground on a slope.
+    tree.position.set(px, meshHeight(px, pz), pz);
     tree.rotation.y = vegRandom.range(0, Math.PI * 2);
     group.add(tree);
     treesPlanted += 1;
@@ -460,7 +571,8 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     nuts.scale.setScalar(s);
     nuts.position.set(0.3 * s, -0.25 * s, 0.2 * s);
     crown.add(nuts);
-    palm.position.set(px, ph, pz);
+    // v5: snap to the MESH height (see plantShadeTree).
+    palm.position.set(px, meshHeight(px, pz), pz);
     palm.rotation.y = vegRandom.range(0, Math.PI * 2);
     group.add(palm);
     palmsPlanted += 1;
@@ -474,7 +586,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       s * vegRandom.range(0.55, 1.1),
       s * vegRandom.range(0.8, 1.6),
     );
-    rock.position.set(px, ph + 0.2 * s, pz);
+    rock.position.set(px, meshHeight(px, pz) + 0.2 * s, pz);
     rock.rotation.set(vegRandom.range(0, 3), vegRandom.range(0, 3), vegRandom.range(0, 3));
     group.add(rock);
     rocksPlanted += 1;
@@ -488,7 +600,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       s * vegRandom.range(0.45, 0.75),
       s * vegRandom.range(0.7, 1.4),
     );
-    bush.position.set(px, ph + 0.2 * s, pz);
+    bush.position.set(px, meshHeight(px, pz) + 0.2 * s, pz);
     bush.rotation.y = vegRandom.range(0, Math.PI * 2);
     group.add(bush);
     bushesPlanted += 1;
@@ -512,6 +624,25 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         if (ph < 12 || ph > 160) continue;
         if (Math.hypot(px - runway.x, pz - runway.z) < 350) continue;
         plantShadeTree(px, pz, ph, vegRandom.range(1.0, 1.9));
+      }
+    }
+    // v5: one dense jungle cluster on the bigger islands — 8-12 trees packed
+    // tight with darker canopies, so the hills grow real jungle instead of
+    // scattered lone trees.
+    if (isl.radius > 500) {
+      const ja = vegRandom.range(0, Math.PI * 2);
+      const jr = isl.radius * vegRandom.range(0.2, 0.5);
+      const jx = isl.x + Math.cos(ja) * jr;
+      const jz = isl.z + Math.sin(ja) * jr;
+      const jcount = 8 + vegRandom.int(0, 4);
+      for (let t = 0; t < jcount; t += 1) {
+        const px = jx + vegRandom.range(-18, 18);
+        const pz = jz + vegRandom.range(-18, 18);
+        const ph = groundAt(px, pz);
+        if (ph < 30 || ph > 160) continue;
+        if (Math.hypot(px - runway.x, pz - runway.z) < 350) continue;
+        plantShadeTree(px, pz, ph, vegRandom.range(1.6, 2.4));
+        junglePlanted += 1;
       }
     }
     const palmCount = 4 + vegRandom.int(0, 2);
@@ -562,6 +693,20 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     for (const ring of hero) if (ring) plantHeroGrove(ring.x, ring.z, 10);
     if (course.spawn) plantHeroGrove(course.spawn.x, course.spawn.z, 6);
   }
+  // v5: the airport belt — dense trees around the runway island, so the
+  // landing shot shows a real airfield in a forest clearing instead of a grey
+  // rectangle in an empty field. Kept 90 m clear of the strip itself.
+  let airportTrees = 0;
+  for (let tries = 0; tries < 300 && airportTrees < 26; tries += 1) {
+    const a = vegRandom.range(0, Math.PI * 2);
+    const r = vegRandom.range(90, 260);
+    const px = runway.x + Math.cos(a) * r;
+    const pz = runway.z + Math.sin(a) * r;
+    const ph = groundAt(px, pz);
+    if (ph < 12 || ph > 160) continue;
+    plantShadeTree(px, pz, ph, vegRandom.range(1.5, 2.4));
+    airportTrees += 1;
+  }
   // Rocks on beaches and slopes, bushes on the grass — scattered, kept clear
   // of the runway strip.
   for (let tries = 0; tries < 900 && rocksPlanted < 40; tries += 1) {
@@ -582,6 +727,31 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     if (Math.hypot(px - runway.x, pz - runway.z) < 300) continue;
     plantBush(px, pz, ph, vegRandom.range(0.8, 1.5));
   }
+  // v5: coastal cliffs — big angular rock faces at the shoreline, half-sunk
+  // into the slope, so the coast has vertical rock instead of only smooth
+  // green hills meeting the sand.
+  for (const isl of islands) {
+    const cliffCount = 3 + vegRandom.int(0, 2);
+    for (let c = 0; c < cliffCount; c += 1) {
+      const ca = vegRandom.range(0, Math.PI * 2);
+      const cr = isl.radius * vegRandom.range(0.95, 1.15);
+      const px = isl.x + Math.cos(ca) * cr;
+      const pz = isl.z + Math.sin(ca) * cr;
+      const ph = groundAt(px, pz);
+      if (ph < 2 || ph > 25) continue;
+      if (Math.hypot(px - runway.x, pz - runway.z) < 300) continue;
+      const cliff = new THREE.Mesh(rockGeo, rockMats[vegRandom.int(0, 1)]);
+      cliff.scale.set(
+        vegRandom.range(6, 14),
+        vegRandom.range(8, 18),
+        vegRandom.range(5, 9),
+      );
+      cliff.position.set(px, meshHeight(px, pz) - 3, pz);
+      cliff.rotation.set(vegRandom.range(0, 0.4), vegRandom.range(0, 3), vegRandom.range(-0.2, 0.2));
+      group.add(cliff);
+      cliffsPlanted += 1;
+    }
+  }
 
   // --- Sky dome: a gradient shader, warm at the horizon, deep blue above. ---
   const skyMat = new THREE.ShaderMaterial({
@@ -601,7 +771,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // --- Sun: a high white disc in the daytime sky, and the light that comes
   // with it. v4: the low sunset disc is gone — the user asked for daytime, so
   // the sun rides high and the light is near-white instead of orange.
-  const sunDir = new THREE.Vector3(-0.45, 0.72, -0.3).normalize();
+  // v5: elevation ~34° (was ~46°) — a lower daytime sun stretches the
+  // plane's shadow ahead of it, so the shadow lands in the visible frame in
+  // the landing and cover shots instead of hiding directly under the plane
+  // (where the forward-looking chase camera can never see it).
+  const sunDir = new THREE.Vector3(-0.69, 0.56, -0.46).normalize();
   const sun = new THREE.Mesh(
     new THREE.CircleGeometry(190, 32),
     new THREE.MeshBasicMaterial({ color: PALETTE.sun, fog: false, transparent: true, opacity: 0.95 }),
@@ -656,8 +830,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   }
 
   return {
-    group, groundAt, update,
+    group, groundAt, update, sunDir,
     // How much scenery the generator planted (for the screenshot run's log).
-    vegCounts: { trees: treesPlanted, palms: palmsPlanted, rocks: rocksPlanted, bushes: bushesPlanted },
+    vegCounts: {
+      trees: treesPlanted, palms: palmsPlanted, rocks: rocksPlanted, bushes: bushesPlanted,
+      jungle: junglePlanted, cliffs: cliffsPlanted, airport: airportTrees,
+    },
   };
 }
