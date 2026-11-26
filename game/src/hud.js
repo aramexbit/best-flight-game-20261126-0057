@@ -1,0 +1,163 @@
+// The HUD: DOM instruments over the 3D view — altitude, speed, heading, fuel,
+// throttle, timer, score and ring count — plus a compass strip and an attitude
+// ball drawn on small canvases, a centre message line, and the title, pause and
+// game-over panels. Numbers are rebuilt only when they change.
+
+import { FONT, PALETTE } from './config.js';
+
+export function createHud() {
+  const el = (id) => document.getElementById(id);
+  const altEl = el('hud-alt');
+  const spdEl = el('hud-spd');
+  const hdgEl = el('hud-hdg');
+  const timeEl = el('hud-time');
+  const scoreEl = el('hud-score');
+  const ringsEl = el('hud-rings');
+  const fuelFill = el('fuel-fill');
+  const thrFill = el('thr-fill');
+  const msgEl = el('hud-msg');
+  const warnEl = el('hud-warn');
+  const compass = el('compass');
+  const attitude = el('attitude');
+  const compassCtx = compass.getContext('2d');
+  const attCtx = attitude.getContext('2d');
+
+  const cache = {};
+  function setText(node, key, value) {
+    if (cache[key] !== value) {
+      cache[key] = value;
+      node.textContent = value;
+    }
+  }
+
+  let msgTimer = 0;
+  function showMessage(text, seconds) {
+    msgEl.textContent = text;
+    msgEl.style.opacity = '1';
+    msgTimer = seconds;
+  }
+
+  function showWarning(text) {
+    warnEl.textContent = text;
+    warnEl.style.opacity = text ? '1' : '0';
+  }
+
+  function drawCompass(headingDeg) {
+    const w = compass.width;
+    const h = compass.height;
+    compassCtx.clearRect(0, 0, w, h);
+    compassCtx.fillStyle = PALETTE.hudPanel;
+    compassCtx.fillRect(0, 0, w, h);
+    compassCtx.font = `600 13px ${FONT}`;
+    compassCtx.textAlign = 'center';
+    compassCtx.textBaseline = 'middle';
+    // The strip shows 120 degrees around the current heading.
+    for (let deg = -120; deg <= 120; deg += 5) {
+      const shown = ((Math.round(headingDeg) + deg) % 360 + 360) % 360;
+      const x = w / 2 + (deg / 120) * (w / 2 - 8);
+      const major = shown % 30 === 0;
+      compassCtx.strokeStyle = major ? PALETTE.hudText : 'rgba(255,247,232,0.45)';
+      compassCtx.lineWidth = major ? 2 : 1;
+      compassCtx.beginPath();
+      compassCtx.moveTo(x, major ? 6 : 12);
+      compassCtx.lineTo(x, major ? 16 : 16);
+      compassCtx.stroke();
+      if (major) {
+        const label = shown === 0 ? 'N' : shown === 90 ? 'E' : shown === 180 ? 'S' : shown === 270 ? 'W' : String(shown);
+        compassCtx.fillStyle = PALETTE.hudText;
+        compassCtx.fillText(label, x, h - 9);
+      }
+    }
+    // Centre caret: the heading the nose actually points at.
+    compassCtx.fillStyle = PALETTE.ring;
+    compassCtx.beginPath();
+    compassCtx.moveTo(w / 2 - 6, 2);
+    compassCtx.lineTo(w / 2 + 6, 2);
+    compassCtx.lineTo(w / 2, 9);
+    compassCtx.closePath();
+    compassCtx.fill();
+  }
+
+  function drawAttitude(pitch, roll) {
+    const s = attitude.width;
+    const c = s / 2;
+    attCtx.clearRect(0, 0, s, s);
+    attCtx.save();
+    attCtx.beginPath();
+    attCtx.arc(c, c, c - 2, 0, Math.PI * 2);
+    attCtx.clip();
+    attCtx.translate(c, c);
+    attCtx.rotate(-roll);
+    // Pitch shifts the horizon: 90 degrees of pitch moves it by the radius.
+    const shift = (pitch / (Math.PI / 2)) * c;
+    attCtx.fillStyle = '#3a6ea8';
+    attCtx.fillRect(-c, -c + shift, s, c - shift + 2);
+    attCtx.fillStyle = '#8a6a45';
+    attCtx.fillRect(-c, c + shift - 2, s, c - shift + 2);
+    attCtx.strokeStyle = '#fff7e8';
+    attCtx.lineWidth = 2;
+    attCtx.beginPath();
+    attCtx.moveTo(-c, shift);
+    attCtx.lineTo(c, shift);
+    attCtx.stroke();
+    attCtx.restore();
+    // Fixed wings: the plane symbol never moves, the world turns behind it.
+    attCtx.strokeStyle = '#ffd94d';
+    attCtx.lineWidth = 3;
+    attCtx.beginPath();
+    attCtx.moveTo(c - 26, c);
+    attCtx.lineTo(c - 8, c);
+    attCtx.moveTo(c + 8, c);
+    attCtx.lineTo(c + 26, c);
+    attCtx.stroke();
+    attCtx.beginPath();
+    attCtx.arc(c, c, 3, 0, Math.PI * 2);
+    attCtx.fillStyle = '#ffd94d';
+    attCtx.fill();
+  }
+
+  /**
+   * Refresh every instrument from the flight state, the course and the clock.
+   * `view` is { heading, pitch, roll, altM, speedMs, fuel, throttle, time, score,
+   * rings, ringTotal, nextDist, stalled }.
+   */
+  function update(view, dt) {
+    setText(altEl, 'alt', `${Math.round(view.altM * 3.28084)}`);
+    setText(spdEl, 'spd', `${Math.round(view.speedMs * 1.94384)}`);
+    setText(hdgEl, 'hdg', `${String(Math.round(view.heading)).padStart(3, '0')}°`);
+    const mins = Math.floor(view.time / 60);
+    const secs = Math.floor(view.time % 60);
+    setText(timeEl, 'time', `${mins}:${String(secs).padStart(2, '0')}`);
+    setText(scoreEl, 'score', `${view.score}`);
+    setText(ringsEl, 'rings', `RING ${view.rings}/${view.ringTotal} · ${Math.round(view.nextDist)} m`);
+    fuelFill.style.width = `${Math.round(view.fuel * 100)}%`;
+    fuelFill.style.background = view.fuel < 0.2 ? PALETTE.hudWarn : PALETTE.hudGood;
+    thrFill.style.width = `${Math.round(view.throttle * 100)}%`;
+    drawCompass(view.heading);
+    drawAttitude(view.pitch, view.roll);
+    if (view.stalled) showWarning('STALL — NOSE DOWN, THROTTLE UP');
+    else if (view.fuel < 0.2 && view.fuel > 0) showWarning('LOW FUEL — HEAD FOR THE RUNWAY');
+    else if (view.fuel === 0) showWarning('FUEL EMPTY — GLIDING');
+    else showWarning('');
+    if (msgTimer > 0) {
+      msgTimer -= dt;
+      if (msgTimer <= 0) msgEl.style.opacity = '0';
+    }
+  }
+
+  function showPanel(name) {
+    for (const id of ['panel-title', 'panel-pause', 'panel-over']) {
+      el(id).style.display = id === `panel-${name}` ? 'flex' : 'none';
+    }
+  }
+
+  function hidePanels() {
+    for (const id of ['panel-title', 'panel-pause', 'panel-over']) el(id).style.display = 'none';
+  }
+
+  function setOverLines(lines) {
+    el('over-lines').innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
+  }
+
+  return { update, showMessage, showPanel, hidePanels, setOverLines };
+}
