@@ -85,19 +85,23 @@ function runShot(name) {
   const scene = stageShot(name, { flight, course, terrain });
   renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
-  // v7: the cover (play) camera moves closer and lower (13 m back, 3.0 m up,
-  // FOV 68 — was 16 m / 4.5 m / FOV 65) so the tree-covered foreground fills
-  // the frame instead of empty green slope, and the landing camera moves
-  // closer and lower still (12 m back, 2.2 m up, FOV 52 — was 15 m / 3.5 m /
-  // FOV 56) so the threshold sits below the plane in clear view.
-  // v7 add-on (LAYANG framing): the cover chase rides higher (4.5 m, was
-  // 3.0 m), so the plane drops toward the lower third of the frame and the
-  // next ring, the runway and the new landmark peaks sit in the middle —
-  // the composition the reference entry uses.
+  // Framing per shot (v7): the cover (play) camera is close and low
+  // (13 m back, 4.5 m up, FOV 68) so the tree-covered foreground fills
+  // the frame instead of empty green slope, and the landing camera is
+  // closer and lower still (12 m back, 2.2 m up, FOV 52) so the threshold
+  // sits below the plane in clear view; the cover chase rides high so
+  // the plane drops toward the lower third of the frame and the next
+  // ring, the runway and the landmark ridges sit in the middle.
+  // v8: the landing chase rides 4.5 m to the side (lateral -4.5, was 0),
+  // so the plane sits right of centre in the frame and the "09" runway
+  // number on the centreline shows beside the fuselage instead of hiding
+  // under its belly (Gemini v7). The freeze window is untouched
+  // (300 m / +50 m, proven in v6) — only the camera moves, not the
+  // approach.
   if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -24, 4.5); }
   else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, 0, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
-  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, 0, 2.2); }
+  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(12, -4.5, 2.2); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;

@@ -290,19 +290,23 @@ export function buildPlane(THREE) {
     x.fillRect(0, 0, 512, 512);
     // Redline arc across the top-right of the dial.
     x.strokeStyle = '#c83c32';
-    x.lineWidth = 18;
+    x.lineWidth = 22;
     x.beginPath();
     x.arc(256, 256, 208, -Math.PI / 2 - 0.18, -Math.PI / 2 + 0.96);
     x.stroke();
     // Twelve major tick marks, longer at the quarters, with a minor tick
     // halfway between each pair.
+    // v8: strokes are thicker and longer (long 16 / major 10 / minor 6,
+    // was 13 / 8 / 5) and the numbers are bigger — at screenshot distance
+    // the v7 markings blurred into the cream face, and a hero cockpit
+    // shot has to read at a glance (Gemini v7).
     for (let t = 0; t < 24; t += 1) {
       const a = (t / 24) * Math.PI * 2;
       const major = t % 2 === 0;
       const long = major && (t / 2) % 3 === 0;
-      const r0 = long ? 172 : major ? 190 : 200;
-      x.strokeStyle = '#2a2c33';
-      x.lineWidth = long ? 13 : major ? 8 : 5;
+      const r0 = long ? 166 : major ? 184 : 196;
+      x.strokeStyle = '#1a1c22';
+      x.lineWidth = long ? 16 : major ? 10 : 6;
       x.beginPath();
       x.moveTo(256 + Math.sin(a) * r0, 256 - Math.cos(a) * r0);
       x.lineTo(256 + Math.sin(a) * 216, 256 - Math.cos(a) * 216);
@@ -311,15 +315,15 @@ export function buildPlane(THREE) {
     // Numbers at 12 / 3 / 6 / 9 and the instrument label at the bottom.
     // The needle never sweeps the bottom of the dial (its range is the
     // upper ~240°), so the label down there stays uncovered.
-    x.fillStyle = '#2a2c33';
+    x.fillStyle = '#1a1c22';
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.font = 'bold 64px system-ui, sans-serif';
+    x.font = 'bold 76px system-ui, sans-serif';
     x.fillText('12', 256, 104);
     x.fillText('3', 408, 256);
     x.fillText('6', 256, 408);
     x.fillText('9', 104, 256);
-    x.font = 'bold 44px system-ui, sans-serif';
+    x.font = 'bold 52px system-ui, sans-serif';
     x.fillText(label, 256, 336);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -338,20 +342,23 @@ export function buildPlane(THREE) {
     g.position.set(def.x, 0.02, 0.08);
     // v6: big LIGHT dials — cream face, dark ticks, dark needle — so the
     // instruments read at a glance instead of hiding in the dark panel.
+    // v8: the rim is a touch bigger (0.17, was 0.165) and the needle is
+    // thicker and longer, so the instruments read at a glance even at
+    // screenshot distance (Gemini v7).
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.165, 0.016, 8, 28),
+      new THREE.TorusGeometry(0.17, 0.017, 8, 28),
       new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.4, metalness: 0.5 }),
     );
     g.add(rim);
     const face = new THREE.Mesh(
-      new THREE.CircleGeometry(0.156, 24),
+      new THREE.CircleGeometry(0.16, 24),
       new THREE.MeshBasicMaterial({ map: makeDialFace(def.label) }),
     );
     face.position.z = 0.005;
     g.add(face);
     const needlePivot = new THREE.Group();
-    const needleGeo = new THREE.BoxGeometry(0.018, 0.115, 0.006);
-    needleGeo.translate(0, 0.048, 0);
+    const needleGeo = new THREE.BoxGeometry(0.026, 0.13, 0.006);
+    needleGeo.translate(0, 0.055, 0);
     const needle = new THREE.Mesh(
       needleGeo,
       new THREE.MeshBasicMaterial({ color: 0x1c1e24 }),

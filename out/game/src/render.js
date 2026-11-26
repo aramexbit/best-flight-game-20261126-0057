@@ -117,20 +117,21 @@ export function createRenderer(canvas, THREE, groups) {
       // Pilot's head: high and a touch back, so the nose sits low in the frame
       // instead of filling it, and the dashboard reads at the bottom.
       // The camera turns with the plane, so the horizon rolls as the wings do.
-      // v7: the head sits a touch higher (+1.32) and further back (0.8 m),
-      // and the camera aims much less far down (1.2 m below level at 60 m
-      // out, was 3.5 m) — the v6 cockpit shot was half empty teal water
-      // below the nose. Aiming up puts the islands, the shoreline and the
-      // next ring above the nose instead of the sea filling the windshield
-      // (Gemini v6). The dashboard stays low, so the water and horizon
-      // below the plane still show through.
+      // v8 (revisi 2): the head sits further back (0.9 m, was 0.72) and a
+      // touch higher (+1.35), and the camera aims further down (-3.2 m at
+      // 60 m out, was -1.2) — the midpoint try still left the dial rims
+      // at 99% of the frame height with the yoke and the panel's bottom
+      // trim cut off (measured on the screenshot, not guessed). Aiming
+      // down lifts the whole dashboard ~4° in the frame without shrinking
+      // the dials; the sky above the nose loses ~2°, a fair trade for
+      // instruments that are fully in frame with breathing room.
       tmpUp.set(0, 1, 0);
       camera.position.set(
-        s.x - tmpForward.x * 0.8,
-        s.y + 1.32,
-        s.z - tmpForward.z * 0.8,
+        s.x - tmpForward.x * 0.9,
+        s.y + 1.35,
+        s.z - tmpForward.z * 0.9,
       );
-      lookTarget.set(s.x + tmpForward.x * 60, s.y + tmpForward.y * 60 - 1.2, s.z + tmpForward.z * 60);
+      lookTarget.set(s.x + tmpForward.x * 60, s.y + tmpForward.y * 60 - 3.2, s.z + tmpForward.z * 60);
       camera.up.copy(tmpUp);
       camera.lookAt(lookTarget);
       // v3: only 30% of the bank reaches the camera. The v2 shot rolled the

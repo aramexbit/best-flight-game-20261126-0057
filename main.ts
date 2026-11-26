@@ -1,11 +1,13 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v7: a runway clear zone (no tree, bush or rock may
-// touch the strip or the approach cone), rounder stylised clouds, fuller
-// tree canopies, a planted runway-island shoreline, a shaded cockpit with
-// high-resolution dials and a higher cockpit camera, and closer cover and
-// landing framings. The game is this directory's game/ folder: plain static
-// browser loads offline (game/index.html and its ES modules, plus the vendored
-// Three.js build under game/vendor/, no network request at all).
+// standard library only). v8: true mountain ridges (multi-peak silhouettes
+// with saddles, height-zoned rock-to-green colouring, skirted feet) replace
+// the v7 boulder-like peaks, clouds are packed into unified masses with flat
+// bases, trees and palms grow grounding discs, the shore grows clusters,
+// the cockpit dials are bolder and the camera sits closer, and the landing
+// camera rides sideways so the "09" number clears the fuselage. The game is
+// this directory's game/ folder: plain static browser loads offline
+// (game/index.html and its ES modules, plus the vendored Three.js build
+// under game/vendor/, no network request at all).
 // This program hands it in: it copies game/ and screenshots/ from beside this
 // file to /output and writes /output/dossier.json, the summary the judge reads,
 // with the vendored make.fun library. Put 3 or 4 PNG or JPEG screenshots in
@@ -31,7 +33,7 @@ if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), joi
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json). The v7 screenshots are the four staged scenes (cover, cockpit, title, landing),
+// screenshots/ and dossier.json). The v8 screenshots are the four staged scenes (cover, cockpit, title, landing),
 // each a real render of the shipped game at 1280x720, JPEG quality 82, all under 256 KiB.
 writeFileSync(
   join(out, 'dossier.json'),

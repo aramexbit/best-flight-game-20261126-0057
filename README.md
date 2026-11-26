@@ -5,7 +5,7 @@
 [![reward](https://make.fun/badge/best-flight-game-20261126-0057/aramexbit/best-flight-game-20261126-0057/reward.svg)](https://make.fun/bounty/best-flight-game-20261126-0057?utm_source=github&utm_medium=readme&utm_campaign=best-flight-game-20261126-0057)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A bright daytime flight game: fly a propeller tourer through 12 glowing rings over a tropical archipelago, then land on the runway of the big eastern island. Three.js, fully offline — no network requests, no assets to download. Version 7 adds a runway clear zone, rounder stylised clouds, fuller tree canopies, a planted runway-island shoreline, a shaded cockpit with high-resolution dials and a higher camera, and closer cover and landing framings.
+A bright daytime flight game: fly a propeller tourer through 12 glowing rings over a tropical archipelago, then land on the runway of the big eastern island. Three.js, fully offline — no network requests, no assets to download. Version 8 replaces the v7 boulder-like landmark peaks with true mountain ridges (multi-peak silhouettes, height-zoned rock-to-green colouring, skirted feet), packs the clouds into unified masses with flat bases, grounds every tree and palm with a soft shadow disc, grows clustered shorelines, and sharpens the cockpit dials and landing framing.
 
 ## How to play
 
@@ -17,7 +17,7 @@ A bright daytime flight game: fly a propeller tourer through 12 glowing rings ov
 ## Features
 
 - Arcade flight model with thrust, drag, climb cost, stall and banked turns.
-- Seeded procedural archipelago: 9 islands, ridged heightmap terrain with a dry-grass patchwork and a graded dirt apron around the runway, turquoise shallows with reef lines and a speckled water surface, drifting volumetric clouds, midday sun and haze. Clustered 3D trees, palms, boulders and shrubs — every trunk snapped to the rendered ground — plus dense jungle canopies, clustered coastal cliffs and a soft sand-to-grass shoreline. A strict clear zone keeps every tree, bush and rock off the runway strip and the approach cone. Two craggy landmark peaks give the horizon its silhouette: one across the strait past the far threshold, one on the southern shore. `?seed=N` rebuilds the same world.
+- Seeded procedural archipelago: 9 islands, ridged heightmap terrain with a dry-grass patchwork and a graded dirt apron around the runway, turquoise shallows with reef lines and a speckled water surface, drifting volumetric clouds, midday sun and haze. Clustered 3D trees, palms, boulders and shrubs — every trunk snapped to the rendered ground and grounded by a soft shadow disc — plus dense jungle canopies, clustered coastal cliffs and a soft sand-to-grass shoreline. A strict clear zone keeps every tree, bush and rock off the runway strip and the approach cone. Two mountain ridges give the horizon its silhouette: one across the strait past the far threshold, one along the southern shore — each a multi-peak range with saddles, rocky crests and green skirted feet. `?seed=N` rebuilds the same world.
 - 12-ring course planned from the runway backwards, with a pulsing next-ring indicator.
 - Full HUD: altitude (ft), speed (kts), heading compass strip, attitude ball, fuel and throttle bars, timer, score, ring counter.
 - Procedural Web Audio: engine drone, wind, ring chimes, landing chord — no audio files.
