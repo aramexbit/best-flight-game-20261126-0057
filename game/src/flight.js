@@ -178,6 +178,32 @@ export function createFlight(spawn) {
     // with its shoulders and a 40 m overshoot, and "gentle" is 48 m/s
     // (was 42), 0.45 roll / 0.35 pitch (was 0.35 / 0.28), 8 m/s sink
     // (was 6). A hard touchdown off the strip is still a crash.
+    // v21b: the FINISH ZONE (after all 12 rings) is the FORGIVING win
+    // path, and its tolerances are the ones a real human lands inside
+    // — the user's own playtest (27 Nov 09:39 WIB) crashed on a
+    // manual landing to win, and the reproduction (probe
+    // /tmp/probe-land-profiles2.mjs, 10 human profiles) proved why:
+    // a wings-level, on-centreline, on-strip touchdown at throttle
+    // 0.3 fails on speed ALONE (107 kts = 55 m/s vs the 50 cap — the
+    // plane cruises at 105 kts at throttle 0.3, so a human who slows
+    // down naturally still arrives too fast; only a near-idle glide
+    // at 69 kts passed), and the natural descent from ring 12 (55 m
+    // over ~300 m) at cruise speed is VS -11 m/s vs the 8 cap. Both
+    // caps bite TOGETHER on a normal human approach. The fix widens
+    // ONLY the finish-zone tolerances (the precise onRunway "gentle"
+    // path is untouched): speed 62 m/s (120 kts — above the 0.3
+    // throttle cruise of 55 m/s, below the full-throttle cruise of
+    // 75 m/s, so slowing down still matters and a full-throttle
+    // arrival still crashes), sink 12 m/s (the -11 m/s natural
+    // descent lands; a -12 m/s touchdown is firm but survivable),
+    // pitch 0.45 rad (a hard flare is a landing attitude, not a
+    // crash). The check ORDER is unchanged and was verified: the
+    // landing is tested FIRST (onRunway && gentle, or finish zone &&
+    // softEnough) and the crash is only the else — there is no
+    // separate crash check that can fire before the landing check.
+    // The terrain on the final approach is clean (a 3-degree glide
+    // from ring 12 clears the ground by 27-105 m), so the fix is
+    // purely the touchdown window, not the course.
     const ground = groundAt(state.x, state.z);
     if (state.y <= ground + 1.6) {
       const onRunway = runway !== null
@@ -193,8 +219,8 @@ export function createFlight(spawn) {
       const inFinishZone = runway !== null && state.ringsPassed >= COURSE.ringCount
         && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2 + 80
         && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2 + 30;
-      const softEnough = state.speed < 50 && Math.abs(state.roll) < 0.45
-        && Math.abs(state.pitch) < 0.35 && Math.abs(state.verticalSpeed) < 8;
+      const softEnough = state.speed < 62 && Math.abs(state.roll) < 0.45
+        && Math.abs(state.pitch) < 0.45 && Math.abs(state.verticalSpeed) < 12;
       state.y = ground + 1.6;
       if ((onRunway && gentle) || (inFinishZone && softEnough)) {
         state.status = 'landed';

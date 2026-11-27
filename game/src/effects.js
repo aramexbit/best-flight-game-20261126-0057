@@ -96,9 +96,16 @@ export function createEffects(THREE, scene) {
       depthWrite: false,
       map: smokeTexture,
     });
+    // v21: `opts.flat` — a flattened puff (scale.y = size * flat,
+    // random yaw) reads as an irregular billow, not a ball. A round
+    // sphere with a soft texture still has a ROUND silhouette, and
+    // the v20 crash frame showed the blast smoke as a field of pale
+    // balls — the root fix is shape, not opacity.
+    const flat = opts.flat ?? 1;
     const mesh = new THREE.Mesh(puffGeo, mat);
     mesh.position.set(x, y, z);
-    mesh.scale.setScalar(size);
+    mesh.scale.set(size, size * flat, size);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
     scene.add(mesh);
     puffs.push({
       mesh,
@@ -107,6 +114,7 @@ export function createEffects(THREE, scene) {
       grow: opts.grow ?? 1.6,
       vel: opts.vel ?? { x: 0, y: 1.2, z: 0 },
       baseOpacity: opts.opacity ?? 0.55,
+      flat,
     });
   }
 
@@ -307,17 +315,26 @@ export function createEffects(THREE, scene) {
     // texture keeps the soft edges Gemini v17 asked for; the smooth
     // spheres stay, so no return to the faceted "flat dark polygons"
     // of v15).
-    const smokeColors = [0x475569, 0x64748b];
-    for (let p = 0; p < 14; p += 1) {
+    // v21: EIGHT puffs, not fourteen — near-black slate
+    // (#1E293B/#334155, was mid-slate #475569/#64748B), FLATTENED
+    // (flat 0.55) and TIGHTER (±10 m horizontal, ±8 m vertical, was
+    // ±18/±12). The v20 rev-3 crash frame still showed ~8-10 pale
+    // balls: fourteen round mid-grey spheres scattered wide over
+    // bright grass read as bubbles whatever their opacity. Fewer,
+    // darker, flattened puffs clustered ON the fireball read as
+    // soot, not a bubble field.
+    const smokeColors = [0x1e293b, 0x334155];
+    for (let p = 0; p < 8; p += 1) {
       smokePuff(
-        x + (Math.random() - 0.5) * 36,
-        y + (Math.random() - 0.5) * 24,
-        z + (Math.random() - 0.5) * 36,
-        2 + Math.random() * 1.5,
+        x + (Math.random() - 0.5) * 20,
+        y + (Math.random() - 0.5) * 16,
+        z + (Math.random() - 0.5) * 20,
+        1.8 + Math.random() * 1.0,
         {
           color: smokeColors[p % smokeColors.length],
           life: 6 + Math.random() * 2,
           grow: 0.5,
+          flat: 0.55,
           vel: {
             x: (Math.random() - 0.5) * 5,
             y: air ? -2 - Math.random() * 1.5 : 2 + Math.random() * 2,
@@ -661,7 +678,10 @@ export function createEffects(THREE, scene) {
       p.mesh.position.x += (p.vel.x + STORM.windX * 0.5) * dt;
       p.mesh.position.y += p.vel.y * dt;
       p.mesh.position.z += (p.vel.z + STORM.windZ * 0.5) * dt;
-      p.mesh.scale.setScalar(p.mesh.scale.x + p.grow * dt);
+      // v21: a flattened puff grows flattened (the uniform
+      // setScalar above would un-flatten it back into a ball).
+      const ns = p.mesh.scale.x + p.grow * dt;
+      p.mesh.scale.set(ns, ns * (p.flat ?? 1), ns);
       p.mesh.material.opacity = p.baseOpacity * (1 - k);
     }
     // v16: flame tongues stretch out, then shrink and die fast.
@@ -767,7 +787,10 @@ export function createEffects(THREE, scene) {
           c.y + h,
           c.z + (Math.random() - 0.5) * 6,
           2 + Math.random() * 1.5,
-          { color: 0x475569, life: 4, grow: 1.0, vel: { x: 0, y: 2.5, z: 0 }, opacity: 0.7 },
+          // v21: darker (#334155, was #475569) + flattened (0.6) —
+          // the column puffs are the same bubble family as the blast
+          // smoke; the crash frame's pale balls came from both.
+          { color: 0x334155, life: 4, grow: 1.0, flat: 0.6, vel: { x: 0, y: 2.5, z: 0 }, opacity: 0.8 },
         );
       }
       if (c.t >= c.dur) columns.splice(i, 1);

@@ -88,6 +88,32 @@ function runRoute(name, policy) {
           throttle: delayed.throttle,
         };
       }
+    } else if (policy === 'manual') {
+      // v21b: a HUMAN landing — the autopilot flies the rings, then
+      // a human takes over: throttle slewed to 0.3 (a natural "slow
+      // down"), VS -5, cross-track roll (aim 500 m past the runway).
+      // The user's own playtest crashed on exactly this profile
+      // (107 kts vs the old 50 m/s finish-zone cap); the widened
+      // finish-zone tolerances (62 m/s / 12 m/s / 0.45 rad) must let
+      // it win. The land regulator (Reference) is the perfect case;
+      // this is the human case.
+      const ring = course.nextRing();
+      if (ring) {
+        input = autopilotTo(flight, ring, 0.72, groundAt);
+      } else {
+        if (landPhaseAt === null) landPhaseAt = s.elapsed;
+        const farX = runway.x + runway.dirX * 500;
+        const farZ = runway.z + runway.dirZ * 500;
+        const targetYaw = Math.atan2(farX - s.x, -(farZ - s.z));
+        let herr = targetYaw - s.yaw;
+        herr = Math.atan2(Math.sin(herr), Math.cos(herr));
+        const lat = -(s.x - runway.x) * runway.dirZ + (s.z - runway.z) * runway.dirX;
+        const roll = clamp1(-s.roll * 2 - lat * 0.01 + herr * 1.5);
+        const pitch = clamp1((-5 - (s.verticalSpeed || 0)) * 0.05);
+        const thrErr = 0.3 - s.throttle;
+        const throttle = Math.abs(thrErr) < 0.05 ? 0 : Math.sign(thrErr);
+        input = { pitch, roll, yaw: 0, throttle, stickRoll: roll, stickPitch: pitch };
+      }
     } else {
       // Reference: the autopilot, full control.
       const ring = course.nextRing();
@@ -147,7 +173,8 @@ function runRoute(name, policy) {
 const reference = runRoute('reference', 'reference');
 const weak = runRoute('weak', 'weak');
 const idle = runRoute('idle', 'idle');
-for (const r of [reference, weak, idle]) console.log(JSON.stringify(r));
+const manual = runRoute('manual', 'manual');
+for (const r of [reference, weak, idle, manual]) console.log(JSON.stringify(r));
 
 // Pass criteria (the point of the exercise): the course must be
 // finishable by a skilled player, and must NOT be finishable by
@@ -155,9 +182,11 @@ for (const r of [reference, weak, idle]) console.log(JSON.stringify(r));
 const refOk = reference.finished && reference.rings === 12;
 const weakOk = weak.rings > 0 && weak.rings < 12 && !weak.finished;
 const idleOk = !idle.finished;
+const manualOk = manual.finished && manual.rings === 12;
 console.log(`reference: ${refOk ? 'PASS' : 'FAIL'} (must finish 12 rings + land)`);
 console.log(`weak: ${weakOk ? 'PASS' : 'FAIL'} (some rings, no finish)`);
 console.log(`idle: ${idleOk ? 'PASS' : 'FAIL'} (must not finish)`);
-const allOk = refOk && weakOk && idleOk;
+console.log(`manual: ${manualOk ? 'PASS' : 'FAIL'} (human landing at 0.3 throttle must finish 12 rings + land)`);
+const allOk = refOk && weakOk && idleOk && manualOk;
 console.log(allOk ? 'SIM-3TIER: ALL PASS' : 'SIM-3TIER: FAIL');
 process.exit(allOk ? 0 : 1);

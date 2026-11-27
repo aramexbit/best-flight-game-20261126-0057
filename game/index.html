@@ -78,35 +78,52 @@
   over the 3D race scene with text shadows instead of panels, so the
   whole scene stays visible. The top bar is a slim translucent band.
   The pause / game-over cards keep .card. */
-  #panel-title { justify-content: flex-start; }
-  #title-topbar { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; background: linear-gradient(rgba(6, 60, 133, 0.6), rgba(6, 60, 133, 0.35)); pointer-events: none; }
-  /* v15: the hero title floats over the scene — huge gold gradient type
-  with a hard dark shadow, so it reads on bright sky and sea. */
-  #title-hero { position: absolute; left: 4%; top: 11%; pointer-events: none; }
-  #title-hero .hero-title { font-size: clamp(48px, 6.6vw, 84px); font-weight: 900; letter-spacing: 0.01em; line-height: 0.95; background: linear-gradient(#FFE65C, #FFB800); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 2px #063C85; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.6)); }
-  #title-hero .hero-sub { font-size: clamp(26px, 3.3vw, 42px); font-weight: 900; letter-spacing: 0.16em; color: #FFD52A; text-shadow: 2px 0 0 #063C85, -2px 0 0 #063C85, 0 2px 0 #063C85, 0 -2px 0 #063C85, 0 2px 6px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.6); margin-top: 6px; }
-  /* v17: the three rules sit on a LIGHT translucent pill (warm white
-     0.66 + white border + blur + soft shadow) with DARK NAVY text
-     #132238 — the user's direct instruction (26 Nov 23:49 WIB): the
-     white text was unreadable against the bright sky. Navy alone
-     would vanish under a dark storm cloud, so the light pill is what
-     keeps the rules readable in every sky condition. */
-  #title-rules { position: absolute; left: 4%; top: 44%; max-width: 44%; pointer-events: none; background: rgba(248, 250, 252, 0.92); border: 2px solid #063C85; border-radius: 16px; padding: 18px 22px; backdrop-filter: blur(6px); box-shadow: 0 4px 18px rgba(10, 30, 60, 0.18); }
-  #title-rules .rule { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; font-size: 18px; font-weight: 600; line-height: 1.4; color: #132238; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5); }
-  #title-rules .rule-icon { flex: 0 0 auto; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 1px 2px rgba(19, 34, 56, 0.35)); }
-  /* v17: the pill's first/last rules hug its edges — the 14px rule
-     margins would leave a dead band inside the pill. */
-  #title-rules .rule:first-child { margin-top: 4px; }
-  #title-rules .rule:last-child { margin-bottom: 4px; }
-  /* v15: the key-caps float in one row at bottom-left, no box around them.
-     bottom 34px (was 22): the key-labels ("Pitch" ... "Pause") sit under
-     the badges, and at 22px the last label's descenders were clipped by
-     the frame edge in the title screenshot. */
-  .title-keys { position: absolute; left: 4%; bottom: 34px; display: flex; gap: 16px; pointer-events: none; }
-  .title-keys .keycap { text-align: center; }
-  #title-brand { display: flex; align-items: center; gap: 12px; }
-  #title-brand .brand-title { font-size: 26px; font-weight: 900; letter-spacing: 0.03em; line-height: 1; background: linear-gradient(#FFE65C, #FFB800); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55)); }
-  #title-brand .brand-sub { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: #ffffff; opacity: 0.92; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); margin-top: 3px; }
+  /* v21b: MODERN title (the user, 27 Nov 09:39 WIB: the title screen
+  — not the cover — "kurang bagus", "buat lebih modern"). The old
+  title was retro-arcade: a heavy gold-gradient hero with a thick
+  navy stroke, a navy gradient band across the top, a plain white
+  rules box, chunky 3D keycaps with a brown lip, and a chunky 3D
+  Start button with a bottom lip. The modern title is flat, clean
+  and spacious: a solid gold hero with no stroke, a spaced white
+  subtitle, an eyebrow, a glass rules card with a header, a single
+  dark glass control strip, and a flat gold pill CTA. The gold/navy
+  accents stay. Subtle scrims (dark at the top for the hero, dark
+  at the bottom for the strip) replace the heavy band — the scene
+  stays visible. */
+  #panel-title { justify-content: flex-start; background: linear-gradient(rgba(6, 60, 133, 0.28), rgba(6, 60, 133, 0) 26%, rgba(6, 60, 133, 0) 62%, rgba(6, 60, 133, 0.32)); }
+  #title-topbar { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; background: none; pointer-events: none; }
+  /* v21f: the hero spans the FULL width (left:0; right:0) — the
+  v21c centring (left:50% + translateX(-50%)) shrink-to-fit the
+  hero to 640px, so "LANGIT NUSANTARA" wrapped to two lines at
+  88px and the second line + "RING RUN" collided with the mission
+  text below (text printed on text, unreadable in the 3-start
+  screenshot). One line now, no overlap. */
+  #title-hero { position: absolute; left: 0; right: 0; top: 5%; text-align: center; pointer-events: none; }
+  #title-hero .hero-title { font-size: clamp(52px, 7vw, 88px); font-weight: 900; letter-spacing: -0.01em; line-height: 0.95; color: #FFD52A; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5); }
+  /* v21e: "RING RUN" is GOLD (#FFD52A), not white — the user's
+  correction, 27 Nov 09:55 WIB: ALL text above the play button is
+  golden yellow, no white text in that area (the mockup's white
+  subtitle + white mission line are both gold in the game). */
+  #title-hero .hero-sub { font-size: clamp(20px, 2.2vw, 28px); font-weight: 800; letter-spacing: 0.42em; color: #FFD52A; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); margin-top: 12px; display: flex; align-items: center; justify-content: center; }
+  /* v21c: NO instruction card on the title (the user's final
+     decision, 27 Nov 09:49 WIB, variant 2 — "TANPA kotak di
+     pinggir"). The v21b glass card (HOW TO FLY, 3 rules) is
+     REMOVED entirely; its content moved into the gold mission text
+     above the centre play button. */
+  /* v21c: the controls are SIX separate LIGHT glass chips spread
+  across the full width (the final mockup) — each a translucent
+  white rounded card with a gold key badge + dark navy label.
+  The v21b single dark navy strip at bottom-left is gone. The
+  Shift/Ctrl badge wraps to two lines, so that chip stands
+  taller, exactly as in the mockup. All six controls stay,
+  Shift/Ctrl included. */
+  .title-keys { position: absolute; left: 4%; right: 4%; bottom: 28px; display: flex; justify-content: space-between; align-items: center; gap: 16px; pointer-events: none; }
+  .title-keys .chip { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.85); border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 18px; padding: 12px 20px; backdrop-filter: blur(8px); box-shadow: 0 0 0 1px rgba(255, 213, 42, 0.3), 0 8px 24px rgba(10, 30, 60, 0.25); }
+  .title-keys .chip .key { background: #FFD52A; color: #132238; font-weight: 800; font-size: 16px; border-radius: 8px; padding: 7px 11px; line-height: 1.15; text-align: center; white-space: nowrap; }
+  .title-keys .chip .key.wide { max-width: 66px; white-space: normal; }
+  .title-keys .chip .lbl { font-size: 17px; font-weight: 600; color: #132238; white-space: nowrap; }
+  /* v21c: #title-brand is gone with the logo (final mockup: clean
+     top, centred title only). */
   #title-top-right { display: flex; align-items: center; gap: 10px; }
   /* v20 (d): the gear button is HIDDEN on the title screen too (was
      kept as the sound toggle) — the v19 live playtest still saw the
@@ -126,20 +143,31 @@
   .card .sub { margin: 4px 0 14px; font-size: 15px; line-height: 1.45; opacity: 0.92; }
   .card .lines { font-size: 19px; line-height: 1.65; }
   .card .lines div { margin: 2px 0; }
-  .keycap { text-align: center; }
-  /* v12: key-cap badges are YELLOW with navy text (#132238, same as the
-     Start button label) — the user's final choice, 26 Nov 16:10 WIB. The
-     navy SVG icons inside the keys stay navy, so they read on yellow. */
-  .keycap .key { display: flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(#FFE65C, #FFC93C); color: #132238; font-weight: 800; font-size: 14px; border-radius: 6px; border-bottom: 3px solid #B45309; padding: 6px 4px 5px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); }
-  .keycap .key-label { display: inline-block; font-size: 11px; color: #ffffff; margin-top: 4px; background: rgba(6, 60, 133, 0.78); border-radius: 999px; padding: 2px 8px; text-shadow: none; }
+  /* v21b: the old chunky 3D keycap rules are gone with the title
+     redesign (the controls are now one dark glass strip). The
+     pause / game-over cards keep .card .keys. */
   .card .keys { margin-top: 20px; font-size: 14px; line-height: 1.8; opacity: 0.85; }
   .card .prompt { margin-top: 18px; font-size: 18px; font-weight: 700; color: #2CE65B; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
-  /* v11: the big glossy Start button from the mockup — golden-amber to
-  bright yellow, thick glossy top highlight, warm dark-amber border and a
-  solid bottom lip, so it reads as a chunky 3D arcade button. */
-  #btn-start { position: absolute; right: 4%; bottom: 22px; pointer-events: auto; cursor: pointer; display: flex; align-items: center; gap: 14px; font-family: inherit; font-size: 30px; font-weight: 900; color: #132238; background: linear-gradient(#FFD926, #F59E0B); border: 2px solid #B45309; border-radius: 18px; padding: 14px 46px; box-shadow: 0 5px 0 #B45309, 0 10px 24px rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.55); transition: transform 0.12s, filter 0.12s; }
-  #btn-start:hover { transform: translateY(-1px); filter: brightness(1.06); }
-  #btn-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #B45309, 0 6px 16px rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.55); }
+  /* v21c: the title CENTRE, matched to the final mockup (approved
+  by the user 27 Nov 09:51 WIB: "nah itu baru bagus"): the mission
+  text sits ABOVE a BIG circular gold play button in the middle of
+  the screen, with START in big gold caps under it. ALL the mission
+  text is GOLD — in the mockup the first line is still white, but
+  the user ordered it gold in the game to match the title above.
+  The mission line is smaller (18px, lighter gold); the terrain
+  lines are bigger and bold (26px, gold) — the mockup's hierarchy.
+  The play triangle is WHITE (not navy) as in the mockup, and the
+  button is 140px with a soft gold halo. The button keeps
+  id="btn-start" (main.js binds the click by ID). No "or press
+  Space" caption — the mockup has none. */
+  #title-center { position: absolute; left: 50%; top: 55%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+  #title-mission { margin-bottom: 24px; }
+  #title-mission .mission-main { font-size: 18px; font-weight: 700; line-height: 1.4; color: #FFD52A; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7), 0 1px 3px rgba(0, 0, 0, 0.8); white-space: nowrap; }
+  #title-mission .mission-sub { margin-top: 8px; font-size: 26px; font-weight: 800; line-height: 1.3; color: #FFD52A; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7), 0 1px 3px rgba(0, 0, 0, 0.8); }
+  #btn-start { pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 140px; height: 140px; font-family: inherit; background: #FFD52A; border: none; border-radius: 50%; padding: 0; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 8px rgba(255, 213, 42, 0.28), inset 0 2px 0 rgba(255, 255, 255, 0.55); transition: transform 0.12s, box-shadow 0.12s, filter 0.12s; }
+  #btn-start:hover { transform: scale(1.06); filter: brightness(1.05); box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5), 0 0 0 8px rgba(255, 213, 42, 0.38), inset 0 2px 0 rgba(255, 255, 255, 0.55); }
+  #btn-start:active { transform: scale(0.97); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 0 8px rgba(255, 213, 42, 0.28), inset 0 2px 0 rgba(255, 255, 255, 0.55); }
+  #title-center .start-label { margin-top: 16px; font-size: 38px; font-weight: 900; letter-spacing: 0.1em; color: #FFD52A; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7), 0 1px 3px rgba(0, 0, 0, 0.8); }
 </style>
 </head>
 <body>
@@ -177,13 +205,9 @@
 
 <div class="overlay" id="panel-title">
   <div id="title-topbar">
-    <div id="title-brand">
-      <svg width="66" height="44" viewBox="0 0 66 44" aria-hidden="true"><path d="M31 22 L5 8 L13 22 L3 27 L31 29 Z" fill="#9fd4ff"/><path d="M31 22 L10 15 L17 26 L8 30 L31 31 Z" fill="#5aa9e6"/><path d="M35 22 L61 8 L53 22 L63 27 L35 29 Z" fill="#9fd4ff"/><path d="M35 22 L56 15 L49 26 L58 30 L35 31 Z" fill="#5aa9e6"/><circle cx="33" cy="22" r="6" fill="#FFD52A" stroke="#B45309" stroke-width="1.5"/></svg>
-      <!-- v16: the brand TEXT is gone — the top bar showed "LANGIT
-      NUSANTARA / RING RUN" AND the hero below showed the same title,
-      so the title was duplicated on the start screen (Gemini's fix
-      prompt). The logo stays; the hero is now the single title. -->
-    </div>
+    <!-- v21c: the brand logo is GONE from the title (the final
+    mockup has a clean top — just the centred title). The top bar
+    keeps the hidden pills + gear hooks. -->
     <div id="title-top-right">
       <div class="top-pill"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="12" height="18" rx="2" fill="#ffffff"/><rect x="7" y="6" width="6" height="5" rx="1" fill="#2CE65B"/><circle cx="10" cy="16" r="1.6" fill="#063C85"/><path d="M16 8h3v6a2 2 0 0 1-4 0" fill="none" stroke="#ffffff" stroke-width="2"/></svg><span>Fuel</span><span class="fuel-track"><span></span></span></div>
       <div class="top-pill"><span class="star">★</span><span>0 / 12</span></div>
@@ -194,25 +218,27 @@
     <div class="hero-title">LANGIT NUSANTARA</div>
     <div class="hero-sub">RING RUN</div>
   </div>
-  <div id="title-rules">
-    <!-- v20 (Gemini v20 #6): the three rules are Gemini's concise
-    lines, with crisp bold SVG icons — a gold ring, a target, a storm
-    cloud + bolt. The old icons (a fuel-pump pictogram and an abstract
-    lightning shape) read as small/blurry/misaligned at 24-26 px, and
-    rule 3 rambled. -->
-    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" style="filter: drop-shadow(0 0 6px rgba(255,213,42,0.8))" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#FFD52A" stroke-width="3.5"/><circle cx="13" cy="13" r="9" fill="none" stroke="#FFE65C" stroke-width="1.2"/></svg></div><div>Fly through all 12 glowing rings, then land on Runway 09.</div></div>
-    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="10" fill="none" stroke="#C83C32" stroke-width="3.5"/><circle cx="13" cy="13" r="5.5" fill="none" stroke="#FFD52A" stroke-width="2.5"/><circle cx="13" cy="13" r="2.5" fill="#C83C32"/></svg></div><div>Hit ring centres for bonus points; watch fuel and airspeed.</div></div>
-    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="9" cy="12" r="5" fill="#5aa9e6"/><circle cx="15" cy="10" r="6" fill="#5aa9e6"/><circle cx="18" cy="14" r="4.5" fill="#5aa9e6"/><rect x="5" y="12" width="18" height="5" rx="2.5" fill="#5aa9e6"/><path d="M13 16 L10.5 21.5 L12.8 21.5 L11.5 25.5 L15.5 19.5 L13.2 19.5 Z" fill="#FFD52A" stroke="#B45309" stroke-width="0.6"/></svg></div><div>Avoid stalling at low speed and navigate clear of the storm.</div></div>
+  <!-- v21c: the title CENTRE (the user's final decision, 27 Nov
+  09:49 WIB, variant 2 — "TANPA kotak di pinggir"): the gold
+  mission text above a BIG circular play button in the middle of
+  the screen. The old glass rules card (HOW TO FLY, 3 rules) is
+  GONE — its content moved into the gold mission text. -->
+  <div id="title-center">
+    <div id="title-mission">
+      <div class="mission-main">Race 4 rivals through 12 glowing rings across the islands &mdash; then land on Runway 09.</div>
+      <div class="mission-sub">Cross turquoise seas, sandy beaches, green islands<br>and mountain ridges &mdash; steer clear of the storm.</div>
+    </div>
+    <button id="btn-start" type="button" aria-label="Start"><svg width="60" height="60" viewBox="0 0 52 52" aria-hidden="true"><path d="M16 10 L42 26 L16 42 Z" fill="#ffffff"/></svg></button>
+    <div class="start-label">START</div>
   </div>
   <div class="title-keys">
-    <div class="keycap"><span class="key">W/S</span><span class="key-label">Pitch</span></div>
-    <div class="keycap"><span class="key">A/D</span><span class="key-label">Roll</span></div>
-    <div class="keycap"><span class="key">Q/E</span><span class="key-label">Rudder</span></div>
-    <div class="keycap"><span class="key"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="5" fill="none" stroke="#132238" stroke-width="2"/><line x1="12" y1="6" x2="12" y2="10" stroke="#132238" stroke-width="2"/></svg>Shift/Ctrl</span><span class="key-label">Throttle</span></div>
-    <div class="keycap"><span class="key"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" fill="none" stroke="#132238" stroke-width="2"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="#132238" stroke-width="2"/><path d="M9 7l1.5-3h3L15 7" fill="none" stroke="#132238" stroke-width="2"/></svg>C</span><span class="key-label">Camera</span></div>
-    <div class="keycap"><span class="key"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" fill="#132238"/><rect x="14" y="4" width="4" height="16" fill="#132238"/></svg>P</span><span class="key-label">Pause</span></div>
+    <div class="chip"><span class="key">W/S</span><span class="lbl">Pitch</span></div>
+    <div class="chip"><span class="key">A/D</span><span class="lbl">Roll</span></div>
+    <div class="chip"><span class="key">Q/E</span><span class="lbl">Rudder</span></div>
+    <div class="chip"><span class="key wide">Shift/<br>Ctrl</span><span class="lbl">Throttle</span></div>
+    <div class="chip"><span class="key">C</span><span class="lbl">Camera</span></div>
+    <div class="chip"><span class="key">P</span><span class="lbl">Pause</span></div>
   </div>
-  <button id="btn-start" type="button">▶ Start</button>
 </div>
 
 <div class="overlay" id="panel-pause">

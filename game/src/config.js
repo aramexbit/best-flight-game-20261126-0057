@@ -77,7 +77,13 @@ export const COURSE = {
   // Each leg turns the course by up to the per-leg wander in rings.js
   // (a config field used to live here but nothing read it, so it is gone).
   // Ring centres sit between these altitudes, in metres.
-  minRingAlt: 120,
+  // v21c (user 27 Nov 10:17): LOW START — the course climbs out of
+  // the sea. minRingAlt 45 (was 120): the walk starts at 55 m and
+  // climbs to the 145 m approach, so the early rings sit low between
+  // the steep ridge islands (terrain.js) at ~55-90 m AGL instead of
+  // cruising at 120-150 m over flat sea. The clearance pass in
+  // rings.js still lifts any ring whose ground is too close.
+  minRingAlt: 45,
   maxRingAlt: 300,
   // The glowing ring itself, in metres. v4: radius 13 m (was 11.5) — the
   // v3 blind test said the main ring reads small in the cover shot, and the
@@ -195,6 +201,13 @@ export const RACE = {
   // instead. The run still has four rivals crashing: BIRU's dive,
   // ORANYE's clip-dive, and the KUNING+HIJAU mid-air collision.)
   respawnDelay: 3,
+  // v21c (user 27 Nov 10:17): a rival destroyed by a tornado stays
+  // out LONGER than a crash (12 s, was the 3 s respawnDelay) — it
+  // reads as ELIMINATED (gugur), not just bumped, and the player's
+  // race position improves at once (rivals.js skips a tornado-killed
+  // rival in playerPosition instead of latching it). It still rejoins
+  // behind the player afterwards, so the race stays five planes.
+  tornadoOutDelay: 12,
   // Seconds a sea/ground impact's smoke column keeps rising.
   smokeColumnSeconds: 10,
 };

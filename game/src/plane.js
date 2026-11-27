@@ -288,16 +288,45 @@ export function buildPlane(THREE, livery = null) {
     blade.position.set(0, 0, -0.1);
     prop.add(blade);
   }
-  // v20: the blur disc is DARKER (#8a9199, was #d8d8d8), fainter
-  // (max opacity 0.25, was 0.45) and smaller (1.7 m, was 1.85) — the
-  // pale 1.85 m disc read as a giant translucent bubble on the nose
-  // from the chase camera (v19 live playtest). A darker, fainter disc
-  // reads as a spinning blur, not a pale balloon. The two dark blades
-  // still spin under it.
+  // v21: the blur disc is a RADIAL-GRADIENT ring texture, not a
+  // solid disc — transparent at the hub AND at the rim, peaking
+  // mid-radius, with three faint dark blade streaks. The v20 solid
+  // disc (uniform #8a9199 at 0.25 opacity, 1.7 m) still read as a
+  // big pale bubble behind the plane in the v20 live playtest: a
+  // flat circle with a hard edge IS a disc. A soft ring with no
+  // hard edge reads as spinning blur. Radius 1.55 m (was 1.7).
+  const blurTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(128, 128, 8, 128, 128, 128);
+    grad.addColorStop(0, 'rgba(200,205,212,0)');
+    grad.addColorStop(0.25, 'rgba(200,205,212,0.12)');
+    grad.addColorStop(0.55, 'rgba(180,186,194,0.55)');
+    grad.addColorStop(0.8, 'rgba(160,167,176,0.8)');
+    grad.addColorStop(1, 'rgba(160,167,176,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 256, 256);
+    // Three faint dark blade streaks, so the ring reads as blades in
+    // motion, not a clean annulus.
+    g.strokeStyle = 'rgba(70,76,84,0.35)';
+    g.lineWidth = 10;
+    for (let k = 0; k < 3; k += 1) {
+      const a = (k * Math.PI * 2) / 3 + 0.4;
+      g.beginPath();
+      g.moveTo(128 + Math.cos(a) * 30, 128 + Math.sin(a) * 30);
+      g.lineTo(128 + Math.cos(a) * 122, 128 + Math.sin(a) * 122);
+      g.stroke();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
   const blur = new THREE.Mesh(
-    new THREE.CircleGeometry(1.7, 28),
+    new THREE.CircleGeometry(1.55, 28),
     new THREE.MeshBasicMaterial({
-      color: '#8a9199', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
+      map: blurTex, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
     }),
   );
   blur.position.set(0, 0, -3.6);
@@ -340,15 +369,10 @@ export function buildPlane(THREE, livery = null) {
   const face = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.34, 0.02), faceMat);
   face.position.set(0, 0.01, 0.06);
   dash.add(face);
-  // Red trim along the top edge of the panel, so it is visibly built, not cut out.
-  const trim = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.025, 0.13), red);
-  trim.position.set(0, 0.22, 0);
-  dash.add(trim);
-  // v6: the same red trim along the bottom edge, so the panel is framed
-  // top and bottom and reads as one finished housing.
-  const trimBottom = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.025, 0.13), red);
-  trimBottom.position.set(0, -0.22, 0);
-  dash.add(trimBottom);
+  // v21: the red panel trims are GONE — Gemini v20 read the long
+  // red strip across the dash as a placeholder block. The panel is
+  // framed by its own inset face + the glareshield above it, not by
+  // a red bar.
   // Glareshield: wider than the panel, shallow and high, sloping gently down
   // toward the pilot — it gives the panel a real top surface without
   // overhanging the dials. (First try: 0.45 deep at 0.5 rad overhung the panel
@@ -409,14 +433,15 @@ export function buildPlane(THREE, livery = null) {
     shieldSide.rotation.z = -side * 0.10;
     dash.add(shieldSide);
   }
-  // v19 (Gemini v19 #3): the glareshield pinstripe is #C93B2B, the
-  // accent red from the fix prompt — the old stripe used the livery
-  // red, which on the rivals read as a random red bar.
-  const stripeMat = new THREE.MeshStandardMaterial({ color: '#C93B2B', roughness: 0.5, metalness: 0.2 });
-  const shieldStripe = new THREE.Mesh(new THREE.BoxGeometry(1.71, 0.012, 0.02), stripeMat);
-  shieldStripe.position.set(0, 0.215, -0.035);
-  shieldStripe.rotation.x = 0.20;
-  dash.add(shieldStripe);
+  // v21: the glareshield lip carries a LIGHT rim highlight
+  // (#94A3B8), not the red pinstripe — Gemini v21's spec is a
+  // contoured glare shield with a rim highlight; the red stripe
+  // read as a placeholder bar across the dash (Gemini v20).
+  const rimLightMat = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.4, metalness: 0.3 });
+  const shieldRim = new THREE.Mesh(new THREE.BoxGeometry(1.71, 0.012, 0.02), rimLightMat);
+  shieldRim.position.set(0, 0.215, -0.035);
+  shieldRim.rotation.x = 0.20;
+  dash.add(shieldRim);
   // The lower console is a different, lighter grey than the panel, so
   // the dash reads as separate built parts instead of one black mass.
   // v7: a touch lighter still (#6b7078), widening the material gap between
@@ -491,12 +516,10 @@ export function buildPlane(THREE, livery = null) {
   arch.scale.set(1, 0.24, 1);
   arch.position.set(0, 0.42, 0.0);
   dash.add(arch);
-  for (const side of [-1, 1]) {
-    // v18: slimmer struts (0.035, was 0.04) in dark-slate trim.
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.26, 0.035), trimMat);
-    strut.position.set(side * 0.5, 0.31, 0.0);
-    dash.add(strut);
-  }
+  // v21: the two windshield struts are GONE — they divided the
+  // windshield into three panes with thin bars, and Gemini v20 read
+  // the canopy frame as a "scaffolding cage". The windshield is one
+  // clear pane now, framed by the A-pillars + the canopy bow alone.
   // v11 (iterasi 2): the headliner is darker (frameMat, was the light-grey
   // consoleMat), narrower (1.7 m, was 2.0), shallower (0.3 m, was 0.35) and
   // higher and further back (y 0.62, z 0.30) — the first v11 shot showed it
@@ -671,24 +694,34 @@ export function buildPlane(THREE, livery = null) {
     grip.rotation.x = 0.35;
     dash.add(grip);
   }
-  // Throttle quadrant: a dark box on the console right of the yoke column
-  // with two levers (throttle black, mixture red) — the second control
-  // that makes the cockpit read as a flown aeroplane.
-  const quadrant = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.34), dark);
-  quadrant.position.set(0.55, -0.20, 0.20);
+  // Throttle quadrant: a sloped pedestal in the console's own shell
+  // grey (NOT a dark floating box) with a visible slot the levers
+  // slide in — the second control that makes the cockpit read as a
+  // flown aeroplane. v21: the old dark box (0.22 x 0.12 x 0.34) with
+  // two thin sticks read as a "dark box with two black sticks", a
+  // placeholder block (Gemini v20). The new quadrant is lower and
+  // flatter, sloped to match the console shelf (rotation.x 0.45),
+  // sitting ON the shelf, with longer levers (0.26 m) and bigger
+  // knobs (throttle black, mixture red).
+  const quadrant = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.36), shellMat);
+  quadrant.position.set(0.55, -0.30, 0.22);
   quadrant.rotation.x = 0.45;
   dash.add(quadrant);
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.012, 0.30), dark);
+  slot.position.set(0.55, -0.265, 0.22);
+  slot.rotation.x = 0.45;
+  dash.add(slot);
   const leverMat = new THREE.MeshStandardMaterial({ color: '#22242a', roughness: 0.5, metalness: 0.4 });
   for (const [lx, knobColor] of [[0.50, '#22242a'], [0.60, '#c0392b']]) {
-    const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6), leverMat);
-    lever.position.set(lx, -0.14, 0.22);
-    lever.rotation.x = 0.4;
+    const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.26, 6), leverMat);
+    lever.position.set(lx, -0.20, 0.24);
+    lever.rotation.x = 0.7;
     dash.add(lever);
     const knob = new THREE.Mesh(
-      new THREE.SphereGeometry(0.028, 8, 6),
+      new THREE.SphereGeometry(0.035, 8, 6),
       new THREE.MeshStandardMaterial({ color: knobColor, roughness: 0.5, metalness: 0.2 }),
     );
-    knob.position.set(lx, -0.05, 0.27);
+    knob.position.set(lx, -0.10, 0.30);
     dash.add(knob);
   }
   // Three small indicator dots, FLUSH on the panel face below the middle
@@ -726,12 +759,17 @@ export function buildPlane(THREE, livery = null) {
     const x = c.getContext('2d');
     const CX = 512;
     const CY = 512;
-    // v18: a clean light face #F8FAFC (was cream #faf3dd) — Gemini's
-    // spec: dark numerals on a near-white face, no warm tint.
+    // v21: a LIGHT-GREY face, not near-white (#F1F5F9 centre,
+    // #E8EEF4 mid, #CBD5E1 edge — was #FFFFFF / #F8FAFC /
+    // #E2E8F0). The v20 face is MeshBasicMaterial (unlit, full
+    // brightness), so pure white blew out to a featureless glare in
+    // the cockpit shot (Gemini v20: the rightmost dial "mostly
+    // blown-out white/yellow"). A light-grey face keeps the dark
+    // numerals high-contrast without ever blowing out.
     const shade = x.createRadialGradient(CX, CY, 80, CX, CY, 512);
-    shade.addColorStop(0, '#ffffff');
-    shade.addColorStop(0.75, '#f8fafc');
-    shade.addColorStop(1, '#e2e8f0');
+    shade.addColorStop(0, '#f1f5f9');
+    shade.addColorStop(0.75, '#e8eef4');
+    shade.addColorStop(1, '#cbd5e1');
     x.fillStyle = shade;
     x.fillRect(0, 0, 1024, 1024);
     // A point at `deg` degrees clockwise from 12 o'clock, radius r.
@@ -763,12 +801,16 @@ export function buildPlane(THREE, livery = null) {
       x.fillStyle = '#0f172a';
       x.textAlign = 'center';
       x.textBaseline = 'middle';
-      x.font = 'bold 110px system-ui, sans-serif';
+      // v21: 128 px letters (was 110) — the compass cardinals must
+      // read without zooming.
+      x.font = 'bold 128px system-ui, sans-serif';
       for (const [letter, deg] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) {
         const [nx, ny] = pt(deg, 380);
         x.fillText(letter, nx, ny);
       }
-    } else {
+    } else if (kind !== 'ATT') {
+      // (ATT skips the numeric scale entirely — its face is the
+      // transparent-window attitude face built below.)
       const labels = SCALES[kind] || SCALES.IAS;
       // Redline on the top-right of the airspeed and RPM dials only.
       if (kind === 'IAS' || kind === 'RPM') {
@@ -807,11 +849,37 @@ export function buildPlane(THREE, livery = null) {
       x.fillStyle = '#0f172a';
       x.textAlign = 'center';
       x.textBaseline = 'middle';
-      x.font = 'bold 96px system-ui, sans-serif';
+      // v21: 118 px numerals (was 96) — the v20 dials still read as
+      // "canvas noise" at screenshot scale (Gemini v20); the numbers
+      // must be legible without zooming.
+      x.font = 'bold 118px system-ui, sans-serif';
       for (let i = 0; i < 5; i += 1) {
         const deg = -120 + i * 60;
         const [nx, ny] = pt(deg, 380);
         x.fillText(labels[i], nx, ny);
+      }
+      // v21: the ALT dial carries a VSI mini-scale in its needle-free
+      // bottom sector (the main needle sweeps only the upper 240°):
+      // -10 / 0 / +10 m/s at 120° / 180° / 240°, with ticks — so the
+      // panel keeps a live vertical-speed readout now that the outer
+      // VSI dial has become the attitude indicator. The blue VSI
+      // needle (see the gauge build) sweeps this sector. The "0"
+      // label sits below the badge (badge y 764-836, label y 892),
+      // so nothing overlaps.
+      if (kind === 'ALT') {
+        x.font = 'bold 64px system-ui, sans-serif';
+        for (const [vLabel, vDeg] of [['-10', 120], ['0', 180], ['+10', 240]]) {
+          const [nx, ny] = pt(vDeg, 380);
+          x.fillText(vLabel, nx, ny);
+          const [tx0, ty0] = pt(vDeg, 430);
+          const [tx1, ty1] = pt(vDeg, 470);
+          x.strokeStyle = '#1d4ed8';
+          x.lineWidth = 10;
+          x.beginPath();
+          x.moveTo(tx0, ty0);
+          x.lineTo(tx1, ty1);
+          x.stroke();
+        }
       }
       // Sub-label badge in the needle-free bottom sector (the needle
       // sweeps only the upper 240 deg, never the bottom 120 deg).
@@ -823,8 +891,62 @@ export function buildPlane(THREE, livery = null) {
       x.roundRect(CX - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 20);
       x.fill();
       x.fillStyle = '#ffffff';
-      x.font = 'bold 56px system-ui, sans-serif';
+      // v21: 62 px badge text (was 56).
+      x.font = 'bold 62px system-ui, sans-serif';
       x.fillText(label, CX, badgeY + 2);
+    }
+    // v21: the ATTITUDE face — an outer ring + fixed aircraft symbol
+    // with a TRANSPARENT centre window, so the live horizon disc
+    // (built in the gauge loop) shows through it. The window is
+    // punched with destination-out; the ring, ticks and badge stay
+    // opaque. The fixed symbol (white bar + centre dot) never moves;
+    // the horizon turns behind it.
+    if (kind === 'ATT') {
+      x.globalCompositeOperation = 'destination-out';
+      x.beginPath();
+      x.arc(CX, CY, 450, 0, Math.PI * 2);
+      x.fill();
+      x.globalCompositeOperation = 'source-over';
+      // Fixed reference ticks at the rim (radius 470-500, in the
+      // opaque annulus): 12/3/6/9, so the horizon's tilt reads
+      // against fixed marks.
+      for (const deg of [0, 90, 180, 270]) {
+        const [x0, y0] = pt(deg, 470);
+        const [x1, y1] = pt(deg, 500);
+        x.strokeStyle = '#0f172a';
+        x.lineWidth = 14;
+        x.beginPath();
+        x.moveTo(x0, y0);
+        x.lineTo(x1, y1);
+        x.stroke();
+      }
+      // Fixed aircraft symbol: a white bar + centre dot at the
+      // dial's centre, drawn over the horizon disc.
+      x.strokeStyle = '#ffffff';
+      x.lineWidth = 16;
+      x.beginPath();
+      x.moveTo(CX - 110, CY);
+      x.lineTo(CX - 28, CY);
+      x.moveTo(CX + 28, CY);
+      x.lineTo(CX + 110, CY);
+      x.stroke();
+      x.fillStyle = '#ffffff';
+      x.beginPath();
+      x.arc(CX, CY, 16, 0, Math.PI * 2);
+      x.fill();
+      // The ATT badge sits at the bottom, over the disc's lower part.
+      const badgeW = 210;
+      const badgeH = 72;
+      const badgeY = 800;
+      x.fillStyle = '#0f172a';
+      x.beginPath();
+      x.roundRect(CX - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 20);
+      x.fill();
+      x.fillStyle = '#ffffff';
+      x.font = 'bold 62px system-ui, sans-serif';
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.fillText('ATT', CX, badgeY + 2);
     }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -847,31 +969,97 @@ export function buildPlane(THREE, livery = null) {
   // still; the labels are short (IAS/ALT/HDG/VSI/RPM) and the left
   // outer gauge is now a VERTICAL SPEED indicator (fuel already shows
   // in the HUD bar), so the panel reads as a real six-pack fragment.
+  // v21 (Gemini v21 #3): the five dials are now IAS / ALT(+VSI) /
+  // HDG / ATT / RPM — the outer-left dial is an ATTITUDE indicator
+  // (blue/brown horizon ball), not a VSI; the vertical speed lives
+  // on the ALT dial as a blue VSI bug + mini-scale (see makeDialFace).
+  // Gemini's five: 1) IAS 2) Attitude/horizon 3) Altimeter/VSI
+  // 4) Heading/compass 5) RPM/fuel.
   const gaugeDefs = [
     { x: -0.44, pin: 0x7dff9a, label: 'IAS', r: 0.20 },
     { x: 0, pin: 0xffd94d, label: 'ALT', r: 0.20 },
     { x: 0.44, pin: 0x4fc3f7, label: 'HDG', r: 0.20 },
-    { x: -0.80, pin: 0x7dff9a, label: 'VSI', r: 0.14 },
+    { x: -0.80, pin: 0x7dff9a, label: 'ATT', r: 0.14 },
     { x: 0.80, pin: 0xffd94d, label: 'RPM', r: 0.14 },
   ];
   const needles = [];
+  // v21: the attitude horizon disc (ATT gauge) and the ALT dial's
+  // blue VSI bug — driven by setGauges (roll/pitch, verticalSpeed).
+  let attDisc = null;
+  let vsiBug = null;
+  // v21: the horizon-ball texture — sky blue over earth brown with a
+  // white horizon line and a pitch ladder, so the ATT dial reads as
+  // a real attitude indicator instead of a blank disc.
+  function makeHorizonTexture() {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const x = c.getContext('2d');
+    x.fillStyle = '#3b82f6';
+    x.fillRect(0, 0, 512, 256);
+    x.fillStyle = '#8b5a2b';
+    x.fillRect(0, 256, 512, 256);
+    x.strokeStyle = '#ffffff';
+    x.lineWidth = 8;
+    x.beginPath();
+    x.moveTo(0, 256);
+    x.lineTo(512, 256);
+    x.stroke();
+    // Pitch ladder: short white lines at ±20° and ±40° (90° of pitch
+    // is the half-canvas, 256 px).
+    x.strokeStyle = 'rgba(255,255,255,0.85)';
+    x.lineWidth = 6;
+    for (const deg of [-40, -20, 20, 40]) {
+      const ly = 256 - (deg / 90) * 256;
+      x.beginPath();
+      x.moveTo(206, ly);
+      x.lineTo(306, ly);
+      x.stroke();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
   for (const def of gaugeDefs) {
     const g = new THREE.Group();
     // v7: z 0.08 (was 0.065) — the gauges sit proud of the new inset face
     // plate (front at 0.07), so the rims and dials are never clipped by it.
     g.position.set(def.x, -0.01, 0.08);
-    // v6: big LIGHT dials — cream face, dark ticks, dark needle — so the
-    // instruments read at a glance instead of hiding in the dark panel.
-    // v8: the rim is a touch bigger (0.17, was 0.165) and the needle is
-    // thicker and longer, so the instruments read at a glance even at
-    // screenshot distance (Gemini v7).
-    // v9: the rim radius comes from the gauge definition — the two outer
-    // gauges are smaller (0.11) than the three main ones (0.17).
+    // v21: a DARK bezel (#2E3440, low metalness) instead of the cream
+    // rim — the v20 cream rim with metalness 0.5 caught the sun and
+    // glared yellow around every dial (Gemini v20: the rightmost dial
+    // "blown-out white/yellow"). A dark bezel frames the light face
+    // and kills the glare.
     const rim = new THREE.Mesh(
       new THREE.TorusGeometry(def.r, def.r * 0.1, 8, 28),
-      new THREE.MeshStandardMaterial({ color: PALETTE.planeCream, roughness: 0.4, metalness: 0.5 }),
+      new THREE.MeshStandardMaterial({ color: '#2e3440', roughness: 0.5, metalness: 0.2 }),
     );
     g.add(rim);
+    if (def.label === 'ATT') {
+      // The attitude gauge: a live horizon disc behind a face with a
+      // transparent centre window (see makeDialFace 'ATT'). The face
+      // is a full-radius circle (not 0.94r) so its opaque annulus
+      // hides the disc's outer ring; the disc (r*1.07) stays covered
+      // even when it shifts ±0.02 m with pitch.
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(def.r * 1.07, 32),
+        new THREE.MeshBasicMaterial({ map: makeHorizonTexture() }),
+      );
+      disc.position.z = 0.002;
+      g.add(disc);
+      attDisc = disc;
+      const face = new THREE.Mesh(
+        new THREE.CircleGeometry(def.r, 32),
+        new THREE.MeshBasicMaterial({ map: makeDialFace(def.label, def.label), transparent: true }),
+      );
+      face.position.z = 0.005;
+      g.add(face);
+      // No needle and no pin on the attitude gauge — the fixed
+      // aircraft symbol is drawn on the face itself.
+      needles.push(null);
+      dash.add(g);
+      continue;
+    }
     const face = new THREE.Mesh(
       new THREE.CircleGeometry(def.r * 0.94, 24),
       new THREE.MeshBasicMaterial({ map: makeDialFace(def.label, def.label) }),
@@ -907,6 +1095,21 @@ export function buildPlane(THREE, livery = null) {
     );
     pin.position.z = 0.016;
     g.add(pin);
+    // v21: the ALT dial's blue VSI bug — a small marker riding the
+    // dial's rim at the VSI mini-scale (labels at canvas radius 380
+    // = 0.148 m on a 0.20 m dial). A bug, not a needle: a needle from
+    // the centre would cross the "ALT" badge at level flight, while
+    // the bug rides the rim and marks the current climb/descent
+    // without covering anything.
+    if (def.label === 'ALT') {
+      const bug = new THREE.Mesh(
+        new THREE.CircleGeometry(0.014, 12),
+        new THREE.MeshBasicMaterial({ color: 0x1d4ed8 }),
+      );
+      bug.position.set(0, -0.148, 0.012);
+      g.add(bug);
+      vsiBug = bug;
+    }
     needles.push(needlePivot);
     dash.add(g);
   }
@@ -958,13 +1161,30 @@ export function buildPlane(THREE, livery = null) {
   // RPM from the throttle — so all five instruments move with the flight.
   // v19: the left outer gauge is VSI (was FUEL — fuel already shows in
   // the HUD bar); verticalSpeed is the 6th argument, range ±10 m/s.
-  function setGauges(altM, speedMs, headingDeg, throttle = 0.7, fuelFrac = 1, verticalSpeed = 0) {
+  // v21: the 7th/8th arguments are the roll and pitch (radians) for
+  // the attitude indicator's horizon disc. The VSI bug on the ALT
+  // dial is driven by the 6th argument (verticalSpeed, ±10 m/s).
+  function setGauges(altM, speedMs, headingDeg, throttle = 0.7, fuelFrac = 1, verticalSpeed = 0, roll = 0, pitch = 0) {
     const sweep = (value, max) => (-120 + 240 * Math.min(1, Math.max(0, value / max))) * Math.PI / 180;
     needles[0].rotation.z = -sweep(speedMs, 100);
     needles[1].rotation.z = -sweep(altM, 900);
     needles[2].rotation.z = -headingDeg * Math.PI / 180;
-    if (needles[3]) needles[3].rotation.z = -sweep((verticalSpeed + 10) / 2, 10);
     if (needles[4]) needles[4].rotation.z = -sweep(throttle, 1);
+    // The VSI bug rides the ALT dial's rim at the mini-scale:
+    // -10 m/s at 120°, 0 at 180° (straight down), +10 at 240°.
+    if (vsiBug) {
+      const a = (180 + (Math.max(-10, Math.min(10, verticalSpeed)) / 10) * 60) * Math.PI / 180;
+      vsiBug.position.x = Math.sin(a) * 0.148;
+      vsiBug.position.y = -Math.cos(a) * 0.148;
+    }
+    // The attitude horizon turns against the roll and shifts against
+    // the pitch (nose up = horizon drops = more blue). The shift is
+    // clamped to ±0.02 m so the disc (r*1.07) always covers the face
+    // window (0.94r).
+    if (attDisc) {
+      attDisc.rotation.z = -roll;
+      attDisc.position.y = Math.max(-0.02, Math.min(0.02, -pitch * 0.06));
+    }
   }
 
   let propAngle = 0;

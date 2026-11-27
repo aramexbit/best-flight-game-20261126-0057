@@ -9,6 +9,15 @@ import { headingOf } from './flight.js';
 
 export const CAMERA_CHASE = 'chase';
 export const CAMERA_COCKPIT = 'cockpit';
+// v21b: the TITLE hero camera — the user said the title screen (not
+// the cover) "kurang bagus" and asked for "lebih modern". The old
+// title chase (28 m back, 34 m to the side, looking along the course)
+// put the storm dead-centre behind the title text and the ring behind
+// the instruction card. The hero camera sits SOUTH of the plane (over
+// the sea, +z) and looks NORTH at it, so the plane reads against the
+// beach + green hills + blue sky, the storm (east, 90° right) is out
+// of frame, and the turquoise sea fills the bottom of the frame.
+export const CAMERA_HERO = 'hero';
 
 export function createRenderer(canvas, THREE, groups) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -104,7 +113,9 @@ export function createRenderer(canvas, THREE, groups) {
   // meshes: the 0.55 opacity ellipse over bright grass/sea was too
   // faint to pick out at chase distance. A darker, bigger ellipse
   // anchors each plane to the ground below it.
-  function placeContact(mesh, terrainApi, x, y, z, visible) {
+  // v21: `scaleMul` — the rival contact shadows are 1.25x the
+  // player's, for the same reason as the sun-offset shadows above.
+  function placeContact(mesh, terrainApi, x, y, z, visible, scaleMul = 1) {
     if (!visible) { mesh.visible = false; return; }
     const groundY = terrainApi && terrainApi.groundAt ? terrainApi.groundAt(x, z) : 0;
     const floorY = Math.max(groundY, 0.6);
@@ -112,7 +123,7 @@ export function createRenderer(canvas, THREE, groups) {
     if (agl > 160) { mesh.visible = false; return; }
     mesh.visible = true;
     mesh.position.set(x, floorY + 0.4, z);
-    const sc = 10 + agl * 0.03;
+    const sc = (10 + agl * 0.03) * scaleMul;
     mesh.scale.set(sc, sc * 0.72, 1);
     mesh.material.opacity = 0.75 * (1 - agl / 160);
   }
@@ -121,7 +132,11 @@ export function createRenderer(canvas, THREE, groups) {
   // are identical for the player and the rivals, so one helper places
   // any plane's shadow on the ground below it. `yaw` aligns the ellipse
   // with the wings; a hidden plane hides its shadow too.
-  function placeShadow(group, mesh, terrainApi, x, y, z, yaw, visible) {
+  // v21: `scaleMul` — the rival shadows are 1.3x the player's, so a
+  // rival's shadow reads at chase distance instead of vanishing into
+  // the grass (the v20 live playtest identified at most ONE shadow in
+  // the whole frame, the player's, out of 10 code-visible meshes).
+  function placeShadow(group, mesh, terrainApi, x, y, z, yaw, visible, scaleMul = 1) {
     if (!visible) { group.visible = false; return; }
     group.visible = true;
     const sunDir = terrainApi && terrainApi.sunDir ? terrainApi.sunDir : null;
@@ -146,7 +161,7 @@ export function createRenderer(canvas, THREE, groups) {
     const shadowScale = 1 + altAbove * 0.004;
     group.position.set(shadowX, floorY + 0.5, shadowZ);
     group.rotation.y = -yaw;
-    mesh.scale.set(9 * shadowScale, 6.5 * shadowScale, 1);
+    mesh.scale.set(9 * shadowScale * scaleMul, 6.5 * shadowScale * scaleMul, 1);
     // v17: darker (0.75 max) and a 0.3 floor, fading slower (0.0008/m)
     // — the v16 shadow (0.6 max, 0.405 at 150 m) was invisible live.
     mesh.material.opacity = Math.max(0.3, Math.min(0.75, 0.75 - altAbove * 0.0008));
@@ -246,9 +261,9 @@ export function createRenderer(canvas, THREE, groups) {
     planeApi.update(dt, s.throttle, time);
     // The dashboard needles follow the flight, every frame, in both views.
     // v9: throttle and fuel drive the two outer gauges too.
-    // v19: the 6th argument is the vertical speed — the left outer gauge
-    // is a VSI now (plane.js), not a fuel gauge.
-    if (planeApi.setGauges) planeApi.setGauges(s.y, s.speed, headingOf(s.yaw), s.throttle, s.fuel, s.verticalSpeed);
+    // v21: the 7th/8th arguments are the roll and pitch — the ATT
+    // gauge's horizon disc turns against them (plane.js).
+    if (planeApi.setGauges) planeApi.setGauges(s.y, s.speed, headingOf(s.yaw), s.throttle, s.fuel, s.verticalSpeed, s.roll, s.pitch);
 
     tmpForward.set(Math.sin(s.yaw) * Math.cos(s.pitch), Math.sin(s.pitch), -Math.cos(s.yaw) * Math.cos(s.pitch));
 
@@ -279,6 +294,31 @@ export function createRenderer(canvas, THREE, groups) {
       // horizon with the full bank, so the dashboard sat at a wild angle and
       // the horizon was extremely tilted; the pilot's head stays mostly level.
       camera.rotateZ(-s.roll * 0.3);
+    } else if (mode === CAMERA_HERO) {
+      // v21g: the look target sits 20 m WEST of the plane (was 14) —
+      // the v21f shot still had the plane's tail behind the play
+      // button (its centre read ~59% across, not the ~66% the
+      // angles predicted). 20 m west puts the centre ~69% across,
+      // clear of the button. The look direction stays fixed north.
+      const want = new THREE.Vector3(s.x + 2, s.y + 4, s.z + 28);
+      if (firstFrame) {
+        chasePos.copy(want);
+        firstFrame = false;
+      } else {
+        chasePos.x += planeDx;
+        chasePos.y += planeDy;
+        chasePos.z += planeDz;
+        const k = 1 - Math.exp(-dt * 8);
+        chasePos.lerp(want, k);
+        if (terrainApi && terrainApi.groundAt) {
+          const camGround = terrainApi.groundAt(chasePos.x, chasePos.z);
+          if (chasePos.y < camGround + 3) chasePos.y = camGround + 3;
+        }
+      }
+      camera.position.copy(chasePos);
+      lookTarget.set(s.x - 20, s.y + 1, s.z - 50);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(lookTarget);
     } else {
       // Chase: hover behind and above, eased so it never snaps, looking ahead.
       // The lateral offset slides the plane across the frame (negative puts
@@ -337,6 +377,18 @@ export function createRenderer(canvas, THREE, groups) {
         const k = 1 - Math.exp(-dt * 8);
         chasePos.lerp(want, k);
         if (chasePos.y < s.y + 2.5) chasePos.y = s.y + 2.5;
+        // v21: the camera can never sit INSIDE terrain — the v20 live
+        // playtest's crash frame was a red blob against flat pale sky
+        // because the crash camera (48 m behind, at plane height + 30)
+        // ended up inside the hillside the plane had flown into. The
+        // floor lifts the camera 3 m above whatever ground is under
+        // it, every frame, in every chase scene (flight, crash, title
+        // orbit) — the crash camera's own height in main.js is the
+        // first line of defence, this is the second.
+        if (terrainApi && terrainApi.groundAt) {
+          const camGround = terrainApi.groundAt(chasePos.x, chasePos.z);
+          if (chasePos.y < camGround + 3) chasePos.y = camGround + 3;
+        }
       }
       camera.position.copy(chasePos);
       lookTarget.set(
@@ -369,14 +421,14 @@ export function createRenderer(canvas, THREE, groups) {
     for (let i = 0; i < rivalShadows.length; i += 1) {
       const rs = rivalsList[i];
       if (!rs) { rivalShadows[i].group.visible = false; continue; }
-      placeShadow(rivalShadows[i].group, rivalShadows[i].mesh, terrainApi, rs.x, rs.y, rs.z, 0, rs.visible);
+      placeShadow(rivalShadows[i].group, rivalShadows[i].mesh, terrainApi, rs.x, rs.y, rs.z, 0, rs.visible, 1.3);
     }
     // v19 (d): the contact shadows — directly under each plane, so the
     // landing shot and any low pass read the height at a glance.
     placeContact(contactMesh, terrainApi, s.x, s.y, s.z, true);
     for (let i = 0; i < rivalContacts.length; i += 1) {
       const rs = rivalsList[i];
-      placeContact(rivalContacts[i], terrainApi, rs ? rs.x : 0, rs ? rs.y : 0, rs ? rs.z : 0, !!rs && rs.visible);
+      placeContact(rivalContacts[i], terrainApi, rs ? rs.x : 0, rs ? rs.y : 0, rs ? rs.z : 0, !!rs && rs.visible, 1.25);
     }
 
     // v13: camera shake — applied after the lookAt, as a pure translation,

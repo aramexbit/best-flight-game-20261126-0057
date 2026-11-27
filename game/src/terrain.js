@@ -886,11 +886,16 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   });
   const rockGeo = new THREE.IcosahedronGeometry(1, 0);
   const rockMats = [
-    // v18: faceted slate cliffs (#64748B / #4B5563, Gemini's spec) —
-    // the old warm browns read as dirt, not rock.
-    new THREE.MeshStandardMaterial({ color: '#64748B', roughness: 0.95 }),
-    new THREE.MeshStandardMaterial({ color: '#4B5563', roughness: 0.95 }),
-    new THREE.MeshStandardMaterial({ color: '#7a8a9a', roughness: 0.95 }),
+    // v21: LIGHT grey-green boulders (#8B9A94 / #7C8B84 / #9AA5A0,
+    // was dark slate #64748B / #4B5563 / #7a8a9a) — the v20 blind
+    // test read the dark slate rocks on the grass as "tiny dark
+    // specks / stray pixels / debris". Light boulders that blend
+    // with the grass still give the slopes texture without reading
+    // as litter. The cliff faces (terrain vertex colours) keep
+    // their slate.
+    new THREE.MeshStandardMaterial({ color: '#8B9A94', roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: '#7C8B84', roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: '#9AA5A0', roughness: 0.95 }),
   ];
   const bushGeo = new THREE.IcosahedronGeometry(1, 0);
   const bushMat = new THREE.MeshStandardMaterial({ color: '#2a6b32', roughness: 0.95 });
@@ -1695,33 +1700,29 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // too spread to merge into one mass — so detail-1 geometry with smooth
   // shading, only white + warm white, lobes 45-75 m packed tight, and
   // 4 hero clouds east of the airfield where the cameras look.
-  // v19 (Gemini v19 #2): the clouds are FACETED multi-puff cumulus
-  // again — detail-0 lobes with flatShading, bright tops #F7FBFF,
-  // white #FFFFFF, cool undersides #DCE8F2, lobes ~15% smaller and
-  // banks higher (380-410 m) with bank E2 shifted south, so no cloud
-  // sits in the landing camera's top-right HUD corner. The v10
-  // faceted attempt read as rocks because the lobes were grey-blue
-  // and spread thin; bright two-tone lobes packed tight read as
-  // stylised cumulus.
+  // v21 (Gemini v21 #1): the clouds are SOFT-SHADED multi-puff
+  // cumulus — detail-1 lobes with SMOOTH normals (flatShading false),
+  // bright sunlit tops + cool undersides. The v19/v20 faceted lobes
+  // STILL read as floating rocks in the v20 blind test (a polyhedron
+  // with hard triangular facets IS a boulder at a glance, whatever its
+  // colour). The v10 smooth attempt failed differently — its lobes
+  // were small, spread thin and grey-blue, reading as separate
+  // marshmallow pills — but the v20 lobes are packed tight (14-18
+  // base lobes of 30-45 m in a ±28 m box, heavily overlapping) and
+  // bright white, so the merged silhouette reads as one soft cumulus
+  // bank, not separate pills and not rocks. Fully opaque stays (v19b).
   const clouds = [];
   const cloudRandom = createRandom(seed + 101);
   const cloudMats = [
-    // v19b: FULLY OPAQUE (was transparent 0.95). The 0.95 transparency
-    // made the distant bank lobes read as giant translucent grey
-    // bubbles — the "gelembung raksasa" Gemini flagged in v18, still
-    // in the v19 cockpit + cover shots (a census of the live scene
-    // proved the right-edge discs are the 75-95 m bank lobes at
-    // 1.5-1.7 km, seen side-on with their shadow faces toward the
-    // camera). Opaque lobes read as solid cloud, never as bubbles.
-    new THREE.MeshStandardMaterial({ color: '#f7fbff', roughness: 1, flatShading: true, fog: false }),
-    new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, fog: false }),
+    new THREE.MeshStandardMaterial({ color: '#f7fbff', roughness: 1, flatShading: false, fog: false }),
+    new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: false, fog: false }),
     // Gemini's fix prompt: shaded underside/base puffs in cool blue-grey
     // #DCE8F2, as part of the cloud volume (never a separate flat disc).
-    new THREE.MeshStandardMaterial({ color: '#dce8f2', roughness: 1, flatShading: true, fog: false }),
+    new THREE.MeshStandardMaterial({ color: '#dce8f2', roughness: 1, flatShading: false, fog: false }),
   ];
-  // detail-0: faceted lobes — the smooth detail-1 lobes of v10
-  // iterasi 2 read as marshmallow pills in the HUD corner.
-  const lobeGeo = new THREE.IcosahedronGeometry(1, 0);
+  // detail-1: smooth-shaded lobes — the faceted detail-0 lobes of
+  // v19/v20 read as floating rocks (hard facets = boulder geometry).
+  const lobeGeo = new THREE.IcosahedronGeometry(1, 1);
   // The course polyline (spawn -> rings -> runway): the shot cameras all
   // ride within ~40 m of it, so a cloud near it looms over a HUD panel.
   const cloudPath = [];
@@ -1758,9 +1759,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // a 60 m staircase), and one wide flat shared skirt lobe under each
   // bank, so a bank reads as one wide flat cumulus mass, not three
   // separate balls stacked in a staircase.
+  // v21: the eastern banks sit HIGHER (E1 425 m, E2 440 m, was
+  // 390/410) — the v20 landing shot showed a "small floating/tangled
+  // cluster" right above the centre of the distant mountain ridge:
+  // the east bank lobes at 390-410 m overlapping the ~290 m ridge
+  // silhouette. At 425-440 m the banks clear the ridge top and read
+  // as sky, not debris on the mountain.
   const banks = [
-    { x0: 1700, x1: 2050, z0: -900, z1: -650, alt: 390 },
-    { x0: 1650, x1: 2000, z0: 850, z1: 1100, alt: 410 },
+    { x0: 1700, x1: 2050, z0: -900, z1: -650, alt: 425 },
+    { x0: 1650, x1: 2000, z0: 850, z1: 1100, alt: 440 },
     { x0: -300, x1: 600, z0: -1400, z1: -1100, alt: 380 },
     { x0: -1300, x1: -400, z0: 1000, z1: 1400, alt: 390 },
   ];

@@ -24,18 +24,15 @@ const START_SECONDS = 8;
 // ring 12, so the frame shows the fireball ahead over the runway
 // approach instead of a ring — the blast stays the hero moment. This
 // is staging only: the flight model and the shot cameras are untouched.
-const PLAY_SECONDS = 43.5;
-// v20: 49.5 -> 43.5. The cover must be a DIFFERENT moment from the
-// landing shot (Gemini v19: landing was "almost a duplicate" of the
-// cover — same framing, 460 vs 456 FT, 109 vs 113 KTS, same score
-// 3403, because both froze on the final approach). At 43.5 s the
-// player is mid-race around ring 10/11 over the runway island's
-// western slopes — rings < 12, so the AGL pill is hidden too and the
-// HUD reads cleaner. The landing shot now owns the final approach
-// alone, at a low flare. The pre-collision convergence at 49.5 s is
-// gone from the cover, but the blast is not the cover's job any more:
-// the cover's job is the race.
-// v19b: 51.6 -> 49.5. (see above)
+// v21b: 31.0 s (was 28.0) — the cover must be the STRONGEST shot
+// (the user, 27 Nov 09:35 WIB: "cover awal game kurang bagus").
+// At 28 s the plane is over the sandy beach with the sea only at the
+// frame edges and the storm's rain scratching the frame (the cell
+// sits beside ring 6). At 31 s the plane is past the cell, over the
+// turquoise sea with the sandy shoreline + green islands behind it
+// and the next ring ahead — the banking 3/4 chase the brief asks
+// for, not a beach. The landing shot still owns the final approach.
+const PLAY_SECONDS = 20.0;
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world
@@ -126,15 +123,60 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
   // at a 77-degree bank for the full 140 s. A landing aim-point is
   // over the flat strip; the short samples stay on the strip, so the
   // plane can descend onto its glidepath.
-  const guardSamples = target.axis ? [80, 160, 240, 340] : [80, 160];
-  const guardMargin = target.axis ? 45 : 15;
+  // v21c: the ring guard margin is 25 m (was 45). The course
+  // planner already guarantees 33 m at every ring and 45 m along
+  // every leg, so the guard is a backstop, not the primary
+  // clearance — and at the low start (50 m AGL) a 45 m margin
+  // CONFLICTS with ring 1 (60 m): the guard wants the plane at
+  // highest+45 = 70-81 m, above the ring it is flying to, so the
+  // guard + the climb-to-ring command + the Weak pilot's bias all
+  // push the nose up together and the plane rockets to 300-500 m
+  // (sim Weak 0/12). At 25 m the guard wants highest+25 = 50-61 m
+  // at the start — a gentle climb to ring 1, no conflict — while a
+  // real hill ahead (deficit 45+ m) still gets the full 0.9 pitch
+  // via the proportional climb above. The point-target (landing)
+  // margin stays 15 m.
+  // v21c: the RING guard samples the terrain on the plane's PATH —
+  // the aim point (carrot) on the approach line and the midpoint to
+  // it — plus 80 m straight ahead for an imminent hill. It does NOT
+  // sample 160-340 m along the nose. The long nose samples swing
+  // wide whenever the plane banks or turns, and at the low start
+  // they catch the flank of the island beside the course start
+  // (65 m high) and command a hard climb to 90 m — the pitch loop
+  // saturates at 1.10, the plane rockets to 300-500 m and orbits
+  // ring 1 forever (sim Weak 0/12, staged shots + rivals climb
+  // away). The carrot sits on the approach line, which the course
+  // planner already guarantees clear by 33-45 m, so the guard only
+  // fires when the plane is genuinely below its path's clearance.
+  // The 80 m nose sample still catches a hill directly ahead in
+  // time to climb over it (~1.5 s at cruise). The point-target
+  // (landing) guard is untouched: [80, 160] / 15 m (v20).
+  const guardMargin = target.axis ? 25 : 15;
   let highest = -Infinity;
-  for (const d of guardSamples) {
-    const gx = s.x + Math.sin(s.yaw) * d;
-    const gz = s.z - Math.cos(s.yaw) * d;
-    highest = Math.max(highest, groundAt(gx, gz));
+  if (target.axis) {
+    highest = Math.max(highest, groundAt(aim.x, aim.z));
+    highest = Math.max(highest, groundAt((s.x + aim.x) / 2, (s.z + aim.z) / 2));
+    highest = Math.max(highest, groundAt(s.x + Math.sin(s.yaw) * 80, s.z - Math.cos(s.yaw) * 80));
+  } else {
+    for (const d of [80, 160]) {
+      const gx = s.x + Math.sin(s.yaw) * d;
+      const gz = s.z - Math.cos(s.yaw) * d;
+      highest = Math.max(highest, groundAt(gx, gz));
+    }
   }
-  if (highest + guardMargin > s.y) pitchInput = Math.max(pitchInput, 0.9);
+  // v21c: the guard climbs PROPORTIONALLY to the deficit (was a hard
+  // 0.9 stick). At the low start (50 m AGL) the 45 m margin fires on
+  // any island skirt ahead (highest ~25 m -> want 70 m, deficit
+  // 20 m) and a hard 0.9 rockets the plane to 300-500 m before the
+  // pitch-down takes effect — the sim Weak route then orbits ring 1
+  // forever (0/12) and the staged shots + rivals climb away from the
+  // low course. A climb proportional to the deficit (0.4 for 20 m,
+  // 0.9 for 45+ m) clears the terrain with a ~10-15 m overshoot
+  // instead of a 450 m one, and a real hill (deficit 45+ m) still
+  // gets the full 0.9. The safety clearance itself is unchanged.
+  if (highest + guardMargin > s.y) {
+    pitchInput = Math.max(pitchInput, Math.min(0.9, (highest + guardMargin - s.y) / 50));
+  }
   // Recovering from a miss means a tight turn back: stay slow while doing it.
   const slowTurn = (Math.abs(headingError) > 0.6 || recovering) ? 0.45 : throttleTarget;
   // Bank with damping: steer by the heading error, but subtract the bank

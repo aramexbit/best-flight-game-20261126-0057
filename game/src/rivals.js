@@ -47,6 +47,7 @@ import { COURSE, RACE } from './config.js';
 import { createRandom } from './random.js';
 import { createFlight, EVENT_CRASH, EVENT_LAND } from './flight.js';
 import { collisionGate } from './collision.js';
+import { tornadoAt } from './storm.js';
 import { createCourse } from './rings.js';
 import { buildPlane } from './plane.js';
 import { autopilotTo } from './shots.js';
@@ -128,6 +129,11 @@ export function createRivals(THREE, seed, islands, effects) {
   let lastAnchorAt = -999;
   // v17: when the next showcase flyby may start (see update()).
   let nextShowcaseAt = RACE.showcaseAt;
+  // v21c: the storm's tornado list, set by main.js via setTornadoes()
+  // after the storm is created (the rivals are created first). The
+  // kill check in update() reads this list; empty until set, so a
+  // storm-less run never kills anyone.
+  let tornadoes = [];
 
   function forwardOf(yaw) {
     return { x: Math.sin(yaw), y: 0, z: -Math.cos(yaw) };
@@ -310,6 +316,10 @@ export function createRivals(THREE, seed, islands, effects) {
       spinAngle: 0, vel: { x: 0, y: 0, z: 0 },
       smokeT: 0, trailT: 0, respawnT: 0, meetPoint: null, marker,
       crashRings: null, crashDist: null,
+      // v21c: set when this rival is destroyed by a tornado — it is
+      // skipped in playerPosition (its position improves at once)
+      // until it rejoins, when respawn() clears it.
+      tornadoKill: false,
       trailColor: MARKER_COLOR_HEX[i], showcaseSide: 1,
     };
   });
@@ -337,7 +347,7 @@ export function createRivals(THREE, seed, islands, effects) {
     // instead of hovering above it.
     if (r.marker) {
       r.marker.position.set(s.x, s.y + 2.9, s.z);
-      r.marker.visible = r.api.group.visible;
+      r.marker.visible = markersVisible && r.api.group.visible;
     }
   }
 
@@ -357,7 +367,7 @@ export function createRivals(THREE, seed, islands, effects) {
     const s = r.flight.state;
     const f = forwardOf(s.yaw);
     effects.smokePuff(s.x - f.x * 3, s.y - 0.2, s.z - f.z * 3, 1.2, {
-      color: 0x4a4a4a, life: 2.0, grow: 0.9,
+      color: 0x4a4a4a, life: 2.0, grow: 0.9, flat: 0.6,
       vel: { x: -f.x * 4, y: 0.8, z: -f.z * 4 }, opacity: 0.45,
     });
   }
@@ -399,6 +409,9 @@ export function createRivals(THREE, seed, islands, effects) {
     // the player and counts live again from here.
     r.crashRings = null;
     r.crashDist = null;
+    // v21c: the tornado-kill flag clears too — it rejoins as a live
+    // rival and counts again from here.
+    r.tornadoKill = false;
     // Rejoin on the player's heading, at the player's altitude, on the
     // course line — spread out by rival index, so the pack reads as
     // spread across the sky instead of stacked on one point. Two cases.
@@ -538,6 +551,38 @@ export function createRivals(THREE, seed, islands, effects) {
         r.respawnT -= dt;
         if (r.respawnT <= 0 && r.respawnT + dt > 0) respawn(r, ps, pf);
         continue;
+      }
+      // v21c: TORNADO KILL (user 27 Nov 10:17 + 10:23) — a rival that
+      // flies into a tornado's kill cylinder EXPLODES and is
+      // ELIMINATED: a chain fireball + both airframe halves torn
+      // apart, tumbling and burning (the same visuals as the mid-air
+      // collision, so the kill is unmistakable in a screenshot), then
+      // it is out for RACE.tornadoOutDelay (12 s) and rejoins behind
+      // the player, so the race stays five planes. The player's race
+      // position improves AT ONCE (playerPosition skips a
+      // tornado-killed rival instead of latching it like a crash) —
+      // that is the "gugur, posisi berubah" the user asked for. The
+      // PLAYER is never tested here (the tornado kill is a rival
+      // mechanic; the player's storm danger stays the gusts, as now).
+      // Checked for every flying state, not just 'racing' — a rival
+      // converging, holding, flying by or showcasing can wander into
+      // a cell too. A rival already diving/spinning/tumbling is
+      // crashing already and is skipped. The scripted crash flags
+      // are NOT set, so a tornado-killed rival can still do its
+      // scripted event after it rejoins (the mid-air collision needs
+      // its pair).
+      if (tornadoes.length > 0 && (r.state === 'racing' || r.state === 'converging'
+        || r.state === 'holding' || r.state === 'flyby' || r.state === 'showcase')) {
+        const hit = tornadoAt(s.x, s.y, s.z, tornadoes);
+        if (hit) {
+          effects.explodeChain(s.x, s.y, s.z, true);
+          effects.explodeSplit(s.x, s.y, s.z, s.yaw, { body: r.livery.main, accent: r.livery.accent });
+          r.tornadoKill = true;
+          hide(r, RACE.tornadoOutDelay);
+          if (onEvent) onEvent('tornado-kill', { name: r.name, x: s.x, y: s.y, z: s.z, tornado: { x: hit.x, z: hit.z } });
+          if (onShake) onShake(0.5);
+          continue;
+        }
       }
       // --- scripted triggers, racing state only ---
       if (r.state === 'racing') {
@@ -843,7 +888,7 @@ export function createRivals(THREE, seed, islands, effects) {
           r.trailT = 0;
           const f2 = forwardOf(s.yaw);
           effects.smokePuff(s.x - f2.x * 4, s.y - 0.1, s.z - f2.z * 4, 1.8, {
-            color: 0xffffff, life: 0.9, grow: 1.4,
+            color: 0xffffff, life: 0.9, grow: 1.4, flat: 0.6,
             vel: { x: -f2.x * 8, y: 0.2, z: -f2.z * 8 }, opacity: 0.25,
           });
         }
@@ -885,7 +930,7 @@ export function createRivals(THREE, seed, islands, effects) {
           // grow 1.8 / 0.12, was 0.8 / 1.0 / 0.20) — same wire fix as
           // the flyby streaks above.
           effects.smokePuff(s.x - f.x * 4, s.y - 0.1, s.z - f.z * 4, 1.4, {
-            color: r.trailColor, life: 1.1, grow: 1.8,
+            color: r.trailColor, life: 1.1, grow: 1.8, flat: 0.6,
             vel: { x: -f.x * 6, y: 0.2, z: -f.z * 6 }, opacity: 0.12,
           });
         }
@@ -1030,6 +1075,12 @@ export function createRivals(THREE, seed, islands, effects) {
       : Math.hypot(ps.x - playerCourse.runway.x, ps.y - playerCourse.runway.y, ps.z - playerCourse.runway.z);
     let ahead = 0;
     for (const r of rivals) {
+      // v21c: a tornado-killed rival is OUT of the ranking at once
+      // (it does not count, latched or live) — the player's position
+      // improves the moment the rival explodes, which is the
+      // "gugur, posisi berubah" the user asked for. A crash keeps
+      // the v18 latch (below); a tornado kill does not latch.
+      if (r.tornadoKill) continue;
       // v18: a crashed rival counts at its LATCHED crash position (see
       // latchCrash) until it respawns — the old code skipped crashed
       // rivals entirely, so the player jumped 5/5 -> 2/5 on the collision
@@ -1070,6 +1121,7 @@ export function createRivals(THREE, seed, islands, effects) {
       r.meetPoint = null;
       r.crashRings = null;
       r.crashDist = null;
+      r.tornadoKill = false;
       r.api.group.visible = true;
       syncMesh(r);
     }
@@ -1080,9 +1132,50 @@ export function createRivals(THREE, seed, islands, effects) {
     nextShowcaseAt = RACE.showcaseAt;
   }
 
+  // v21: the race-number markers can be hidden (the title shot
+  // hides them — the v20 title showed #02/#04/#05 floating
+  // awkwardly behind the instruction card). The planes stay; only
+  // the tags go. syncMesh() applies the flag every frame.
+  let markersVisible = true;
+  function setMarkersVisible(v) {
+    markersVisible = !!v;
+    for (const r of rivals) {
+      if (r.marker) r.marker.visible = markersVisible && r.api.group.visible;
+    }
+  }
+
   for (const r of rivals) syncMesh(r);
   return {
-    group, update, playerPosition, reset,
+    group, update, playerPosition, reset, setMarkersVisible,
+    /** v21c: give the pack the storm's tornado list (main.js, after
+     * creating the storm — the rivals are created first). The kill
+     * check in update() reads this closure list. */
+    setTornadoes(list) { tornadoes = Array.isArray(list) ? list : []; },
+    /** v21c: teleport a rival (live probe A11 — push one into a
+     * tornado to prove the kill). Sets its flight position and
+     * makes it racing again if it was out, so the next update()
+     * step runs the kill check on it. Returns false for a bad index. */
+    debugTeleport(i, x, y, z) {
+      const r = rivals[i];
+      if (!r) return false;
+      const s = r.flight.state;
+      s.x = x;
+      s.y = y;
+      s.z = z;
+      s.pitch = 0;
+      s.roll = 0;
+      if (r.state === 'gone') {
+        r.state = 'racing';
+        r.stateT = 0;
+        r.respawnT = 0;
+        r.tornadoKill = false;
+        r.crashRings = null;
+        r.crashDist = null;
+        r.api.group.visible = true;
+        syncMesh(r);
+      }
+      return true;
+    },
     /** Debug: each rival's name, state, rings and position (for the sim probe). */
     debug() {
       return rivals.map((r) => ({

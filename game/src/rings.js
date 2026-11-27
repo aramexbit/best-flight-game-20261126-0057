@@ -46,7 +46,14 @@ export function createCourse(random, seed, islands) {
   // course's first leg, a turn no autopilot (and no human) can make in one
   // 224 m leg. The spawn must line up with the walk's first step instead.
   const startZ = z;
-  let y = 150;
+  // v21c (user 27 Nov 10:17): LOW START — the walk starts at 55 m
+  // (was 150) and climbs toward the 145 m approach, so the early
+  // rings sit low between the ridge islands at ~55-90 m and the
+  // course CLIMBS out of the sea instead of cruising flat at 150 m.
+  // The lerp below carries the climb: ~62, 76, 88, 98, 107, 115,
+  // 122, 128, 133, 137, 141, 145. The clearance pass still lifts any
+  // ring whose ground is too close.
+  let y = 55;
   for (let i = 0; i < COURSE.ringCount; i += 1) {
     const legsLeft = COURSE.ringCount - i;
     const dx = approach.x - x;
@@ -64,18 +71,19 @@ export function createCourse(random, seed, islands) {
       // 22.6 m). The fix is the pitch authority (test 7 proves a tap
       // moves ~2x more altitude now); the legs stay natural.
       : clamp(dist / legsLeft, COURSE.legMin, COURSE.legMax);
-    // v20 (a): the FIRST legs are gentler — wander 0.12 rad (was
-    // 0.22) and altitude jitter ±12 m (was ±28) for rings 1-3, so ring
-    // 2 sits nearly straight ahead of ring 1 at nearly the same
-    // altitude. The v19 live playtest failed ring 2 in 3/3 tap-steered
-    // flights (closest 186 m, then the gap grew to kilometres): the
-    // 206 m leg gives only ~3.7 s, and a ±28 m altitude step plus a
-    // 0.22 rad wander is more correction than tap steering can make in
-    // that time. The later rings keep the full wander/jitter, so the
-    // course still snakes — only the opening is forgiving. The legs
-    // stay ~206 m (legMin/legMax untouched — the v19 lesson: a higher
-    // floor collapses the final leg).
-    const early = i < 3;
+    // v21: the FIRST legs are gentler for LONGER — rings 1-5 (was
+    // 1-3): wander 0.12 rad and altitude jitter ±12 m. The v20 live
+    // playtest failed ring 5 in 3/3 tap-steered flights (closest 76 m,
+    // then the gap ballooned to 1-1.5 km): ring 5 is the first real
+    // turn (wander jumps to 0.165 rad at i=3, 0.147 at i=4), and a
+    // tapping pilot turns ~2-3°/s — not enough for a 17° course
+    // change in one 206 m leg. Rings 1-5 now turn at most ~0.12 rad
+    // per leg, so the opening is a gentle slalom a tap pilot can
+    // follow; rings 6+ keep the full wander, so the course still
+    // snakes. The legs stay ~206 m (the v19 lesson: a higher floor
+    // collapses the final leg). Headless test 17 proves a tap pilot
+    // passes ring 5; test 18 guards the leg lengths + turns.
+    const early = i < 5;
     const wander = (1 - i / COURSE.ringCount) * (early ? 0.12 : 0.22);
     const heading = headingTo(x, z, approach.x, approach.z) + random.range(-wander, wander);
     x += Math.sin(heading) * stepLen;
@@ -119,10 +127,17 @@ export function createCourse(random, seed, islands) {
 
   const first = rings[0];
   const spawnHeading = headingTo(-1700, startZ, first.x, first.z);
+  const spawnX = first.x - Math.sin(spawnHeading) * 600;
+  const spawnZ = first.z + Math.cos(spawnHeading) * 600;
+  // v21c: LOW START — the plane spawns ~50 m above the sea/beach
+  // (ground + 50), NOT 10 m above ring 1. The leg-clearance pass
+  // below may lift ring 1 over the island skirt at the course's
+  // start, but the spawn itself stays low: the opening is a low
+  // climb out of the sea, then the course climbs through the hills.
   const spawn = {
-    x: first.x - Math.sin(spawnHeading) * 600,
-    y: first.y + 10,
-    z: first.z + Math.cos(spawnHeading) * 600,
+    x: spawnX,
+    y: islandHeightAt(islands, seed, spawnX, spawnZ) + 50,
+    z: spawnZ,
     yaw: spawnHeading,
     speed: 55,
     throttle: 0.7,
@@ -132,10 +147,25 @@ export function createCourse(random, seed, islands) {
   // after start: the spawn-to-ring-1 straight line crossed a ridge
   // higher than both endpoints (the ring floor only clears the ground
   // AT the ring, and the spawn sits 10 m above ring 1). Sample every
-  // leg; if the terrain under the straight line rises within 45 m of
+  // leg; if the terrain under the straight line rises within 25 m of
   // it, lift the destination ring so the line clears. The spawn follows
   // ring 1 up, so the first leg starts above the ridge too. Capped at
   // +120 m per ring, so no ring floats absurdly high.
+  // v21c: the margin is 25 m (was 45). At the low start (50 m AGL)
+  // a 45 m margin lifts ring 1 to 60 m — the line from the 50 m
+  // spawn is only 35 m above the 14.5 m island skirt, so the pass
+  // lifts the ring and the first leg CLIMBS. A climbing first leg
+  // makes the autopilot's pitch positive, and the Weak pilot's
+  // +/-0.5 bias then climbs much harder than it descends (the
+  // autopilot pitch + bias is +0.8 up, -0.1 down) — the plane
+  // rockets to 300-500 m and orbits ring 1 forever (sim Weak 0/12).
+  // At 25 m the low line (35 m above the skirt) needs no lift, ring
+  // 1 stays at its walk altitude (~51 m), the first leg is LEVEL,
+  // the autopilot's pitch is ~0 and the Weak bias porpoises
+  // symmetrically around the ring, as it did on the high course
+  // (Weak 7/12). The ring floor (ground + 33) still guarantees every
+  // ring clears its own ground, so 25 m here is a backstop, not the
+  // primary clearance.
   {
     const pts = [{ x: spawn.x, y: spawn.y, z: spawn.z }, ...rings];
     for (let i = 1; i < pts.length; i += 1) {
@@ -147,12 +177,25 @@ export function createCourse(random, seed, islands) {
         const gx = a.x + (b.x - a.x) * t;
         const gz = a.z + (b.z - a.z) * t;
         const lineY = a.y + (b.y - a.y) * t;
-        const need = islandHeightAt(islands, seed, gx, gz) + 45 - lineY;
+        const need = islandHeightAt(islands, seed, gx, gz) + 25 - lineY;
         if (need > lift) lift = need;
       }
       if (lift > 0) rings[i - 1].y += Math.min(120, lift);
     }
-    spawn.y = rings[0].y + 10;
+    // v21c: the spawn sits AT ring 1's altitude (was ground + 50,
+    // then the old `spawn.y = rings[0].y + 10`). The first leg is
+    // LEVEL, so the autopilot's pitch is ~0 and the Weak pilot's
+    // +/-0.5 bias porpoises symmetrically around the ring, as it
+    // did on the high course (Weak 7/12). A spawn 8-10 m BELOW ring
+    // 1 makes the autopilot climb, and the climb + the bias is
+    // asymmetric (input +0.8 up, -0.1 down) while the pitch loop
+    // (gain 2.2, delayed 0.5-1.5 s in the Weak model) saturates to
+    // full pitch-up after the opening descent — the plane rockets
+    // to 300-500 m and orbits ring 1 forever (sim Weak 0/12). The
+    // spawn is still LOW (ring 1 is at ~58 m over the sea, AGL
+    // ~58 m — inside the user's 40-60 m band) and the course
+    // climbs after ring 1; only the first 600 m is level.
+    spawn.y = rings[0].y;
   }
 
   // Face every ring along the leg that flies into it, so the opening is square
@@ -165,6 +208,42 @@ export function createCourse(random, seed, islands) {
     const len = Math.hypot(dx, dy, dz) || 1;
     rings[i].axis = { x: dx / len, y: dy / len, z: dz / len };
   }
+
+  // v21c: STEEP RIDGES flanking the course (user 27 Nov 10:17) — the
+  // seed-1 course flies over open sea the whole way (ground 0-15 m
+  // under rings 1-11, nothing within 200 m), so the "low start
+  // between hills" needs real hills. Two pairs of narrow, tall ridge
+  // islands flank the FINAL ring positions (450 m perpendicular, so
+  // their skirts add < 2 m under the rings and the low course stays
+  // low, while their 280-320 m crests fill the frame's edges): pair
+  // A flanks ring 3, pair B ring 9. Placed HERE (not in
+  // planIslands) because they must flank the ACTUAL course — fixed
+  // positions break other seeds (seed 10's course runs over a fixed
+  // southern ridge: ring 3 sits on it at ground 134 m, the leg
+  // climbs 100 m in 203 m, the autopilot overshoots and crashes
+  // into the ridge). Idempotent: createCourse runs once per rival
+  // on the same islands array, so a ridge is only added if no
+  // island already sits within 100 m of it.
+  function addRidge(x, z, radius, height) {
+    for (const isl of islands) {
+      if (Math.hypot(isl.x - x, isl.z - z) < 100) return;
+    }
+    islands.push({ x, z, radius, height });
+  }
+  function flank(idx, offset, radius, height) {
+    const a = rings[Math.max(0, idx - 1)];
+    const b = rings[Math.min(rings.length - 1, idx + 1)];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const px = -dz / len;
+    const pz = dx / len;
+    const r = rings[idx];
+    addRidge(r.x + px * offset, r.z + pz * offset, radius, height);
+    addRidge(r.x - px * offset, r.z - pz * offset, radius, height);
+  }
+  flank(2, 450, 260, 300);
+  flank(8, 450, 280, 320);
 
   let nextIndex = 0;
   let streak = 0;
@@ -242,9 +321,9 @@ export function buildRingMeshes(THREE, course) {
   const ringGeo = new THREE.TorusGeometry(COURSE.ringRadius, 0.75, 12, 64);
   // v3: a thin outer glow layer around each ring (a fatter, faint torus in the
   // same gold), so the ring reads as light, not as a painted hoop.
-  const glowGeo = new THREE.TorusGeometry(COURSE.ringRadius, 0.75 * 2.6, 10, 64);
+  const glowGeo = new THREE.TorusGeometry(COURSE.ringRadius, 0.75 * 2.0, 10, 64);
   const glowMat = new THREE.MeshBasicMaterial({
-    color: PALETTE.ring, transparent: true, opacity: 0.22, depthWrite: false,
+    color: PALETTE.ring, transparent: true, opacity: 0.20, depthWrite: false,
   });
   const nextMat = new THREE.MeshBasicMaterial({ color: PALETTE.ringNext });
   // v4: future rings at 0.45 (was 0.55) — the distant rings cluttered the sky
@@ -341,12 +420,12 @@ export function buildRingMeshes(THREE, course) {
         mesh.scale.setScalar(1 + pulse * Math.sin(time * 3.2));
         glow.visible = true;
         glow.scale.copy(mesh.scale);
-        // v20: the next ring's glow PULSES in opacity too (0.22-0.34),
-        // so the gate ahead reads as luminous light with a direction
-        // of travel, not a static hoop — Gemini v20 asked for a crisp
-        // luminous rim + pulse. The shared glow material is safe to
-        // pulse: only the next ring's glow is visible at all.
-        glowMat.opacity = 0.28 + 0.06 * Math.sin(time * 3.2);
+        // v21: the next ring's glow is DAMPED (0.20-0.24, was
+        // 0.28-0.34, tube 2.0x, was 2.6x) — the v20 live playtest saw
+        // a "giant pale yellow translucent ring in the sky" that read
+        // as a bubble; a thinner, fainter glow still reads as light
+        // without filling the sky.
+        glowMat.opacity = 0.20 + 0.04 * Math.sin(time * 3.2);
       } else {
         mesh.material = futureMat;
         mesh.scale.setScalar(1);
