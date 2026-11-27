@@ -232,3 +232,57 @@ the subject must read in one second.
   the plane, and it never appears in the title (the hero camera
   looks north, away from the course) or the landing (overhead,
   out of frame).
+
+## v22 style notes
+
+- STORM DECK WIDER (user 27 Nov 14:06): the deck is ~400 m wide
+  now — every course position grows a CLUSTER of 3 overlapping
+  puffs (centre lobe rx 120–160 m + two satellites ±60–120 m
+  sideways), ~45 lobes, y ~262 m, base ~192 m — so the storm
+  sky reads as a ceiling, not a ribbon. The rings (top 172 m)
+  stay under it and readable; the deck never covers a ring or
+  the plane.
+- TORNADO as a vortex (Gemini): a smooth outer SHEATH cone
+  (48→6 m, 264 m tall, opacity 0.22, DoubleSide) unifies the
+  silhouette, segment overlap +4×scale, and a CROWN puff cluster
+  (3 dark slate puffs, r 18/24/30 × scale) caps the top — no more
+  coarse faceted grey cone. Rain is thicker and slanted (30 m
+  streaks, wind ×2.2, 0.38) with SPLASH rings on the sea (growing
+  5→40 m over 2.5 s) so the rain connects to the water. Lightning
+  is a THICK bolt: three parallel jagged lines (main + 2 echoes
+  ±2.5 m) + a radial-gradient glow sprite at the strike midpoint
+  + flash light 1500 — one ~5 m bolt, not a 1 px line.
+- RIVAL BADGES subtler: pill sprite 3.2×1.36 m at +2.7 m, opacity
+  0.9 — a tag, not a debug marker.
+- COCKPIT DEDUP: in cockpit view the duplicated DOM HUD panels
+  hide (top-left ALT/SPD/HDG, attitude ball, compass) — the 3D
+  dials are the instruments, the DOM is not a second copy. Trim
+  #3a4149, arch tube 0.03 m (slimmer, lighter frame).
+- ALT · MSL: the altitude panel is labelled "ALT · MSL" and the
+  WIN cue pill reads SPD in knots and AGL in feet — MSL and AGL
+  never share one bare label again. The pill is the win cue
+  (green when lined up on final, gold otherwise, "AUTOPILOT
+  LANDING…" once the win has triggered) — there is no V/S zone
+  any more, because no speed/VS threshold decides the win.
+- TITLE (v22): the two gold mission lines STAY (user decision) —
+  the life comes from the BACKGROUND: the title camera ORBITS
+  (yaw 0.22 rad/s, bank 0.42 rad, y 190 → 110 m) so sea, beach
+  and hills move behind the gold text, and the sea texture
+  drifts. No instruction box, no logo, no gear — unchanged.
+- AIRFIELD (v22): PAPI lenses bigger (1.6×0.7×1.6 m on 1.0 m
+  posts), approach lights 0.5 m domes + a crossbar row 300 m out,
+  a 12 m control tower (concrete shaft + glass cab + red roof)
+  by the hangar, a parked static Caravan on the apron, and a
+  denser tree belt (60 trees, 80–200 m) — the landing frame has
+  furniture at true scale, not a flat green slab.
+- WIN MOMENT (user 27 Nov 15:09 + 15:11 + 15:13): there is no
+  manual touchdown any more — after 12/12 rings, flying over the
+  runway 09 asphalt triggers the WIN and the autopilot lands the
+  plane smoothly ("Autopilot landing — smooth touchdown!" on the
+  end screen, "🏁 FINISH! Autopilot landing…" toast + chime).
+  The player's plane NEVER explodes in the finish/win sequence;
+  dramatic explosions belong to the OTHER TEAMS' planes (tornado,
+  collision, dive — never "musuh/enemy", this is a race, not
+  combat), announced by team name, and scripted rival explosions
+  pause once the player has 12/12 rings so the win moment is
+  never confused with a rival's fireball.

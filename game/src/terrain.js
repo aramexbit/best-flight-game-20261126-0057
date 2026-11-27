@@ -6,6 +6,10 @@
 
 import { COURSE, PALETTE, STORM, WORLD } from './config.js';
 import { createNoise, createRandom } from './random.js';
+// v22: the parked Caravan on the apron below reuses the player
+// aircraft model — plane.js imports config.js only, so there is no
+// import cycle (terrain -> plane -> config).
+import { buildPlane } from './plane.js';
 
 /** Place the islands: a big one near the centre-east for the runway, the rest spread out. */
 export function planIslands(random) {
@@ -547,14 +551,19 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     const px = runway.x + dirX * along + perpX * across;
     const pz = runway.z + dirZ * along + perpZ * across;
     const py = meshHeight(px, pz);
-    const papiBase = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), baseMat);
-    papiBase.position.set(px, py + 0.25, pz);
-    group.add(papiBase);
+    // v22: the PAPI boxes are BIGGER and on 1.0 m posts (lens
+    // 1.6 x 0.7 x 1.6, was 0.9 x 0.4 x 0.9; post 0.5 x 1.0 x 0.5,
+    // was a 0.5 m base slab) — the v21 landing shot's PAPI read as
+    // four specks beside the threshold; at 1.6 m wide on a metre
+    // post the red/white boxes read from the air on final.
+    const papiPost = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.0, 0.5), baseMat);
+    papiPost.position.set(px, py + 0.5, pz);
+    group.add(papiPost);
     const papiLens = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9, 0.4, 0.9),
+      new THREE.BoxGeometry(1.6, 0.7, 1.6),
       k < 2 ? papiRed : papiWhite,
     );
-    papiLens.position.set(px, py + 0.65, pz);
+    papiLens.position.set(px, py + 1.35, pz);
     group.add(papiLens);
   }
   // v17: approach lights — five white fixtures on the extended
@@ -562,13 +571,29 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // has a visible lead-in. (The old approach-light row was removed in
   // v4 for floating white spheres; these sit on the ground like the
   // edge-light fixtures above, snapped to the mesh height.)
+  // v22: the domes are BIGGER (0.5 m, was 0.32) and a CROSSBAR row
+  // joins them — five lights ACROSS the centreline 300 m out from
+  // the threshold, the bar a pilot expects to see on final. Both
+  // rows snap to the mesh height like the edge lights.
+  const approachDomeGeo = new THREE.SphereGeometry(0.5, 10, 8);
   for (let a = 1; a <= 5; a += 1) {
     const ax = runway.x - dirX * (COURSE.runwayLength / 2 + a * 40);
     const az = runway.z - dirZ * (COURSE.runwayLength / 2 + a * 40);
     const base = new THREE.Mesh(baseGeo, baseMat);
     base.position.set(ax, meshHeight(ax, az) + 0.06, az);
     group.add(base);
-    const dome = new THREE.Mesh(domeGeo, whiteLight);
+    const dome = new THREE.Mesh(approachDomeGeo, whiteLight);
+    dome.scale.y = 0.6;
+    dome.position.set(ax, meshHeight(ax, az) + 0.2, az);
+    group.add(dome);
+  }
+  for (const across of [-20, -10, 0, 10, 20]) {
+    const ax = runway.x - dirX * (COURSE.runwayLength / 2 + 300) + perpX * across;
+    const az = runway.z - dirZ * (COURSE.runwayLength / 2 + 300) + perpZ * across;
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.set(ax, meshHeight(ax, az) + 0.06, az);
+    group.add(base);
+    const dome = new THREE.Mesh(approachDomeGeo, whiteLight);
     dome.scale.y = 0.6;
     dome.position.set(ax, meshHeight(ax, az) + 0.2, az);
     group.add(dome);
@@ -640,6 +665,51 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   hangar.position.set(hx, hy - 0.5, hz);
   hangar.rotation.y = Math.atan2(perpX, perpZ);
   group.add(hangar);
+  // v22 (Gemini v21 #4): a CONTROL TOWER beside the hangar — a 12 m
+  // concrete shaft with a glass cab on top and a red roof to match
+  // the hangar, so the airfield has a landmark at true scale instead
+  // of one lone hangar on a bare slope. 96 m off the centreline,
+  // outside the clear zone, west of the apron.
+  {
+    const tx = runway.x + perpX * 96 + dirX * -40;
+    const tz = runway.z + perpZ * 96 + dirZ * -40;
+    const ty = meshHeight(tx, tz);
+    const tower = new THREE.Group();
+    const shaft = new THREE.Mesh(
+      new THREE.BoxGeometry(3, 12, 3),
+      new THREE.MeshStandardMaterial({ color: '#cfd4d8', roughness: 0.85 }),
+    );
+    shaft.position.y = 6;
+    tower.add(shaft);
+    const cab = new THREE.Mesh(
+      new THREE.BoxGeometry(5.5, 2.5, 5.5),
+      new THREE.MeshStandardMaterial({ color: '#1c2f45', roughness: 0.2, metalness: 0.3 }),
+    );
+    cab.position.y = 13.25;
+    tower.add(cab);
+    const cabRoof = new THREE.Mesh(
+      new THREE.BoxGeometry(6, 0.4, 6),
+      new THREE.MeshStandardMaterial({ color: '#C83C32', roughness: 0.7 }),
+    );
+    cabRoof.position.y = 14.7;
+    tower.add(cabRoof);
+    tower.position.set(tx, ty - 0.5, tz);
+    group.add(tower);
+  }
+  // v22 (Gemini v21 #4): a PARKED Caravan on the apron — the player
+  // aircraft model at rest (nose east, along the strip), so the
+  // landing shot shows a working airfield with another airframe on
+  // the ground, not an empty apron. The group origin is the aircraft
+  // centre, which sits 1.6 m above the ground when parked (the
+  // flight.js touchdown line) plus the 0.3 m apron slab top.
+  {
+    const parked = buildPlane(THREE);
+    const px = runway.x + perpX * 90;
+    const pz = runway.z + perpZ * 90;
+    parked.group.position.set(px, meshHeight(px, pz) + 1.9, pz);
+    parked.group.rotation.y = Math.PI / 2;
+    group.add(parked.group);
+  }
   // Windsock on a pole at the apron corner, so the airfield has one more
   // thing a pilot would expect to see.
   const wsx = runway.x + perpX * 78 + dirX * 14;
@@ -1294,10 +1364,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // rectangle in an empty field. Kept 90 m clear of the strip itself.
   // v6: 40 trees (was 26), pulled closer (80-240 m, was 90-260) and bigger,
   // so the airfield sits inside a forest edge instead of on a bare slope.
+  // v22: 60 trees (was 40), band 80-200 m (was 80-240) — the v21
+  // landing shot's airfield edge still read as sparse small trees
+  // around a flat green slab; a closer, denser belt closes the
+  // clearing. The clear-zone check still keeps every trunk off the
+  // strip and the approach cone.
   let airportTrees = 0;
-  for (let tries = 0; tries < 500 && airportTrees < 40; tries += 1) {
+  for (let tries = 0; tries < 800 && airportTrees < 60; tries += 1) {
     const a = vegRandom.range(0, Math.PI * 2);
-    const r = vegRandom.range(80, 240);
+    const r = vegRandom.range(80, 200);
     const px = runway.x + Math.cos(a) * r;
     const pz = runway.z + Math.sin(a) * r;
     const ph = groundAt(px, pz);
@@ -2077,6 +2152,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   }
 
   function update(dt) {
+    // v22: the sea texture DRIFTS (offset +0.008/+0.004 per second) —
+    // the title screen's water used to sit perfectly still behind the
+    // gold text, which is part of why the title read as a pasted
+    // poster. The speckle + wave arcs now crawl slowly, so the sea
+    // reads as moving water in live play and in the staged title
+    // shot (render.draw calls update() every frame). The cloud drift
+    // below already existed; the sea was the still part.
+    seaTex.offset.x += dt * 0.008;
+    seaTex.offset.y += dt * 0.004;
     // v16: palms bend with the storm wind — a slow lean along the wind,
     // each palm on its own phase, so the foliage moves in a gale.
     swayTime += dt;

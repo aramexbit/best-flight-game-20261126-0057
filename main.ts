@@ -1,5 +1,29 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v21: the Gemini v20 blind-test fixes + the
+// standard library only). v22: the Gemini v21 blind-test fixes + the user's
+// auto-win decision (27 Nov 15:09) + the 15:11 clarification + the 15:13
+// rival-explosion and "team lain" corrections. Rings 1–5 are forgiving
+// (16 m, linear climb, Weak sim 4/12 → 9/12). The storm deck is ~400 m
+// wide (~45 lobes in clusters of 3, base ~192 m, rings stay under it), the
+// funnel is a smooth-sheathed vortex with a crown, rain is thicker with sea
+// splashes, and lightning is three parallel jagged lines + a glow sprite +
+// flash light 1500. ORANYE detours into the tornado in normal play (kill at
+// t 16.32 s) and rival badges are subtler. The cockpit hides the duplicated
+// DOM HUD panels (cockpit-view), the altitude panel reads "ALT · MSL", and
+// after 12/12 the pill is the WIN cue (SPD · AGL · AUTOLAND READY / FLY OVER
+// RUNWAY 09 TO WIN). The title camera ORBITS (yaw 0.22 rad/s, bank 0.42 rad,
+// y 190 → 110 m) behind the two gold mission lines, which STAY as the user
+// approved them. The airfield has bigger PAPI, a crossbar row, a control
+// tower, a parked Caravan and 60 trees. And the WIN itself is automatic now:
+// after 12/12 rings, flying over the runway 09 asphalt triggers the win (no
+// speed/VS/pitch threshold — the Gemini 78 / −16.5 / hard-landing numbers were
+// built, verified, then REMOVED) and the autopilot lands the plane smoothly
+// (steep VS-hold −9/−7/−2.5, heading-hold + cross-track roll, pinned rollout)
+// — the plane can NEVER explode during the autopilot landing. The player's
+// plane never exploded at all: what the user saw exploding were RIVAL planes,
+// and the win simply never triggered. Rival explosions are always the OTHER
+// TEAMS' planes (race rivals, never "musuh/enemy"), announced by team name,
+// and scripted rival explosions pause once the player has 12/12 rings so the
+// win moment is never confused with a rival's fireball. v21: the Gemini v20 blind-test fixes + the
 // eleven v20 live-playtest P0s + the v21b landing-to-win fix + the
 // v21b–v21h title rebuild (the user's final decision, 27 Nov 09:49–
 // 09:55 WIB, approved mockup) + v21c low start + steep ridges + dense

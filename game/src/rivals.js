@@ -106,10 +106,17 @@ function makeMarkerSprite(THREE, text, color) {
   x.fillText(text, 96, 42);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  // v22 (Gemini v21 #2 / coordinator note g): the badge is SUBTLER —
+  // 0.9 opacity, so it reads as a race tag instead of a UI pin
+  // shouting over the plane.
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9, depthWrite: false }));
   // v20: pill 4.0 x 1.7 m (192:80 aspect) — compact, reads as a race
   // number without hiding the plane it marks (was 5.0 x 2.1).
-  sprite.scale.set(4.0, 1.7, 1);
+  // v22: 3.2 x 1.36 m (was 4.0 x 1.7) — the v21 landing shot showed
+  // the #2 badge overlapping the "FLY OVER THE RUNWAY TO WIN" pill, and the
+  // cockpit shot had #3/#5 badges crowding the ring. Smaller + lower
+  // + fainter keeps the pack readable without competing.
+  sprite.scale.set(3.2, 1.36, 1);
   return sprite;
 }
 
@@ -320,6 +327,8 @@ export function createRivals(THREE, seed, islands, effects) {
       // skipped in playerPosition (its position improves at once)
       // until it rejoins, when respawn() clears it.
       tornadoKill: false,
+      // v22: the ORANYE tornado detour (below) runs once per run.
+      tornadoDetourDone: false,
       trailColor: MARKER_COLOR_HEX[i], showcaseSide: 1,
     };
   });
@@ -345,8 +354,10 @@ export function createRivals(THREE, seed, islands, effects) {
     // floating over the fin and overlapped the ring pointer in the
     // cockpit shot. At 2.9 m the pill's lower edge hugs the fin top
     // instead of hovering above it.
+    // v22: 2.7 m (was 2.9) — the smaller pill (3.2 x 1.36 m) sits
+    // lower still, hugging the fin.
     if (r.marker) {
-      r.marker.position.set(s.x, s.y + 2.9, s.z);
+      r.marker.position.set(s.x, s.y + 2.7, s.z);
       r.marker.visible = markersVisible && r.api.group.visible;
     }
   }
@@ -512,12 +523,24 @@ export function createRivals(THREE, seed, islands, effects) {
    * object, `playerCourse` its course; `groundAt` and `runway` are the
    * terrain's. `audio` and `onShake` are for the flyby whoosh and camera
    * shake. `onEvent` (v14, optional) is called as onEvent(kind, detail)
-   * for race events the game should announce — currently 'collision',
-   * so main.js can flash the HUD message, play the boom and shake the
-   * camera. Rivals read the player, they never write to it.
+   * for race events the game should announce — 'collision',
+   * 'tornado-kill' and 'rival-crash' (v22: every rival explosion is
+   * named with the team's name, so it is never confused with the
+   * player's plane), so main.js can flash the HUD message, play the
+   * boom and shake the camera. Rivals read the player, they never
+   * write to it.
    */
   function update(dt, time, player, playerCourse, groundAt, runway, audio, onShake, onEvent) {
     const ps = player.state;
+    // v22 auto-win (user 27 Nov 15:11): once the player has all 12
+    // rings, NO new rival explosion fires — the finish belongs to
+    // the player's win, and a rival blast near the runway must never
+    // read as the player's fate. Flybys keep going (they are not
+    // explosions). The gate covers the scripted events (tornado-kill,
+    // dive, clip, collision); an unscripted rival terrain crash in
+    // the racing branch is left alone (rare, and gating it would
+    // freeze a crashed rival mid-air).
+    const playerOnFinal = ps.ringsPassed >= COURSE.ringCount;
     const pf = forwardOf(ps.yaw);
     const pr = { x: Math.cos(ps.yaw), y: 0, z: Math.sin(ps.yaw) };
     // v17: showcase flybys — from RACE.showcaseAt on, every
@@ -571,7 +594,7 @@ export function createRivals(THREE, seed, islands, effects) {
       // are NOT set, so a tornado-killed rival can still do its
       // scripted event after it rejoins (the mid-air collision needs
       // its pair).
-      if (tornadoes.length > 0 && (r.state === 'racing' || r.state === 'converging'
+      if (tornadoes.length > 0 && !playerOnFinal && (r.state === 'racing' || r.state === 'converging'
         || r.state === 'holding' || r.state === 'flyby' || r.state === 'showcase')) {
         const hit = tornadoAt(s.x, s.y, s.z, tornadoes);
         if (hit) {
@@ -586,7 +609,7 @@ export function createRivals(THREE, seed, islands, effects) {
       }
       // --- scripted triggers, racing state only ---
       if (r.state === 'racing') {
-        if (r.name === 'BIRU' && !r.crashed.dive && time >= RACE.diveCrashAt) {
+        if (r.name === 'BIRU' && !r.crashed.dive && !playerOnFinal && time >= RACE.diveCrashAt) {
           // v17: if BIRU is far from the player (>400 m), the dive
           // happens somewhere the player never looks — reposition it
           // 250 m ahead of the player first, so the dive and the
@@ -595,12 +618,12 @@ export function createRivals(THREE, seed, islands, effects) {
           // at 12 s is untouched.
           repositionAhead(r, ps, pf, 250);
           startDive(r, 'dive');
-        } else if (r.name === 'ORANYE' && !r.crashed.clip && time >= RACE.clipCrashAt) {
+        } else if (r.name === 'ORANYE' && !r.crashed.clip && !playerOnFinal && time >= RACE.clipCrashAt) {
           // v17: same — the wing-clip explosion must happen where the
           // player is looking, not behind them on the course.
           repositionAhead(r, ps, pf, 250);
           startSpin(r);
-        } else if ((r.name === 'KUNING' || r.name === 'HIJAU') && !r.crashed.collision
+        } else if ((r.name === 'KUNING' || r.name === 'HIJAU') && !r.crashed.collision && !playerOnFinal
           && (time >= RACE.collisionAt - 14 || (time >= 20 && nearAnchor(ps, pf, playerCourse))
             || (time >= RACE.collisionEarlyAt && ps.speed > 70 && isOffCourse(ps, pf, playerCourse)))) {
           // Converge on a point on the course AHEAD OF THE PLAYER, not a
@@ -761,7 +784,7 @@ export function createRivals(THREE, seed, islands, effects) {
           meetPoint: r.meetPoint,
           time,
         });
-        if (fire || lateFire || relFire) {
+        if ((fire || lateFire || relFire) && !playerOnFinal) {
           // v17: the chase boost ends with the collision.
           r.flight.state.maxSpeedBoost = 0;
           r.flight.state.thrustBoost = 1;
@@ -793,6 +816,10 @@ export function createRivals(THREE, seed, islands, effects) {
           if (onShake) onShake(0.5);
         } else if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          // v22 auto-win (user 27 Nov 15:13): name the team, so the
+          // blast is unmistakably the OTHER team's plane — the
+          // dramatic explosion is always a rival's, never the player's.
+          if (onEvent) onEvent('rival-crash', { name: r.name, kind: 'crash', x: s.x, y: s.y, z: s.z });
           latchCrash(r);
           hide(r, RACE.respawnDelay);
         }
@@ -829,6 +856,10 @@ export function createRivals(THREE, seed, islands, effects) {
         if (s.y <= groundAt(s.x, s.z) + 2) {
           const g = groundAt(s.x, s.z);
           effects.explode(s.x, Math.max(1, g + 1), s.z, false);
+          // v22 auto-win (user 27 Nov 15:13): name the team — the
+          // dive/clip explosion is the OTHER team's plane, never the
+          // player's. 'clip' is ORANYE's ring-clip, 'dive' is BIRU's.
+          if (onEvent) onEvent('rival-crash', { name: r.name, kind: r.crashed.clip ? 'clip' : 'dive', x: s.x, y: s.y, z: s.z });
           // v16: a sea impact throws a splash crown and leaves a
           // burning oil slick drifting on the waves (Gemini's v16
           // build prompt) — the wreck, the smoke column, the splash
@@ -906,6 +937,7 @@ export function createRivals(THREE, seed, islands, effects) {
           r.flybyDone = true;
         } else if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          if (onEvent) onEvent('rival-crash', { name: r.name, kind: 'crash', x: s.x, y: s.y, z: s.z });
           latchCrash(r);
           hide(r, RACE.respawnDelay);
         }
@@ -942,6 +974,7 @@ export function createRivals(THREE, seed, islands, effects) {
           r.stateT = 0;
         } else if (ev & EVENT_CRASH) {
           effects.explode(s.x, s.y, s.z, false);
+          if (onEvent) onEvent('rival-crash', { name: r.name, kind: 'crash', x: s.x, y: s.y, z: s.z });
           latchCrash(r);
           hide(r, RACE.respawnDelay);
         }
@@ -956,7 +989,34 @@ export function createRivals(THREE, seed, islands, effects) {
         const next = r.course.nextRing();
         let target = next;
         let holding = false;
-        if (next) {
+        // v22: ORANYE's TORNADO DETOUR — in the window t 13-18 s the
+        // orange rival steers at a point 20 m from spout3 toward ring
+        // 4 (inside its 35 m kill radius, at ring-4 altitude — headless
+        // test 27 proves the geometry), so the tornado kill fires
+        // ~15-16 s into the race, just ahead of the player near ring 4
+        // — visible, mid-frame, in NORMAL play (the v21 kill only ever
+        // fired in the probe, at the frame's left edge). The kill check
+        // at the top of update() fires the moment ORANYE enters the
+        // cylinder; the detour ends when the window closes, and it runs
+        // once per run. Full throttle, no weave/lane — the detour is a
+        // straight dash at the funnel.
+        let detour = null;
+        if (r.name === 'ORANYE' && !r.tornadoDetourDone && time >= 13 && time <= 18) {
+          const s3 = tornadoes.find((t) => t.id === 'spout3');
+          const ring4 = r.course.rings[3];
+          if (s3 && ring4) {
+            const d = Math.hypot(ring4.x - s3.x, ring4.z - s3.z) || 1;
+            detour = {
+              x: s3.x + (ring4.x - s3.x) / d * 20,
+              y: ring4.y,
+              z: s3.z + (ring4.z - s3.z) / d * 20,
+            };
+          }
+        }
+        if (time > 18) r.tornadoDetourDone = true;
+        if (detour) {
+          target = detour;
+        } else if (next) {
           const idx = r.course.rings.indexOf(next);
           const prev = idx > 0 ? r.course.rings[idx - 1] : r.course.spawn;
           const dx = next.x - prev.x;
@@ -1009,9 +1069,10 @@ export function createRivals(THREE, seed, islands, effects) {
         // (behind), so the scripted flyby and collision always find the
         // pack near the player instead of strung out over a kilometre.
         // In the holding pattern the throttle is fixed — the rubber-band
-        // would surge and brake the orbit for no reason.
+        // would surge and brake the orbit for no reason. The tornado
+        // detour (above) always flies full throttle: a straight dash.
         const gap = (s.x - ps.x) * pf.x + (s.z - ps.z) * pf.z;
-        const throttle = holding ? 0.6 : gap > 120 ? 0.5 : gap < -120 ? 1.0 : 0.72 * r.speedBias;
+        const throttle = detour ? 1.0 : holding ? 0.6 : gap > 120 ? 0.5 : gap < -120 ? 1.0 : 0.72 * r.speedBias;
         const prev = { x: s.x, y: s.y, z: s.z };
         const ev = r.flight.step(dt, autopilotTo(r.flight, target, throttle, groundAt), groundAt, runway);
         const pass = r.course.checkPass(prev, s);
@@ -1122,6 +1183,7 @@ export function createRivals(THREE, seed, islands, effects) {
       r.crashRings = null;
       r.crashDist = null;
       r.tornadoKill = false;
+      r.tornadoDetourDone = false;
       r.api.group.visible = true;
       syncMesh(r);
     }

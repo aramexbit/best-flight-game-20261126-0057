@@ -3,7 +3,8 @@
 // checkPass + the same terrain ground the game flies on. Seed 1, the same
 // course as the staged screenshots and the live probes.
 //
-//   Reference — the autopilot (a skilled player): must pass 12 rings AND land.
+//   Reference — the autopilot (a skilled player): must pass 12 rings AND land
+//     (v22 auto-win: the win triggers over the runway, the autopilot lands).
 //   Weak      — autopilot + seeded noise (a struggling player): some rings, no finish.
 //   Idle      — no input at all: must fail (no finish / crash).
 //
@@ -89,14 +90,16 @@ function runRoute(name, policy) {
         };
       }
     } else if (policy === 'manual') {
-      // v21b: a HUMAN landing — the autopilot flies the rings, then
-      // a human takes over: throttle slewed to 0.3 (a natural "slow
-      // down"), VS -5, cross-track roll (aim 500 m past the runway).
-      // The user's own playtest crashed on exactly this profile
-      // (107 kts vs the old 50 m/s finish-zone cap); the widened
-      // finish-zone tolerances (62 m/s / 12 m/s / 0.45 rad) must let
-      // it win. The land regulator (Reference) is the perfect case;
-      // this is the human case.
+      // v22 auto-win: a HUMAN flight TO the strip — the autopilot
+      // flies the rings, then a human takes over: throttle slewed
+      // to 0.3 (a natural "slow down"), VS -5, cross-track roll
+      // (aim 500 m past the runway). The human only has to FLY OVER
+      // the runway: the win triggers on corridor entry and the
+      // autopilot lands. (v21b: this exact profile crashed the
+      // user's own playtest on the old 50 m/s finish-zone cap —
+      // the manual touchdown is gone now, so the cap is gone too.)
+      // The land regulator (Reference) is the perfect case; this is
+      // the human case.
       const ring = course.nextRing();
       if (ring) {
         input = autopilotTo(flight, ring, 0.72, groundAt);
@@ -120,12 +123,15 @@ function runRoute(name, policy) {
       if (ring) {
         input = autopilotTo(flight, ring, 0.72, groundAt);
       } else {
-        // All rings done: land with the probe's 'land' regulator
-        // (VS-hold + heading-hold to a point 500 m beyond the runway,
-        // wings level + cross-track correction, idle throttle) — the
-        // pursuit autopilot levels off at its target altitude and never
-        // touches down, so it cannot land on its own. Continuous inputs
-        // here (no key PWM — the sim has no keyboard).
+        // All rings done: fly TO the strip with the probe's 'land'
+        // regulator (VS-hold + heading-hold to a point 500 m beyond
+        // the runway, wings level + cross-track correction, idle
+        // throttle) — the pursuit autopilot levels off at its target
+        // altitude and never touches down, so it cannot land on its
+        // own. The win triggers when the plane enters the runway
+        // corridor and the autopilot landing takes over (flight.js
+        // ignores the regulator's input from then on). Continuous
+        // inputs here (no key PWM — the sim has no keyboard).
         if (landPhaseAt === null) landPhaseAt = s.elapsed;
         const g = groundAt(s.x, s.z);
         const agl = s.y - g;
@@ -186,7 +192,7 @@ const manualOk = manual.finished && manual.rings === 12;
 console.log(`reference: ${refOk ? 'PASS' : 'FAIL'} (must finish 12 rings + land)`);
 console.log(`weak: ${weakOk ? 'PASS' : 'FAIL'} (some rings, no finish)`);
 console.log(`idle: ${idleOk ? 'PASS' : 'FAIL'} (must not finish)`);
-console.log(`manual: ${manualOk ? 'PASS' : 'FAIL'} (human landing at 0.3 throttle must finish 12 rings + land)`);
+console.log(`manual: ${manualOk ? 'PASS' : 'FAIL'} (human flight to the strip at 0.3 throttle must finish 12 rings + autoland)`);
 const allOk = refOk && weakOk && idleOk && manualOk;
 console.log(allOk ? 'SIM-3TIER: ALL PASS' : 'SIM-3TIER: FAIL');
 process.exit(allOk ? 0 : 1);

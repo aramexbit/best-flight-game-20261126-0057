@@ -403,7 +403,11 @@ export function buildPlane(THREE, livery = null) {
   // roof, console) keep the lighter shell grey.
   // v19: #242B35 (Gemini v19 #3) — a touch darker, so the frame reads
   // as structure against the bright sky without glare.
-  const trimMat = new THREE.MeshStandardMaterial({ color: '#242B35', roughness: 0.6, metalness: 0.2 });
+  // v22 (Gemini v21 #3): the cockpit frame is a shade LIGHTER
+  // (#3a4149, was #242B35) — the v21 cockpit read as a boxy
+  // flat-shaded cage; a lighter trim with the same geometry reads as
+  // a smooth moulded frame instead of a dark cage.
+  const trimMat = new THREE.MeshStandardMaterial({ color: '#3a4149', roughness: 0.6, metalness: 0.2 });
   // Glareshield: a shaped three-piece brow — a flat centre with two side
   // pieces sloping down to the A-pillars — so the instruments sit under a
   // hood that is part of the cabin, not a floating slab.
@@ -512,7 +516,9 @@ export function buildPlane(THREE, livery = null) {
   // from the bow — the top of the frame is now a cabin roof, not open sky.
   // v17: the arch tube is slimmer (0.04, was 0.05) with the pillars.
   // v18: arch tube 0.035 (was 0.04) in dark-slate trim, with the pillars.
-  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.035, 8, 28, Math.PI), trimMat);
+  // v22: the arch tube is SLIMMER (0.03, was 0.035) — with the lighter
+  // trim the top arch reads as a smooth strut instead of a thick bar.
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.03, 8, 28, Math.PI), trimMat);
   arch.scale.set(1, 0.24, 1);
   arch.position.set(0, 0.42, 0.0);
   dash.add(arch);

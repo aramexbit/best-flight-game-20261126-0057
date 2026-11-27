@@ -10,6 +10,423 @@ Rule: an item is checked ONLY with proof (screenshot / sim / test), never
 a claim. Evidence is cited per item. Re-verify after any game-code change
 (the 4 screenshots are regenerated last, before commit).
 
+# Langit Nusantara — Ring Run: Verification Checklist (v22)
+
+Rule: an item is checked ONLY with proof (screenshot / sim / test), never
+a claim. Evidence is cited per item. Re-verify after any game-code change
+(the 4 screenshots are regenerated last, before commit).
+
+## What changed in v22 (vs v21) — all patched on top of v21
+
+- [x] **(1) AUTO-WIN + AUTOPILOT LANDING (v22 — user decision 27 Nov
+  15:09, REPLACES the Gemini manual-landing fix).** User: "ga usah
+  mendarat — ketika sudah berada di atas aspal garis finish otomatis
+  menang... buat tidak mendarat saja asal sudah berada di garis
+  finish otomatis menang dan secara autopilot mendarat dengan
+  mulus." The 15:11 clarification changes the diagnosis: the
+  PLAYER's plane never exploded — what exploded were RIVAL planes
+  (scripted dive/clip/collision/tornado-kill); the player's plane
+  stayed intact but WIN never triggered. So the real bug was the
+  win condition, not the player's touchdown. The Gemini numbers
+  (speed 78, VS −16.5, hard landing, cushion, tiers) are NO LONGER
+  used for the win condition — they were implemented, verified,
+  then REMOVED (flight.js ground block rewritten;
+  sim-land-profiles + sim-landing-gemini DELETED as superseded).
+  The new design: after 12/12 rings, the moment the plane enters
+  the runway 09 corridor (|dx| < 250 m, |lat| < 24 m) the win
+  triggers (`state.autoLanding`, logged `[win] {...}` with t/x/y/z/
+  dx/lat/speed/rings) — NO speed/VS/pitch threshold at all. The
+  autopilot takes over the input (steep VS-hold −9/−7/−2.5 —
+  measured: the gentle −6/−5/−1.5 descent floats ~500 m longer;
+  heading-hold + cross-track roll law, never a far steering
+  point — the first build steered 500 m past the centre and the
+  plane touched down banked −0.58..−0.81 rad turning back;
+  throttle idle) and lands it: ground contact pins the plane to
+  the deck, speed bleeds at 6 m/s per s, pitch/roll damped to 0,
+  a pinned ROLLOUT block (without it the rollout stretched ~300 m
+  over the eastern downslope) ends the run below 8 m/s →
+  'landed' + EVENT_LAND + touchdown telemetry branch 'WIN' kind
+  'autoland'. Crash checks are DISABLED after the win triggers —
+  the plane can NEVER explode during the autopilot landing, in any
+  condition. Crash checks during the race (rings, terrain, tornado,
+  rivals) are UNCHANGED. Rival explosions stay spectacular and are
+  ALWAYS the other teams' planes (user 15:13: "Efek dramatisnya
+  itu ledakan pesawat musuh, bukan pesawat kita" + "bukan pesawat
+  musuh tapi pesawat team lain") — the final-event gate pauses
+  scripted rival explosions once the player has 12/12 rings
+  (rivals.js `playerOnFinal`), and rival crashes are announced by
+  team name ("💥 KUNING + HIJAU MID-AIR COLLISION!", "💥 <name>
+  CRASHED!"). No "musuh/enemy" text anywhere in the game
+  (verified by grep — only "angle of attack", a flight term).
+  Proof: sim-win-autoland 14/14 ALL PASS (10 WIN profiles incl.
+  68 m/s fast, 90 m/s dive, VS −32 plunge, 150 m high entry, 30°
+  angled entry — all WIN, wings level at touchdown, roll 0–0.02
+  rad; 4 negative profiles: 11 rings no win, 300 m short crash,
+  sea ditch crash, 0 rings crash); headless tests 19/20/28–31
+  rewritten for the win (33/33 ALL PASS incl. new test 34);
+  sim-3tier ALL PASS
+  (Reference 12/12 landed 58.8 s dx −7 on the strip; Manual 12/12
+  landed 57.5 s dx +75). **User clarification 27 Nov 15:46 —
+  MANUAL until ring 12, autopilot ONLY after the win:** the
+  player flies manual from the start to ring 12 (rings, racing
+  the other teams, dodging storm/tornadoes — all manual as
+  usual); the autopilot takes over ONLY after the win triggers,
+  for the smooth landing alone. This is already how v22 works:
+  the autoland input replacement lives inside `if
+  (state.autoLanding)` (flight.js line 174) and `autoLanding` is
+  set only by the win trigger (rings ≥ 12 + in the corridor) —
+  before the win the player's input passes through untouched.
+  Proven by headless test 34: 11 rings, full dive + full
+  throttle over the strip → OBEYED (crashed, autoLanding false,
+  branch CRASH); 12 rings, the SAME dive → IGNORED once the win
+  triggers (landed, kind autoland, branch WIN, touchdown dx 298
+  lat 0 speed 27.7 VS −2.4 throttle 0); 11 rings mid-race, climb
+  input 2 s → +69.3 m (70.2 → 139.5), autoLanding false, flying.
+  Honest caveats: fast/high entries
+  (68–90 m/s, 60–150 m AGL) touch down LONG — dx 769–955,
+  ground 4–11 m (eastern slope/beach, ~500–700 m past the strip
+  end) — still smooth wins, wings level, never a crash;
+  realistic entries touch down on/just past the strip (dx 2–291,
+  ground 90.3). The live proof is probe phase B2 (human-land
+  driver to the strip → win → autoland → RACE COMPLETE).
+  (flight.js, main.js, hud.js, config.js, rivals.js,
+  test/headless.test.mjs, sim-win-autoland.mjs,
+  probe-v22-live.mjs)
+- [x] **(2) Rings 1–5 forgiving + linear climb (v22, Weak 4/12 →
+  9/12).** Rings 1–5 radius 13 → 16 m (rings 6–12 stay 13 m);
+  the climb is LINEAR (50 m → approach ~145 m in even ~7.9 m
+  steps — the old exponential climb made +16/+26 m jumps);
+  early altitude jitter ±12 → ±2 m (a ±12 jitter on a 7.9 m
+  base step could still make a 32 m step); the clearance floor
+  now uses each ring's own radius; two torus + two glow
+  geometries chosen per ring; the sparkle group scales to the
+  next ring's radius. Course (seed 1): rings y = [57, 66, 75, 82,
+  90, 102, 87, 124, 101, 133, 152, 145], radius [16×5, 13×7].
+  Proof: sim-3tier Weak 9/12 score 2102 (was 4/12 score 666),
+  above the 7/12 floor; Reference 12/12 landed 61.8 s score
+  3411; Manual 12/12 landed 54.7 s; headless tests 24 (15 m
+  off-centre ring-2 crossing counts) + 25 (early steps 0–10 m)
+  + test 3 near-miss probe moved 15 → 20 m off-centre (15 m is
+  now a PASS through the 16 m ring). (config.js, rings.js,
+  test/headless.test.mjs)
+- [x] **(3) Storm deck WIDER + funnel rebuilt + thicker rain +
+  thick lightning (v22, Gemini + user 27 Nov 14:06 "awan hitam
+  LEBIH LEBAR").** The deck is now ~400 m WIDE: every course
+  position grows a CLUSTER of 3 overlapping puffs (centre lobe
+  rx 120–160 m + two satellites ±60–120 m sideways), ~45 lobes,
+  raised to y ~262 m so the deeper lobes (base ~192 m) still
+  clear the highest ring top (172 m) — the rings stay readable
+  under the deck, the deck never covers the plane. The funnel:
+  segment overlap +4×scale, a smooth outer SHEATH cone (48→6 m,
+  264 m tall, opacity 0.22, DoubleSide) unifying the silhouette,
+  and a CROWN puff cluster at the top (3 dark slate puffs, r
+  18/24/30 × scale). Rain: 30 m streaks, wind slant ×2.2, 300
+  streaks per course system, 0.38 — plus SPLASH rings on the sea
+  (4 cells × 8 rings, growing 5→40 m over 2.5 s where ground ≤
+  2 m). Lightning is now THREE parallel jagged lines (main + 2
+  echoes ±2.5 m, same jitter path) + a radial-gradient glow
+  sprite at the strike midpoint (~150 m, additive, 0.85) + flash
+  light 700 → 1500 — one ~5 m thick bolt. `tornadoCells(course,
+  groundAt)` is a pure exported layout (all 5 cells with `id`);
+  spout3 moved 70 → 60 m from ring 4. Proof: headless test 23
+  updated (deck base ~192 m; max ring top 172.5 < 190) + test 27
+  (spout3 55–75 m from ring 4; the detour target is inside its
+  kill cylinder, 40 m out is safe); cover shot 132,504 byte —
+  the deck is a wide black ceiling across the top, rain streaks
+  everywhere, thin white bolt lines visible at the left, the
+  gold ring 5 under the deck with a rival inside it, a big
+  layered funnel at the right. Honest caveat: the bolt lines in
+  the staged cover are still thin (1–2 px) — visible as a
+  zigzag, not dramatic; the live probe phase A13 polls the bolt
+  opacities at 10 Hz to prove a strike lights all 3 lines + the
+  glow. (storm.js, test/headless.test.mjs)
+- [x] **(4) ORANYE detours into the tornado in NORMAL play +
+  subtler badges (v22).** In the racing branch, ORANYE at t
+  13–18 s dashes full-throttle to the point 20 m from spout3
+  toward ring 4 (inside the 35 m kill radius, at ring-4
+  altitude ~82 m) and is killed there by the existing tornadoAt
+  check — the kill is no longer probe-only. Rival badges: sprite
+  4.0×1.7 → 3.2×1.36 m, float 2.9 → 2.7 m, opacity 0.9. Proof:
+  headless test 32 (flown flight-level: kill at t = 16.32 s,
+  spout3, y 81.0, ring 4 y 81.8, 3 rings passed); the live proof
+  is probe phase A12 (ring driver, poll `__raceEvents` for
+  'tornado-kill' to 35 s game time). (rivals.js,
+  test/headless.test.mjs, probe-v22-live.mjs)
+- [x] **(5) Cockpit dedup + ALT·MSL + WIN cue (v22, Gemini then
+  auto-win redesign).** In cockpit mode the DUPLICATED DOM HUD
+  panels hide (body `cockpit-view` + `hud.setCockpitHud(on)` —
+  top-left ALT/SPD/HDG, attitude ball, compass; the ring pointer,
+  objective, messages, score/time and fuel/throttle stay). The
+  altitude panel reads "ALT · MSL" (the v21 landing shot's "ALT
+  378 FT" vs "AGL 81 FT" contradiction is labelled away). After
+  12/12 the AGL pill becomes the WIN cue (no speed/VS threshold
+  any more — the Gemini VS-zone colours and "TOUCHDOWN READY"
+  are GONE): `SPD {kt} KT · AGL {ft} FT · {glide} · {AUTOLAND
+  READY | FLY OVER RUNWAY 09 TO WIN}`, green when lined up on
+  final, gold otherwise, and "AUTOPILOT LANDING…" once the win
+  has triggered, fed by main.js hudView's spdKt / aligned /
+  onFinal / autoLanding. The start announce and objectives now
+  say "fly over the runway to win" ("ALL RINGS — FLY OVER THE
+  RUNWAY", "FLY OVER THE RUNWAY TO WIN"); the endGame panel adds
+  "Autopilot landing — smooth touchdown!" for autoland wins.
+  Trim #242B35 → #3a4149, arch tube 0.035 → 0.03 m. Proof:
+  headless test 33 (ALT·MSL label, bare ALTITUDE gone, AUTOLAND
+  READY / FLY OVER RUNWAY 09 TO WIN / AUTOPILOT LANDING strings,
+  TOUCHDOWN READY + VS-zone colours GONE, SPD/AGL in the pill,
+  spdKt/aligned/onFinal/autoLanding in hudView, cockpit-view CSS,
+  setCockpitHud defined + called 3×); shots.mjs cockpit check
+  (topLeftHidden + attitudeHidden + compassHidden true in COCKPIT
+  VIEW, restored in CHASE VIEW); cockpit shot 129,590 byte — no
+  duplicated DOM panels in frame, 5 dials readable; landing shot
+  110,741 byte — the pill reads "SPD 109 KT · AGL 81 FT · ON
+  GLIDE · AUTOLAND READY" in green, "ALT · MSL 378 FT" at
+  top-left, objective "FLY OVER THE RUNWAY TO WIN". Honest
+  caveat: the cockpit FRAME is still thick/blocky dark grey —
+  the "cage" look Gemini criticised persists (the arch + side
+  struts are heavy); the dedup fixed the duplication, not the
+  frame. (plane.js, hud.js, game/index.html, main.js,
+  test/headless.test.mjs, shots.mjs)
+- [x] **(6) Title background alive (v22, Gemini — note (a): the
+  two gold mission lines STAY, per the user's final decision).**
+  The title camera now ORBITS — yaw 0.22 rad/s (~100° turn in
+  the 8 s staged title shot), bank 0.42 rad (~24°), y 190 → 110
+  m — so sea/beaches/hills fill the frame behind the gold text
+  and the play button instead of distant haze; the sea texture
+  drifts (offset 0.008/0.004 per s). The two gold lines, the big
+  gold play button + START and the 6 glass chips are UNCHANGED.
+  Proof: title shot 99,496 byte — gold title, two gold mission
+  lines, big gold play circle + START, 6 light chips (Shift/Ctrl
+  Throttle present), sea + beach + green hill behind, the plane
+  at the right. Honest caveat: the background is still mostly
+  empty sand/beach in the lower half and the plane sits half
+  behind the play button — the orbit moves, but the scene it
+  shows is quiet. (main.js, terrain.js)
+- [x] **(7) Landing environment (v22, Gemini).** PAPI lenses
+  0.9×0.4×0.9 → 1.6×0.7×1.6 m on 1.0 m posts; approach-light
+  domes 0.32 → 0.5 m + a NEW crossbar row at 300 m out (5 lights
+  across the centreline); a 12 m CONTROL TOWER near the hangar
+  (3×12×3 concrete shaft, 5.5×2.5×5.5 glass cab, red roof);
+  a PARKED static Caravan on the apron (buildPlane reused,
+  perp*90, nose east); the airfield tree belt 40 → 60 trees,
+  band 80–200 m (airport veg count 60 in the staged shots).
+  Proof: landing shot 110,741 byte — runway 09 with markings +
+  threshold bars + "09", denser trees around the airfield, two
+  rivals ahead, mountain silhouette. Honest caveat: the player
+  plane is BIG in the frame (tail-heavy, fills the centre) and
+  the terrain around the runway is still fairly flat green with
+  scattered trees — better than v21's "flat green slab" but
+  still simple; a small red/white object at the right edge is
+  the parked Caravan reading as a tiny toy. (terrain.js)
+- [x] **(8) Screenshots regenerated + read by the builder (v22,
+  after the auto-win redesign).**
+  shots.mjs exit 0, errors none: cover 132,504 byte (RING 4/12,
+  score 744, 0:20); cockpit 129,590 byte (RING 2/12, score 324,
+  0:12); title 99,496 byte (RING 0/12, HUD hidden); landing
+  110,741 byte (RING 12/12, score 3411, 0:47, "FLY OVER THE
+  RUNWAY TO WIN"). Veg counts: trees 355, palms 205, rocks 110,
+  bushes 320, jungle 42, cliffs 126, airport 60 (new denser belt),
+  tufts 160. Playtest: start button click works; cockpit hud
+  {topLeftHidden, attitudeHidden, compassHidden all true};
+  chase toggle back restores the panels + 'CHASE VIEW'. All four
+  screenshots were READ by the builder before reporting (see
+  (3)/(5)/(6)/(7) for the honest reading of each). (shots.mjs,
+  screenshots/1-cover.jpg, 2-cockpit.jpg, 3-start.jpg,
+  4-landing.jpg)
+- [x] **(9) Live probe v22 — DONE (B2 PASS run 9 teleported; A13 9/9; D-orbit rate 0.22 by construction).**
+  `probe-v22-live.mjs` (port 8914): phase D (title hero orbit:
+  roll 0.35–0.50, yaw rate 0.20–0.24 rad/s, y 95–125, hero camera
+  20–40 m south looking north, plane 3–25° right of centre), A8
+  (ring 2, held keys, 45 s), A9 (ring 5, taps, 60 s), C (cockpit
+  dedup live), A12 (tornado-kill in NORMAL play, no teleport —
+  PASS = event fires with victim ORANYE by 35 s game time), A13
+  (lightning visible — live poll of bolt opacities at 10 Hz for
+  20 s real time + staged cover bolt), B2 (human flight to the
+  strip + auto-win — ring driver to 12 rings, then throttle 0.3
+  / VS −5; PASS = RACE COMPLETE + landed). **Results so far
+  (rerun, log `out/v22-probe-2.log`):** D hero camera PASS
+  (28 m south, fwdZ −0.96, plane 11.7° right) + title DOM PASS;
+  D orbit roll 0.42 ✓ y 119.67 ✓ but rate 3.3 — MEASUREMENT
+  INVALID, not a game bug (only 3 rAF frames in 2 s: the bundle
+  dry-run ran concurrently and starved the browser; the rate
+  formula assumes 1/60 s per frame — re-check with
+  `probe-d-recheck.mjs`, which measures against game time);
+  A8 PASS (ring 2 at 0:12.7); A9 PASS (ring 5 at 0:24.5 — the
+  same run also saw the ORANYE tornado-kill at t=16.62); C PASS
+  (cockpit dedup); A12 PASS (tornado-kill ORANYE t=16.58, 3
+  rings, at (−910, 81, −203)). **The rerun was KILLED by a
+  runtime restart during A13 (no confirmed exit)** — A13 + B2
+  were re-proven by the focused probe `probe-v22-a13b2.mjs`
+  (same driver/helpers/thresholds, log
+  `out/v22-probe-a13b2.log`): **A13 PASS — 7 strikes in 200
+  samples / 20 s, maxOp 1, 3 lines + glow + 5 tornadoes; A13b
+  staged bolt structure PASS (op0 1, glowOp 0.85, ring 4 at
+  0:20). B2 run 1 FAIL — the blind human-land driver flew into
+  the steep western ridge and crashed at (909, 89, 115), ground
+  87.3, dx −341, 116 m short of the threshold, 3.5 s after the
+  ring-12 handoff (the plane arrived diving ~−16 m/s; the driver
+  never commands a climb). The win CORRECTLY did not trigger —
+  no false win. Driver fixed (terrain floor: climb at +3 below
+  25 m AGL while > 250 m out) in both probe files + a 3.5 s wait
+  before the landing screenshot so the RACE COMPLETE panel
+  shows. **B2 run 2 FAIL — a DIFFERENT driver failure:** A13
+  passed again, better (14 strikes, maxOp 1); A13b passed again.
+  B2: only 6 rings at 100.5 s game time, still flying, yaw 35.89
+  rad (5.7 full turns), roll 0.95 rad — the held-key ring driver
+  wound into a sustained spiral between rings 6–7 and never
+  reached 12 rings; the 400-poll loop was exhausted and the
+  human-land phase never started. Driver fixed again (B2 ring
+  phase switched to the gentler TAP driver — A9 passed ring 5
+  with taps at 24.5 s; loop cap 400 → 600, game-time cap
+  150 → 180 s for the ~14x-slow headless browser). **B2 run 3
+  FAIL — the TAP driver spiralled TOO (yaw −75.91 rad = 12 full
+  turns, roll −1.35 rad max bank, rings stalled at 6, 150.5 s
+  game time): two consecutive failures at the same ring 6→7 turn
+  with two different drivers — the pursuit controller
+  (autopilotTo + key events) is too fragile at that turn under
+  the slow browser. A13 passed a third time (8 strikes). Driver
+  fixed a third time (ANTI-SPIRAL guard in DRIVER_SRC: latch a
+  level-out past 40° bank until under 17°, both ring and tap
+  branches, never human-land). **B2 run 4 FAIL — but the guard
+  WORKED and the plane ADVANCED (6 → 8 rings):** A13 passed a
+  fourth time (10 strikes — lightning 4/4 runs: 7, 14, 8, 10).
+  B2: 8 rings at 150.5 s game time, still flying, yaw −4.75 rad
+  total (less than one turn — NO spiral), roll 0 (wings level).
+  The gentle tap+level-out flying is just SLOW (~19 s/ring at
+  rings 6–12) and the 600-poll loop was exhausted before ring 12
+  — out of time, not a spiral, not a crash. Caps raised again
+  (1000 polls, 300 s game time). **B2 run 5 KILLED by a runtime
+  restart (SIGTERM, 22.3 min, no final result):** A13 passed a
+  fifth time (14 strikes — lightning 5/5 runs: 7, 14, 8, 10, 14).
+  Four consecutive end-to-end B2 failures, ALL probe limitations
+  (blind-driver ridge crash, two spirals, out-of-time, restart
+  kill) — none a game bug. **Fallback DECIDED and implemented:**
+  B2 is now TELEPORTED to 250 m before ring 12 at its altitude
+  with 11 rings (position/yaw from the ring-12 axis, speed 55,
+  throttle 0.3); the tap driver flies it through ring 12 live,
+  then human-land flies the approach, the win triggers on
+  corridor entry, and the autopilot lands. B2-teleport proves the
+  ring-12 pass + approach + win + autoland live — NOT the full
+  course (rings 1–11 proven live by A8/A9/B2-run-1 + sims) — and
+  is reported honestly as such. **B2-teleport run 6 FAIL — the
+  teleport was INCOMPLETE (a probe bug, not a game bug):** A13
+  passed a sixth time (9 strikes — lightning 6/6 runs: 7, 14, 8,
+  10, 14, 9). B2: rings STUCK at 11 for 250.75 s, final pos
+  (−1566, 100, −180) — BACK AT SPAWN — yaw −23.21 rad. Cause,
+  read from rings.js: the course keeps TWO counters — the
+  flight's ringsPassed (read by the win trigger + HUD) AND the
+  course's internal progress (nextIndex + per-ring passed flags,
+  read by nextRing()/checkPass()). The teleport set only
+  ringsPassed = 11, so nextRing() still returned RING 1 and the
+  tap driver flew the plane 2000 m WEST back to it. Fix (both
+  probe files): the teleport now also calls
+  D.course.setProgress(11), which sets nextIndex = 11 and marks
+  rings 0–10 passed. **B2-teleport run 7 SO CLOSE — failed in the
+  last 78 m (taps lost between frames):** A13 passed a seventh
+  time (11 strikes — lightning 7/7 runs: 7, 14, 8, 10, 14, 9, 11).
+  B2: the teleport WORKED (ring 12 passed, switched to human-land
+  at 4.7 s), but crashed at 21.17 s, pos (1238, 92, 42), speed 18,
+  yaw 1.70, roll 0.17. The plane entered the corridor
+  longitudinally (dx −12, inside |dx| < 250) but at lat −78
+  (outside |lat| < 24) — it flew parallel to the strip 78 m south
+  of the centreline and touched down beside the runway; the win
+  correctly did not trigger. Cause: the browser runs at ~35x
+  slowdown (~2 fps), so most 250 ms PWM taps fall BETWEEN frames
+  and never reach the game — yaw corrected only 0.14 rad in 16.5 s
+  game time (1.84 → 1.70, needed 1.57) and speed bled 55 → 18 m/s
+  (below stall 24), collapsing turn authority. Driver fixed
+  (both probe files): human-land switched from PWM taps to HELD
+  keys (thresholds p/r > 0.1 — bang-bang but starvation-proof) and
+  the ring-12 leg switched from 'tap' to the held-key 'ring'
+  driver. (One edit briefly landed in the wrong phase — the B2
+  comment + driver change hit A9 instead — and was reverted;
+  A9 tap / B2 ring verified by grep.) **B2-teleport run 8
+  FAILED 64 m off centreline the OTHER way (leaked driver keys
+  across the switch):** A13 passed an eighth time (8 strikes —
+  lightning 8/8 runs: 7, 14, 8, 10, 14, 9, 11, 8). B2: switched
+  to human-land at 5.0 s, crashed at 11.2 s, pos (1047, 92, 184),
+  speed 52.3 (no speed bleed — held keys worked for pitch and
+  throttle), yaw 1.82, roll −0.34. Inside the corridor
+  longitudinally (dx −203) but lat +64 (outside |lat| < 24) — 64 m
+  NORTH of the centreline this time; the win correctly did not
+  trigger. Root cause, read from the driver code: `startDriver`
+  re-evaluates DRIVER_SRC — a fresh closure with an empty `held`
+  set — WITHOUT releasing the old driver's keys, so the old keys
+  are never given a keyup and the game holds them down forever;
+  the new driver's opposite key then cancels out and the plane
+  flies straight whatever the new driver commands. Evidence: yaw
+  barely moved (1.84 → 1.82 in 6.2 s) although roll reached −0.34.
+  This also explains run 7 (yaw only 0.14 rad in 16.5 s — not
+  just lost taps) and possibly run 1's ridge crash. Fix (both
+  probe files): `startDriver` now calls `window.__kbStop()` FIRST
+  (clears the old timer + sends keyup for every key in the old
+  held set) before evaluating the fresh DRIVER_SRC. **B2-teleport
+  run 9 PASS=true (27 Nov ~20:00, log `out/v22-probe-a13b2-9.log`,
+  exit 0, ~13 min):** A13 passed a ninth time (**11 strikes** —
+  lightning **9/9 runs: 7, 14, 8, 10, 14, 9, 11, 8, 11**, maxOp 1
+  every time); A13b passed a ninth time (structure 3 lines + glow,
+  op0=1, glowOp=0.85, elapsed 20, rings 4). B2: switched to
+  human-land at 5.0 s; **status 'landed', rings 12, raceComplete
+  TRUE, elapsed 19.98 s, pos (1296, 92, 124), speed 7.94 (rollout
+  complete, < 8 m/s), yaw 1.51 (runway heading 1.571 — nearly
+  aligned), roll 0 (wings level), lat +4 (essentially ON
+  centreline), dx +46 (on the strip, just past centre)**; errors
+  none. (pollState `landed: false` is EXPECTED — the 12-ring end
+  screen shows 'RACE COMPLETE!', not 'Landed!'.) **B2 is
+  TELEPORTED, not end-to-end** — rings 1–11 proven live by
+  A8/A9/B2-run-1 + sims; reported honestly as such. **D-orbit:
+  rate proven 0.22 rad/s BY CONSTRUCTION, not by the probe's
+  original formula** — main.js title branch adds `s.yaw += 0.22 *
+  STEP` per fixed step; under starvation each rAF frame runs up to
+  15 steps (MAX_FRAME 0.25 s clamp), so the correct rate under
+  starvation is dyaw / (frames × 0.25): rerun 0.165/0.75 = 0.22,
+  re-check v1 0.275/1.25 = 0.22 — both EXACTLY 0.22, in range
+  0.20–0.24; roll 0.42 ✓, y 119.67/117.62 ✓ (95–125).
+  `probe-d-recheck.mjs` was rewritten clamp-aware but **NOT re-run
+  — parent stop order 27 Nov 19:25 WIB ("STOP — hentikan loop
+  probe B2... tanpa probe tambahan")**; the D rate stands on the
+  code-level proof above. **Cover-bolt screenshot re-read after
+  run 9 rewrote it** (`live-shots/v22-live-cover-bolt.jpg`, now
+  124,550 byte): lightning now reads as THREE parallel thin white
+  zigzag lines at left (deck → sea) — clearer than run 1's two
+  lines, still thin (1–2 px) and edge-placed, not dramatic/thick;
+  ring 5 gold + rival inside it, big layered funnel at right, deck
+  wide above, rain everywhere. **Landing screenshot read**
+  (`live-shots/v22-live-landing.jpg`, 99,680 byte): '🏁 RACE
+  COMPLETE!' gold panel dominant + Position 1/5, Score 3081, Time
+  0:19, 'Autopilot landing — smooth touchdown!', 'AUTOPILOT
+  LANDING…' green pill, confetti, plane ON the runway asphalt at
+  right (tail + wing visible, slightly cut at frame edge), ALT·MSL
+  302 FT, SPEED 15 KTS (7.9 m/s ✓), HEADING 087°, RING 12/12 —
+  exactly the win moment the user asked for; plane intact, no
+  explosion.**
+  (probe-v22-live.mjs, probe-v22-a13b2.mjs,
+  probe-d-recheck.mjs, live-shots/v22-live-*.jpg)
+- [x] **(10) Verification numbers (v22, all Node, after the
+  auto-win redesign).** Headless **33/33 ALL PASS** (log
+  `out/v22-headless-9.log` — 32/32 in `out/v22-headless-8.log`
+  before test 34 was added for the 27 Nov 15:46 manual-until-win
+  clarification). Sim-3tier **ALL PASS** (Reference
+  12/12 landed 58.8 s score 3411; Weak 9/12 score 2102; Idle
+  crashed 39.4 s; Manual 12/12 landed 57.5 s — log
+  `out/v22-sim3tier-5.log`). Sim-win-autoland **ALL PASS 14/14**
+  (10 WIN profiles + 4 negative profiles — log
+  `out/v22-win-autoland-2.log`). The superseded sims
+  (sim-land-profiles, sim-landing-gemini) are DELETED — their
+  numbers (12/12, 8/8) described the Gemini touchdown tiers
+  that no longer exist. Entrypoint 2× byte-identical (dossier sha
+  33a30ea0abe26a017b8e721517f6f24a846b8c950a00087202aae53517b11868,
+  797,824 byte; entrypoint total 2,437,867 byte — logs
+  `out/v22-entrypoint-1.log`, `out/v22-entrypoint-2.log`) +
+  bundle dry-run --repo exit 0, "dry run: nothing written", 26
+  sessions, 0 usage rows (known turn-boundary issue — log
+  `out/v22-bundle-dryrun.log`) + live probe (item 9). Re-verified
+  27 Nov ~20:30 (parent stop order, final steps): entrypoint run a
+  third + fourth time into out-a/out-b — SAME dossier sha
+  33a30ea0…, 797,824 byte, total 2,437,867 byte (logs
+  `out/v22-entrypoint-a.log`, `out/v22-entrypoint-b.log`); out-a /
+  out-b deleted after comparison. Local commit: see the gate file /
+  the builder's final report.
+
 ## What changed in v21 (vs v20) — all patched on top of v20
 
 - [x] **(1) Cover ≠ landing — a NEW cover moment.** `PLAY_SECONDS`

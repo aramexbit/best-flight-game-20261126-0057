@@ -411,3 +411,161 @@ an outside blind test. v20 is not submitted by the builder.
   Sim-3tier ALL PASS (unchanged numbers — the deck/rain/lightning
   are visual only).
   live probe gains phase A11 (tornado kill, visual screenshot).
+
+## v22 (Gemini v21 blind-test fixes + user P0 landing bug + wider storm deck)
+
+- Blind test v21 (Gemini) verdict NO — Cover 5.5 / Cockpit 5.0 /
+  Title 5.0 / Landing 6.0. The criticism: storm clouds + funnel
+  like coarse faceted grey blobs/cones, rain thin and disconnected
+  from sky/water; the cockpit a boxy flat-shaded frame with gaps,
+  dials cluttered, clashing with the outer HUD; the title empty /
+  pasted-together, the plane parked awkwardly on the shoreline,
+  two subtitle lines competing with the horizon/sand; the landing
+  terrain a flat green slab with sparse small trees, ALT 378 FT
+  vs AGL 81 FT reading as contradictory. Live playtest v21
+  (27 Nov 13:20–13:53) added: lightning NEVER visible in any
+  screenshot; tornado-kill NOT observed in ±8 min of normal play
+  (rivals stayed in formation); ring 2 missed 6/6 on the random
+  course; manual landing never reached by the tester. And the
+  user's own playtest 27 Nov 14:04: "finishnya masih hancur,
+  tidak menang" — a manual landing to win STILL crashed on v21,
+  although the probe landed. The user's playtest decides pass.
+- RINGS FORGIVING (v22): rings 1–5 radius 13 → 16 m (rings 6–12
+  stay 13 m); the climb is now LINEAR (50 m → approach ~145 m in
+  even ~7.9 m steps — the old exponential climb made +16/+26 m
+  jumps); early altitude jitter ±12 → ±2 m. The Weak sim returns
+  4/12 → 9/12 (score 666 → 2102), above the 7/12 floor. New
+  headless tests 24 (16 m early rings, 15 m off-centre counts) +
+  25 (early steps 0–10 m). Course (seed 1): rings
+  y = [57, 66, 75, 82, 90, 102, 87, 124, 101, 133, 152, 145].
+- STORM (v22, Gemini + user 27 Nov 14:06 "awan hitam LEBIH
+  LEBAR"): the deck is now ~400 m WIDE — every course position
+  grows a CLUSTER of 3 overlapping puffs (centre lobe rx 120–160
+  m + two satellites ±60–120 m sideways), ~45 lobes, raised to
+  y ~262 m so the deeper lobes (base ~192 m) still clear the
+  highest ring top (172 m). The funnel is rebuilt as a vortex:
+  segment overlap +4×scale, a smooth outer SHEATH cone (48→6 m,
+  264 m, opacity 0.22, DoubleSide) unifying the silhouette, and a
+  CROWN puff cluster at the top (3 dark slate puffs). Rain: 30 m
+  streaks, wind slant ×2.2, 300 streaks per course system, 0.38 —
+  plus SPLASH rings on the sea (4 cells × 8 rings, growing 5→40 m
+  over 2.5 s where ground ≤ 2 m). Lightning is now THREE parallel
+  jagged lines (main + 2 echoes ±2.5 m) + a radial-gradient glow
+  sprite at the strike midpoint + flash light 700 → 1500, so a
+  strike reads as one ~5 m thick bolt. `tornadoCells(course,
+  groundAt)` is a pure exported layout (all 5 cells with `id`);
+  spout3 moved 70 → 60 m from ring 4. New headless test 27
+  (spout3 55–75 m from ring 4; the detour target is inside its
+  kill cylinder).
+- RIVALS (v22): ORANYE now DETOURS into the tornado in NORMAL
+  play — at t 13–18 s it dashes full-throttle to the point 20 m
+  from spout3 toward ring 4 (inside the 35 m kill radius, at
+  ring-4 altitude) and is killed there (headless test 32: kill
+  at t = 16.32 s, spout3, y 81.0, ring 4 y 81.8, 3 rings passed).
+  Rival badges are subtler (sprite 3.2×1.36 m, float 2.7 m,
+  opacity 0.9).
+- COCKPIT DEDUP + ALT·MSL (v22, Gemini): in cockpit mode the
+  duplicated DOM HUD panels hide (body `cockpit-view` + 
+  `hud.setCockpitHud(on)` — top-left ALT/SPD/HDG, attitude ball,
+  compass; the ring pointer, objective, messages, score/time and
+  fuel/throttle stay). The altitude panel reads "ALT · MSL"
+  (the v21 "ALT 378 FT" vs "AGL 81 FT" contradiction is labelled
+  away). Trim #242B35 → #3a4149, arch tube 0.035 → 0.03 m.
+- TITLE BACKGROUND (v22, Gemini — note (a): the two gold mission
+  lines are the user's final decision and STAY): the title camera
+  now ORBITS — yaw 0.22 rad/s, bank 0.42 rad, y 190 → 110 m — so
+  the sea/beaches/hills fill the frame behind the gold text and
+  the play button; the sea texture drifts (offset 0.008/0.004/s).
+- LANDING ENVIRONMENT (v22, Gemini): PAPI lenses 1.6×0.7×1.6 m
+  on 1.0 m posts; approach-light domes 0.5 m + a NEW crossbar row
+  at 300 m out (5 lights across the centreline); a 12 m CONTROL
+  TOWER by the hangar (concrete shaft + glass cab + red roof);
+  a PARKED static Caravan on the apron (buildPlane reused);
+  the airfield tree belt 40 → 60 trees, band 80–200 m (airport
+  veg count 60 in the staged shots).
+- AUTO-WIN + AUTOPILOT LANDING (v22, user decision 27 Nov 15:09 —
+  REPLACES the Gemini manual-landing fix above, which was
+  implemented, verified, then REMOVED): user: "ga usah mendarat
+  — ketika sudah berada di atas aspal garis finish otomatis
+  menang... buat tidak mendarat saja asal sudah berada di garis
+  finish otomatis menang dan secara autopilot mendarat dengan
+  mulus." The 15:11 clarification changes the diagnosis: the
+  PLAYER's plane never exploded — what exploded were RIVAL planes
+  (scripted dive/clip/collision/tornado-kill); the player's plane
+  stayed intact but WIN never triggered. So the real bug was the
+  win condition, not the player's touchdown. The Gemini numbers
+  (speed 78, VS −16.5, hard landing, cushion, tiers) are NO
+  LONGER used for the win condition; sim-land-profiles +
+  sim-landing-gemini are DELETED as superseded. The new design:
+  - After 12/12 rings, the moment the plane enters the runway 09
+    corridor (|dx| < 250 m, |lat| < 24 m) the win triggers
+    (`state.autoLanding`, logged `[win] {...}`) — NO speed/VS/
+    pitch threshold at all. **User clarification 27 Nov 15:46 —
+    MANUAL until ring 12, autopilot ONLY after the win:** the
+    player flies manual from the start to ring 12 (rings, racing
+    the other teams, dodging storm/tornadoes — all manual as
+    usual); the autopilot takes over ONLY after the win triggers,
+    for the smooth landing alone. In code this is already the
+    case: the autoland input replacement lives inside `if
+    (state.autoLanding)` (flight.js line 174) and `autoLanding`
+    is set only by the win trigger — before the win the player's
+    input passes through untouched. Proven by headless test 34
+    (11 rings: dive obeyed → crash, no rescue; climb input
+    climbs +69.3 m in 2 s; 12 rings: the same dive ignored →
+    autoland WIN).
+  - The AUTOPILOT takes over the input: steep VS-hold −9/−7/−2.5
+    (measured: the gentle −6/−5/−1.5 descent floats ~500 m
+    longer), heading-hold + cross-track roll law (never a far
+    steering point — the first build steered 500 m past the
+    centre and the plane touched down banked −0.58..−0.81 rad
+    turning back), throttle idle. Ground contact pins the plane
+    to the deck, speed bleeds 6 m/s per s, pitch/roll damped to 0,
+    a pinned ROLLOUT block (without it the rollout stretched ~300
+    m over the eastern downslope) ends the run below 8 m/s →
+    'landed' + EVENT_LAND + touchdown telemetry branch 'WIN'
+    kind 'autoland'.
+  - Crash checks are DISABLED after the win triggers — the plane
+    can NEVER explode during the autopilot landing, in any
+    condition. Crash checks during the race (rings, terrain,
+    tornado, rivals) are UNCHANGED.
+  - Rival explosions are ALWAYS the other teams' planes (user
+    15:13: "Efek dramatisnya itu ledakan pesawat musuh, bukan
+    pesawat kita" + "bukan pesawat musuh tapi pesawat team lain
+    karena itu bukan pesawat tempur") — the final-event gate
+    pauses scripted rival explosions once the player has 12/12
+    rings (rivals.js `playerOnFinal`), and rival crashes are
+    announced by team name ("💥 KUNING + HIJAU MID-AIR
+    COLLISION!", "💥 <name> CRASHED!"). No "musuh/enemy" text
+    anywhere in the game (verified by grep — only "angle of
+    attack", a flight term).
+  - HUD WIN cue after 12/12 (hud.js + main.js hudView): `SPD
+    {kt} KT · AGL {ft} FT · {glide} · {AUTOLAND READY | FLY OVER
+    RUNWAY 09 TO WIN}`, green when lined up on final, gold
+    otherwise, "AUTOPILOT LANDING…" once the win has triggered.
+    The objectives now say "FLY OVER THE RUNWAY TO WIN"; the
+    endGame panel adds "Autopilot landing — smooth touchdown!".
+  - `state.landingKind`: 'autoland' | null (the old
+    runway/finish/hard/offfield tiers are gone).
+  - Score: `hardLandingPenalty: 100` REMOVED from config.js.
+  - VERIFICATION: sim-win-autoland 14/14 ALL PASS (10 WIN
+    profiles incl. 68 m/s fast, 90 m/s dive, VS −32 plunge,
+    150 m high entry, 30° angled entry — all WIN, wings level at
+    touchdown, roll 0–0.02 rad; 4 negative profiles: 11 rings no
+    win, 300 m short crash, sea ditch crash, 0 rings crash).
+    Headless 32/32 (tests 19/20/28–31 rewritten for the win;
+    test 33 now asserts the WIN cue + the old VS-zone colours
+    and TOUCHDOWN READY are GONE). Sim-3tier ALL PASS (Reference
+    12/12 landed 58.8 s score 3411; Weak 9/12 score 2102; Idle
+    crashed 39.4 s; Manual 12/12 landed 57.5 s).
+  - HONEST CAVEATS (v22): fast/high entries (68–90 m/s, 60–150 m
+    AGL) touch down LONG — dx 769–955, ground 4–11 m (eastern
+    slope/beach, ~500–700 m past the strip end) — still smooth
+    wins, wings level, never a crash; realistic entries touch
+    down on/just past the strip (dx 2–291, ground 90.3).
+- Verification: headless 32/32, sim-3tier ALL PASS, sim-win-
+  autoland ALL PASS 14/14, shots.mjs exit 0 (4 new screenshots,
+  errors none), live probe probe-v22-live.mjs (phases D-title/
+  A8-ring2-held/A9-ring5-taps/C-cockpit-dedup/A12-tornado-kill-
+  normal-play/A13-lightning/B2-human-flight-to-the-strip +
+  auto-win). v22 is not submitted by the builder.
+  Deadline 28 Nov 07:57 WIB — v22 is the LAST big iteration.

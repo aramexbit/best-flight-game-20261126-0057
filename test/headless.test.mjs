@@ -31,21 +31,68 @@
 //  18. Legs 1-5 are long and gentle (v21: guards the ring-5
 //      softening — every early leg >= 200 m, every turn into rings
 //      2-5 < 29°).
-//  19. A human landing at throttle 0.3, VS -5, wings level, on the
-//      strip, WINS (v21b: the user's manual landing crashed on speed
-//      alone — 107 kts vs the 50 m/s finish-zone cap — so the
-//      finish-zone tolerances are now 62 m/s / 12 m/s / 0.45 rad).
-//  20. A full-throttle arrival still crashes, and the natural steep
-//      descent from ring 12 (VS -11) at throttle 0.3 now lands (v21b:
-//      the widened window must not make every arrival a win).
+//  19. A human flight to the strip at throttle 0.3, VS -5, WINS
+//      after 12 rings (v22 auto-win: the win triggers on corridor
+//      entry, the autopilot lands — there is no manual touchdown
+//      and no speed/VS threshold any more).
+//  20. v22 auto-win: a full-throttle LEVEL arrival WINS (the win
+//      triggers over the strip, the autopilot lands it as
+//      'autoland'); the steep -11 m/s descent at 0.3 also wins.
+//      A diving arrival (speed 85+ / VS -25) wins too now — the
+//      autopilot never explodes, in any condition (tested in 31).
+//  24. Early rings are 16 m and a 15 m off-centre ring-2 crossing
+//      counts (v22: Weak diag near-misses at 14.6-19.7 m must pass).
+//  25. Linear climb: early ring steps are all <= 10 m (v22).
+//  27. tornadoCells: spout3 near ring 4; the ORANYE detour target
+//      (20 m from spout3 toward ring 4) is inside its kill cylinder.
+//  28. Throttle-on level arrival (75 m/s, VS -5, 12 rings) WINS as
+//      'autoland' (v22 auto-win — the exact profile that crashed
+//      the user's own landing on v21; the win triggers the moment
+//      the plane is over the strip, and the autopilot lands it).
+//  29. Steep descents win: VS -14 from 300 m short and VS -18 from
+//      320 m short fly into the corridor and win; an 80 m/s /
+//      VS -20 dive over the strip wins too — the autopilot never
+//      explodes, in any condition. Telemetry branch asserted (WIN).
+//  30. Lateral + water: a touchdown 60 m off the centreline
+//      CRASHES (it is not over the asphalt); 100 m off the
+//      centreline on land CRASHES; a gentle touchdown in the open
+//      sea CRASHES; flying over the strip at lat +20 WINS as
+//      'autoland'.
+//  31. Guards: a 95 m/s dive over the strip WINS (the autopilot
+//      saves it); a fast touchdown on the strip BEFORE all 12 rings
+//      crashes (the win stays gated to 12 rings); a touchdown 300 m
+//      short of the strip crashes; flying over the strip with 11
+//      rings does NOT trigger the win (still flying after 3 s).
+//  32. The ORANYE detour, flown: a rival starting 15 m ahead of the
+//      player, racing at ~0.88 throttle and dashing full-throttle at
+//      the detour target in t 13-18 s, is KILLED by spout3 inside the
+//      window, at ring-4 altitude (v22 — the v21 kill only ever fired
+//      in the probe; this proves the scripted detour reaches the
+//      funnel in normal play).
+//  33. ALT vs AGL read consistent (v22): the top-left altitude
+//      panel is labelled "ALT · MSL" (not bare ALTITUDE); after
+//      12/12 the AGL pill becomes the WIN cue — SPD in knots, AGL
+//      in feet, glide verdict, "AUTOLAND READY" when lined up on
+//      final / "FLY OVER RUNWAY 09 TO WIN" otherwise, and
+//      "AUTOPILOT LANDING…" once the win has triggered — fed by
+//      main.js hudView's spdKt / aligned / autoLanding fields; and
+//      the cockpit HUD dedup (hud.setCockpitHud +
+//      body.cockpit-view rules) is wired at the C toggle, startGame
+//      and the staged cockpit shot.
+//  34. Manual until the win, autopilot ONLY after it (v22, user
+//      27 Nov 15:46): with 11 rings the player's dive over the
+//      strip is OBEYED (it crashes — no rescue) and a climb input
+//      actually climbs the plane; with 12 rings the SAME dive is
+//      IGNORED once the win triggers and the autopilot lands it.
 // Run: node test/headless.test.mjs   (exit 0 = all pass)
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRandom } from '../game/src/random.js';
 import { planIslands, createGroundAt } from '../game/src/terrain.js';
 import { createCourse } from '../game/src/rings.js';
 import { createFlight } from '../game/src/flight.js';
 import { STEP, COURSE } from '../game/src/config.js';
-import { gustAt, tornadoAt } from '../game/src/storm.js';
+import { gustAt, tornadoAt, tornadoCells } from '../game/src/storm.js';
 import { collisionGate } from '../game/src/collision.js';
 import { autopilotTo } from '../game/src/shots.js';
 
@@ -141,16 +188,19 @@ check('clear miss does not count', () => {
   console.log(`  centre=${pass.centre.toFixed(2)} m (radius ${ring.radius} m)`);
 });
 
-check('near-miss (15 m off-centre) is a near-miss', () => {
+check('near-miss (20 m off-centre) is a near-miss', () => {
   const course = buildCourse();
   const ring = course.nextRing();
   const ax = ring.axis;
+  // v22: ring 1 is 16 m now (was 13), so the near-miss probe moves
+  // from 15 m to 20 m off-centre — 15 m is a PASS through the bigger
+  // opening, and 20 m sits inside the 1.7x near-miss band (27.2 m).
   const perp = { x: -ax.z, y: 0, z: ax.x };
-  const prev = { x: ring.x - ax.x * 10 + perp.x * 15, y: ring.y - ax.y * 10, z: ring.z - ax.z * 10 + perp.z * 15 };
-  const pos = { x: ring.x + ax.x * 10 + perp.x * 15, y: ring.y + ax.y * 10, z: ring.z + ax.z * 10 + perp.z * 15 };
+  const prev = { x: ring.x - ax.x * 10 + perp.x * 20, y: ring.y - ax.y * 10, z: ring.z - ax.z * 10 + perp.z * 20 };
+  const pos = { x: ring.x + ax.x * 10 + perp.x * 20, y: ring.y + ax.y * 10, z: ring.z + ax.z * 10 + perp.z * 20 };
   const pass = course.checkPass(prev, pos);
   assert.ok(pass && !pass.passed && pass.nearMiss, `expected a near-miss, got ${JSON.stringify(pass)}`);
-  console.log(`  centre=${pass.centre.toFixed(2)} m bonus=${pass.bonus}`);
+  console.log(`  centre=${pass.centre.toFixed(2)} m bonus=${pass.bonus} (ring radius ${ring.radius} m)`);
 });
 
 // --- 4. Collision gate ---------------------------------------------------
@@ -477,21 +527,17 @@ check('legs 1-5 >= 200 m with turns < 29 deg into rings 2-5', () => {
   assert.ok(maxTurn < 0.5, `sharpest early turn is ${(maxTurn * 180 / Math.PI).toFixed(1)}° (limit 29°)`);
 });
 
-// --- 19 + 20. Human landings after ring 12 (v21b) --------------------
+// --- 19 + 20. Human flights to the strip after ring 12 (v22 auto-win) --
 // The user's own playtest (27 Nov 09:39 WIB) crashed on a manual
-// landing to win. The reproduction proved a wings-level,
-// on-centreline, on-strip touchdown at throttle 0.3 fails on speed
-// alone (107 kts = 55 m/s vs the 50 m/s finish-zone cap — the plane
-// cruises at 105 kts at throttle 0.3, so a human who slows down
-// naturally still arrives too fast), and the natural descent from
-// ring 12 (55 m over ~300 m) at cruise speed is VS -11 m/s vs the
-// 8 cap. The finish-zone tolerances are now 62 m/s / 12 m/s /
-// 0.45 rad pitch. The human controller below is the sim's land
+// landing to win — and the 27 Nov 15:11 clarification says the
+// player's plane never exploded at all; the win simply never
+// triggered. So there is no manual touchdown any more: the human
+// controller below flies the plane TO the strip (the sim's land
 // regulator with a human's throttle + VS targets: cross-track roll
-// (aim 500 m PAST the runway, never at the centre — aiming at the
-// centre makes the target jump behind the plane once it flies past
-// it and commands a max-bank U-turn), VS-hold pitch, throttle
-// slewed to a target (Shift/Ctrl held).
+// aiming 500 m PAST the runway, VS-hold pitch, throttle slewed to
+// a target), the win triggers on corridor entry, and the autopilot
+// lands. The tests assert the WIN (autoLanding + 'autoland' +
+// branch WIN), not just "landed".
 function humanLandInput(flight, runway, targetVS, throttleTarget) {
   const s = flight.state;
   const farX = runway.x + runway.dirX * 500;
@@ -530,20 +576,32 @@ function flyRingsThenLand(targetVS, throttleTarget) {
   return { s, runway: course.runway };
 }
 
-check('human landing at throttle 0.3, VS -5, wins after 12 rings', () => {
+check('human flight to the strip at throttle 0.3, VS -5, wins after 12 rings', () => {
   const { s, runway } = flyRingsThenLand(-5, 0.3);
-  console.log(`  status=${s.status} rings=${s.ringsPassed} td(x${Math.round(s.x - runway.x)}/z${Math.round(s.z - runway.z)}) spd=${Math.round(s.speed * 1.94)} kts VS=${s.verticalSpeed.toFixed(1)}`);
+  console.log(`  status=${s.status} autoLanding=${s.autoLanding} kind=${s.landingKind} branch=${s.touchdown ? s.touchdown.branch : '-'} rings=${s.ringsPassed} td(x${Math.round(s.x - runway.x)}/z${Math.round(s.z - runway.z)}) spd=${Math.round(s.speed * 1.94)} kts VS=${s.verticalSpeed.toFixed(1)}`);
   assert.equal(s.ringsPassed, 12, `passed ${s.ringsPassed} rings (expected 12)`);
-  assert.equal(s.status, 'landed', `human landing at 0.3 throttle ${s.status} (expected landed)`);
+  assert.equal(s.autoLanding, true, 'win should have triggered over the runway (autoLanding)');
+  assert.equal(s.status, 'landed', `human flight at 0.3 throttle ${s.status} (expected landed)`);
+  assert.equal(s.landingKind, 'autoland', `human flight kind=${s.landingKind} (expected autoland)`);
+  assert.equal(s.touchdown.branch, 'WIN', `human flight branch=${s.touchdown.branch} (expected WIN)`);
 });
 
-check('full-throttle arrival still crashes; steep -11 m/s at 0.3 lands', () => {
+check('full-throttle LEVEL arrival wins; steep -11 m/s at 0.3 wins', () => {
   const fast = flyRingsThenLand(-5, 0.72);
-  console.log(`  full-throttle: status=${fast.s.status} spd=${Math.round(fast.s.speed * 1.94)} kts`);
-  assert.equal(fast.s.status, 'crashed', `full-throttle arrival ${fast.s.status} (expected crashed)`);
+  console.log(`  full-throttle level: status=${fast.s.status} autoLanding=${fast.s.autoLanding} kind=${fast.s.landingKind} branch=${fast.s.touchdown ? fast.s.touchdown.branch : '-'} spd=${Math.round(fast.s.speed * 1.94)} kts`);
+  assert.equal(fast.s.status, 'landed', `full-throttle level arrival ${fast.s.status} (expected landed)`);
+  // v22 auto-win: a throttle-on arrival WINS instead of crashing
+  // (v21: the 62 m/s cap killed it at 75 m/s). The win triggers
+  // over the strip and the autopilot lands it — the kind is
+  // 'autoland' and the branch is WIN, whatever the approach was.
+  assert.equal(fast.s.autoLanding, true, 'full-throttle level arrival should have triggered the win');
+  assert.equal(fast.s.touchdown.branch, 'WIN', `full-throttle level arrival branch=${fast.s.touchdown.branch} (expected WIN)`);
+  assert.equal(fast.s.landingKind, 'autoland', `full-throttle level arrival kind=${fast.s.landingKind} (expected autoland)`);
   const steep = flyRingsThenLand(-11, 0.3);
-  console.log(`  steep -11: status=${steep.s.status} spd=${Math.round(steep.s.speed * 1.94)} kts VS=${steep.s.verticalSpeed.toFixed(1)}`);
-  assert.equal(steep.s.status, 'landed', `steep -11 m/s landing at 0.3 throttle ${steep.s.status} (expected landed)`);
+  console.log(`  steep -11: status=${steep.s.status} kind=${steep.s.landingKind} branch=${steep.s.touchdown ? steep.s.touchdown.branch : '-'} spd=${Math.round(steep.s.speed * 1.94)} kts VS=${steep.s.verticalSpeed.toFixed(1)}`);
+  assert.equal(steep.s.status, 'landed', `steep -11 m/s at 0.3 throttle ${steep.s.status} (expected landed)`);
+  assert.equal(steep.s.landingKind, 'autoland', `steep -11 kind=${steep.s.landingKind} (expected autoland)`);
+  assert.equal(steep.s.touchdown.branch, 'WIN', `steep -11 branch=${steep.s.touchdown.branch} (expected WIN)`);
 });
 
 // --- 21. Tornado kill cylinder (v21c: user 27 Nov 10:17) ---------------
@@ -594,19 +652,389 @@ check('low start: spawn AGL 40-60 m, early rings low and climbing, ridges flank 
 });
 
 // --- 23. Rings sit below the storm deck (v21d: user 27 Nov 11:49) ------
-// The storm deck's base is ~196 m (lobe y 248 minus rx x y-scale);
-// every ring's top (y + ring radius) must sit below it, so the
-// rings are UNDER the black clouds and stay readable — a regression
-// guard: if the course is ever raised, this fails before the rings
-// poke into the deck.
+// The storm deck's base is ~192 m (v22: lobe y 262, deepest lobe
+// 58 m); every ring's top (y + ring radius) must sit below it, so
+// the rings are UNDER the black clouds and stay readable — a
+// regression guard: if the course is ever raised, this fails before
+// the rings poke into the deck.
 check('rings sit below the storm deck base', () => {
   const course = buildCourse();
   let maxTop = -Infinity;
-  for (const r of course.rings) maxTop = Math.max(maxTop, r.y + COURSE.ringRadius);
-  console.log(`  highest ring top=${maxTop.toFixed(1)} (deck base ~196)`);
-  assert.ok(maxTop < 190, `highest ring top ${maxTop.toFixed(1)} (expected < 190, below the deck base ~196)`);
+  for (const r of course.rings) maxTop = Math.max(maxTop, r.y + r.radius);
+  console.log(`  highest ring top=${maxTop.toFixed(1)} (deck base ~192)`);
+  assert.ok(maxTop < 190, `highest ring top ${maxTop.toFixed(1)} (expected < 190, below the deck base ~192)`);
 });
 
-console.log(`\n${passed}/23 headless tests passed`);
+// --- 24. Early rings are forgiving (v22) --------------------------------
+// Rings 1-5 are 16 m (was 13 m): a 15 m off-centre crossing of ring 2
+// COUNTS as a pass now (it was a near-miss at 13 m — the Weak diag's
+// ring-3 misses at 14.6/15.1 m and ring-4's at 18.5 m are the same
+// story). Rings 6-12 stay 13 m.
+check('early rings are 16 m and a 15 m off-centre ring-2 crossing counts', () => {
+  const course = buildCourse();
+  for (let i = 0; i < 5; i += 1) {
+    assert.equal(course.rings[i].radius, 16, `ring ${i + 1} radius ${course.rings[i].radius} (expected 16)`);
+  }
+  for (let i = 5; i < 12; i += 1) {
+    assert.equal(course.rings[i].radius, 13, `ring ${i + 1} radius ${course.rings[i].radius} (expected 13)`);
+  }
+  course.setProgress(1); // next ring is ring 2
+  const ring = course.nextRing();
+  const ax = ring.axis;
+  const perp = { x: -ax.z, y: 0, z: ax.x };
+  const prev = { x: ring.x - ax.x * 10 + perp.x * 15, y: ring.y - ax.y * 10, z: ring.z - ax.z * 10 + perp.z * 15 };
+  const pos = { x: ring.x + ax.x * 10 + perp.x * 15, y: ring.y + ax.y * 10, z: ring.z + ax.z * 10 + perp.z * 15 };
+  const pass = course.checkPass(prev, pos);
+  assert.ok(pass && pass.passed, `15 m off-centre ring 2 expected a pass, got ${JSON.stringify(pass)}`);
+  console.log(`  ring 2 centre=${pass.centre.toFixed(2)} m radius=${ring.radius} m — counts`);
+});
+
+// --- 25. Linear climb (v22) ----------------------------------------------
+// The course climbs in even ~8 m steps (was +16, +26 m jumps from the
+// exponential lerp): every step between consecutive EARLY rings
+// (1-2, 2-3, 3-4, 4-5) is <= 10 m, so the Weak pilot can track the
+// climb instead of orbiting ring 5. Final heights (after the clearance
+// passes) are what the pilot flies, so they are what is measured.
+check('linear climb: early ring steps are all <= 10 m', () => {
+  const course = buildCourse();
+  const ys = course.rings.slice(0, 5).map((r) => r.y);
+  console.log(`  early ring heights: ${ys.map((v) => v.toFixed(1)).join(', ')}`);
+  for (let i = 1; i < 5; i += 1) {
+    const step = ys[i] - ys[i - 1];
+    assert.ok(step >= 0 && step <= 10, `ring ${i} -> ${i + 1} step ${step.toFixed(1)} m (expected 0..10)`);
+  }
+});
+
+// --- 26. (no new check — existing test 17, tap pilot passes ring 5, is
+// the guard for the gentle opening; it still passes on the v22 course.)
+
+// --- 27. tornadoCells geometry (v22: ORANYE detour target) ----------
+// spout3 sits 55-75 m from ring 4, and the scripted detour target —
+// 20 m from spout3 toward ring 4, at ring-4 altitude — is inside
+// spout3's kill cylinder (radius 35 m, height band baseY..baseY +
+// 264 x 0.55), so the ORANYE tornado kill fires in normal play.
+// A point 40 m out (past the 35 m radius) is safe.
+check('tornadoCells: spout3 near ring 4; detour target inside its kill cylinder', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const { cells } = tornadoCells(course, groundAt);
+  assert.equal(cells.length, 5, `tornado cells ${cells.length} (expected 5)`);
+  const s3 = cells.find((c) => c.id === 'spout3');
+  assert.ok(s3, 'spout3 must exist');
+  const ring4 = course.rings[3];
+  const d = Math.hypot(s3.x - ring4.x, s3.z - ring4.z);
+  console.log(`  spout3-ring4 dist=${d.toFixed(1)} radius=${s3.radius} scale=${s3.scale} baseY=${s3.baseY.toFixed(1)} ring4 y=${ring4.y.toFixed(1)}`);
+  assert.ok(d >= 55 && d <= 75, `spout3 ${d.toFixed(1)} m from ring 4 (expected 55-75)`);
+  const ux = (ring4.x - s3.x) / d;
+  const uz = (ring4.z - s3.z) / d;
+  const hit = tornadoAt(s3.x + ux * 20, ring4.y, s3.z + uz * 20, cells);
+  assert.ok(hit && hit.id === 'spout3', `detour target 20 m from spout3 should kill (got ${hit ? hit.id : 'null'})`);
+  const safe = tornadoAt(s3.x + ux * 40, ring4.y, s3.z + uz * 40, cells);
+  assert.equal(safe, null, `40 m from spout3 (past radius 35) should be safe, got ${safe ? safe.id : 'null'}`);
+});
+
+// --- 28-31. v22 auto-win, unit level ---------------------------------
+// Teleport the plane above the ground at (x, z) with a given state,
+// then step with the pitch/roll FROZEN (stickPitch/stickRoll held
+// nonzero so the auto-level never fires — zero input would level
+// the wings and float a shallow descent forever) until it stops
+// flying. VS at touchdown is speed * sin(pitch); the helper derives
+// pitch from the wanted VS. The freeze holds the descent until the
+// win triggers; after that flight.js ignores the passed input and
+// the autopilot lands. Deterministic, no course flight needed.
+function touchdownAt(x, z, { speed, vs, roll = 0, throttle = 0.3, rings = 12, height = 2.0, maxTime = 30 }) {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  const g = groundAt(x, z);
+  // height m above the ground (default 2.0 m — 0.4 m above the
+  // touchdown line: the plane touches down within ~0.1 s, before it
+  // can fly on to ground that falls away — at 3 m a shallow descent
+  // over the cliff edge east of the runway never catches the dropping
+  // terrain (the first v22 run of test 30 stayed 'flying' for the
+  // full 5 s for exactly this). Taller placements (30 m) fly INTO the
+  // corridor before touching down, so the win triggers mid-flight.
+  // The loop runs maxTime seconds: the autopilot rollout needs a few
+  // seconds after touchdown, so the cap is 30 s (was 5).
+  s.x = x; s.y = g + height; s.z = z;
+  s.yaw = Math.atan2(course.runway.dirX, -course.runway.dirZ);
+  s.pitch = Math.asin(Math.max(-1, Math.min(1, vs / speed)));
+  s.roll = roll;
+  s.speed = speed;
+  s.throttle = throttle;
+  s.ringsPassed = rings;
+  s.verticalSpeed = vs;
+  for (let i = 0; i < maxTime / STEP; i += 1) {
+    if (s.status !== 'flying') break;
+    flight.step(STEP, { pitch: 0, roll: 0, yaw: 0, throttle: 0, stickPitch: 1, stickRoll: 1 }, groundAt, course.runway);
+  }
+  return { s, runway: course.runway, ground: g };
+}
+
+function tdLog(tag, r) {
+  const t = r.s.touchdown;
+  console.log(`  ${tag}: status=${r.s.status} autoLanding=${r.s.autoLanding} kind=${r.s.landingKind} branch=${t ? t.branch : '-'} spd=${r.s.speed.toFixed(1)} VS=${r.s.verticalSpeed.toFixed(1)} pitch=${r.s.pitch.toFixed(2)} roll=${r.s.roll.toFixed(2)} gnd=${r.ground.toFixed(1)}`);
+}
+
+// --- 28. Throttle-on level arrival wins (v22 auto-win) ----------------
+check('throttle-on level arrival (75 m/s, VS -5, 12 rings) wins as autoland', () => {
+  const course = buildCourse();
+  const rw = course.runway;
+  const r = touchdownAt(rw.x, rw.z, { speed: 75, vs: -5 });
+  tdLog('75 m/s on strip', r);
+  assert.equal(r.s.autoLanding, true, 'win should have triggered over the strip');
+  assert.equal(r.s.status, 'landed', `throttle-on arrival ${r.s.status} (expected landed)`);
+  assert.equal(r.s.landingKind, 'autoland', `throttle-on arrival kind=${r.s.landingKind} (expected autoland)`);
+  assert.equal(r.s.touchdown.branch, 'WIN', `throttle-on arrival branch=${r.s.touchdown.branch} (expected WIN)`);
+});
+
+// --- 29. Steep descents + dives win (v22 auto-win) ---------------------
+check('steep descents win (VS -14 / -18 from short); 80 m/s VS -20 dive wins', () => {
+  const course = buildCourse();
+  const rw = course.runway;
+  const s14 = touchdownAt(rw.x - 270, rw.z, { speed: 60, vs: -14, height: 30 });
+  tdLog('VS -14, 270 m short, 30 m up', s14);
+  assert.equal(s14.s.autoLanding, true, 'VS -14 should have triggered the win on corridor entry');
+  assert.equal(s14.s.status, 'landed', `VS -14 ${s14.s.status} (expected landed)`);
+  assert.equal(s14.s.landingKind, 'autoland', `VS -14 kind=${s14.s.landingKind} (expected autoland)`);
+  assert.equal(s14.s.touchdown.branch, 'WIN', `VS -14 branch=${s14.s.touchdown.branch} (expected WIN)`);
+  const s18 = touchdownAt(rw.x - 320, rw.z, { speed: 61, vs: -18, height: 30 });
+  tdLog('VS -18, 320 m short, 30 m up', s18);
+  assert.equal(s18.s.autoLanding, true, 'VS -18 should have triggered the win on corridor entry');
+  assert.equal(s18.s.status, 'landed', `VS -18 ${s18.s.status} (expected landed)`);
+  assert.equal(s18.s.landingKind, 'autoland', `VS -18 kind=${s18.s.landingKind} (expected autoland)`);
+  assert.equal(s18.s.touchdown.branch, 'WIN', `VS -18 branch=${s18.s.touchdown.branch} (expected WIN)`);
+  const dive = touchdownAt(rw.x, rw.z, { speed: 80, vs: -20 });
+  tdLog('80 m/s VS -20', dive);
+  assert.equal(dive.s.autoLanding, true, '80 m/s dive should have triggered the win over the strip');
+  assert.equal(dive.s.status, 'landed', `dive ${dive.s.status} (expected landed — the autopilot never explodes)`);
+  assert.equal(dive.s.landingKind, 'autoland', `dive kind=${dive.s.landingKind} (expected autoland)`);
+  assert.equal(dive.s.touchdown.branch, 'WIN', `dive branch=${dive.s.touchdown.branch} (expected WIN)`);
+});
+
+// --- 30. Lateral + water: off-asphalt touchdowns crash; lat +20 wins ---
+check('60 m off centreline crashes; 100 m off crashes; sea crashes; lat +20 wins', () => {
+  const course = buildCourse();
+  const rw = course.runway;
+  const off = touchdownAt(rw.x, rw.z + 60, { speed: 55, vs: -5 });
+  tdLog('60 m off centreline', off);
+  assert.equal(off.s.autoLanding, false, '60 m off centreline should NOT trigger the win (outside the corridor)');
+  assert.equal(off.s.status, 'crashed', `60 m off centreline ${off.s.status} (expected crashed — not over the asphalt)`);
+  assert.equal(off.s.touchdown.branch, 'CRASH', `60 m off centreline branch=${off.s.touchdown.branch} (expected CRASH)`);
+  const field = touchdownAt(rw.x, rw.z + 100, { speed: 55, vs: -5 });
+  tdLog('100 m off centreline, on land', field);
+  assert.ok(field.ground > 2, `off-field ground ${field.ground.toFixed(1)} (expected land > 2)`);
+  assert.equal(field.s.status, 'crashed', `100 m off centreline ${field.s.status} (expected crashed)`);
+  assert.equal(field.s.touchdown.branch, 'CRASH', `100 m off centreline branch=${field.s.touchdown.branch} (expected CRASH)`);
+  const sea = touchdownAt(-2000, -2000, { speed: 55, vs: -5 });
+  tdLog('open sea', sea);
+  assert.equal(sea.ground, 0, `sea ground ${sea.ground} (expected 0)`);
+  assert.equal(sea.s.status, 'crashed', `sea ditching ${sea.s.status} (expected crashed)`);
+  assert.equal(sea.s.landingKind, null, `sea ditching kind=${sea.s.landingKind} (expected null)`);
+  const lat20 = touchdownAt(rw.x, rw.z + 20, { speed: 55, vs: -5, height: 30 });
+  tdLog('lat +20, 30 m up', lat20);
+  assert.equal(lat20.s.autoLanding, true, 'lat +20 (inside the corridor) should trigger the win');
+  assert.equal(lat20.s.status, 'landed', `lat +20 ${lat20.s.status} (expected landed)`);
+  assert.equal(lat20.s.landingKind, 'autoland', `lat +20 kind=${lat20.s.landingKind} (expected autoland)`);
+  assert.equal(lat20.s.touchdown.branch, 'WIN', `lat +20 branch=${lat20.s.touchdown.branch} (expected WIN)`);
+});
+
+// --- 31. Guards: dives win, the win stays gated ------------------------
+check('95 m/s dive wins; fast touchdown before 12 rings crashes; VS -32 wins; 11 rings no win; 300 m short crashes', () => {
+  const course = buildCourse();
+  const rw = course.runway;
+  const dive = touchdownAt(rw.x, rw.z, { speed: 95, vs: -10 });
+  tdLog('95 m/s dive', dive);
+  assert.equal(dive.s.autoLanding, true, '95 m/s dive should have triggered the win over the strip');
+  assert.equal(dive.s.status, 'landed', `95 m/s dive ${dive.s.status} (expected landed — the autopilot never explodes)`);
+  assert.equal(dive.s.landingKind, 'autoland', `95 m/s dive kind=${dive.s.landingKind} (expected autoland)`);
+  assert.equal(dive.s.touchdown.branch, 'WIN', `95 m/s dive branch=${dive.s.touchdown.branch} (expected WIN)`);
+  const early = touchdownAt(rw.x, rw.z, { speed: 55, vs: -5, rings: 0 });
+  tdLog('55 m/s, 0 rings', early);
+  assert.equal(early.s.status, 'crashed', `fast touchdown with 0 rings ${early.s.status} (expected crashed — the win stays gated to 12 rings)`);
+  assert.equal(early.s.touchdown.branch, 'CRASH', `0 rings branch=${early.s.touchdown.branch} (expected CRASH)`);
+  const plunge = touchdownAt(rw.x, rw.z, { speed: 55, vs: -32 });
+  tdLog('VS -32', plunge);
+  assert.equal(plunge.s.autoLanding, true, 'VS -32 should have triggered the win over the strip');
+  assert.equal(plunge.s.status, 'landed', `VS -32 ${plunge.s.status} (expected landed — the autopilot never explodes)`);
+  assert.equal(plunge.s.landingKind, 'autoland', `VS -32 kind=${plunge.s.landingKind} (expected autoland)`);
+  assert.equal(plunge.s.touchdown.branch, 'WIN', `VS -32 branch=${plunge.s.touchdown.branch} (expected WIN)`);
+  const noWin = touchdownAt(rw.x, rw.z, { speed: 55, vs: 0, rings: 11, height: 40, maxTime: 3 });
+  tdLog('11 rings, level, 40 m up', noWin);
+  assert.equal(noWin.s.autoLanding, false, '11 rings should NOT trigger the win');
+  assert.equal(noWin.s.status, 'flying', `11 rings ${noWin.s.status} (expected flying — no win, no touchdown)`);
+  const short = touchdownAt(rw.x - 300, rw.z, { speed: 55, vs: -5 });
+  tdLog('300 m short', short);
+  assert.equal(short.s.status, 'crashed', `300 m short ${short.s.status} (expected crashed — ground contact before the finish line)`);
+  assert.equal(short.s.touchdown.branch, 'CRASH', `300 m short branch=${short.s.touchdown.branch} (expected CRASH)`);
+});
+
+// --- 32. ORANYE detour, flown (v22 — tornado-kill in normal play) -----
+// The scripted detour from rivals.js, replayed flight-level: ORANYE
+// starts 15 m ahead of the player, races its rings at ~0.88 throttle
+// (its 1.22 speed bias against the pack), then in t 13-18 s dashes
+// full-throttle at the point 20 m from spout3 toward ring 4. The kill
+// must fire inside the window, in spout3, at ring-4 altitude — the
+// v21 kill only ever fired in the probe (teleported), at the frame's
+// left edge; this is the geometry proof the live probe A12 then
+// confirms visually.
+check('ORANYE detour: full-throttle dash at spout3 kills inside t 13-18 s', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const { cells } = tornadoCells(course, groundAt);
+  const s3 = cells.find((c) => c.id === 'spout3');
+  const ring4 = course.rings[3];
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  const fx = Math.sin(course.spawn.yaw);
+  const fz = -Math.cos(course.spawn.yaw);
+  s.x += fx * 15;
+  s.z += fz * 15;
+  let prev = { x: s.x, y: s.y, z: s.z };
+  let kill = null;
+  while (s.elapsed < 30 && s.status === 'flying') {
+    let target;
+    let throttle;
+    if (s.elapsed >= 13 && s.elapsed <= 18) {
+      const d = Math.hypot(ring4.x - s3.x, ring4.z - s3.z) || 1;
+      target = {
+        x: s3.x + (ring4.x - s3.x) / d * 20,
+        y: ring4.y,
+        z: s3.z + (ring4.z - s3.z) / d * 20,
+      };
+      throttle = 1.0;
+    } else {
+      target = course.nextRing() || { x: course.runway.x, y: course.runway.height + 40, z: course.runway.z };
+      throttle = 0.88;
+    }
+    flight.step(STEP, autopilotTo(flight, target, throttle, groundAt), groundAt, course.runway);
+    const pass = course.checkPass(prev, s);
+    if (pass && pass.passed) s.ringsPassed += 1;
+    prev = { x: s.x, y: s.y, z: s.z };
+    const hit = tornadoAt(s.x, s.y, s.z, cells);
+    if (hit) { kill = { t: s.elapsed, id: hit.id, y: s.y }; break; }
+  }
+  console.log(`  kill at t=${kill ? kill.t.toFixed(2) : 'NONE'} id=${kill ? kill.id : '-'} y=${kill ? kill.y.toFixed(1) : '-'} (ring4 y=${ring4.y.toFixed(1)}) rings=${s.ringsPassed}`);
+  assert.ok(kill, 'ORANYE should be killed by a tornado during the detour window');
+  assert.equal(kill.id, 'spout3', `kill should be spout3 (got ${kill.id})`);
+  assert.ok(kill.t >= 13 && kill.t <= 18, `kill at t=${kill.t.toFixed(2)} (expected inside the 13-18 s detour window)`);
+  assert.ok(Math.abs(kill.y - ring4.y) < 15, `kill altitude ${kill.y.toFixed(1)} vs ring 4 ${ring4.y.toFixed(1)} (expected within 15 m)`);
+  assert.ok(s.ringsPassed >= 2, `ORANYE passed ${s.ringsPassed} rings before the kill (expected >= 2 — it races first, then detours)`);
+});
+
+// --- 33. ALT · MSL + WIN cue + cockpit HUD dedup (v22 auto-win) --------
+// Static checks on the shipped files: the altitude panel reads
+// "ALT · MSL" (the v21 landing shot's "ALT 378 FT" against the
+// "AGL 81 FT" pill read as contradictory — one is MSL, one is AGL,
+// and only the pill said so); after 12/12 the AGL pill becomes the
+// WIN cue (SPD in knots, AGL in feet, glide verdict, "AUTOLAND
+// READY" when lined up on final / "FLY OVER RUNWAY 09 TO WIN"
+// otherwise, "AUTOPILOT LANDING…" once the win has triggered) —
+// fed by main.js hudView's spdKt / aligned / autoLanding fields.
+// There is no speed/VS threshold any more, so the old VS-zone
+// colours and the "TOUCHDOWN READY" string are gone. The cockpit
+// dedup is wired (hud.setCockpitHud exported and called at the C
+// toggle, startGame and the staged cockpit shot; the
+// body.cockpit-view rules hide the duplicated panels).
+check('ALT labelled MSL, WIN cue present, cockpit HUD dedup wired', () => {
+  const html = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+  const hudJs = readFileSync(new URL('../game/src/hud.js', import.meta.url), 'utf8');
+  const mainJs = readFileSync(new URL('../game/src/main.js', import.meta.url), 'utf8');
+  assert.ok(html.includes('<div class="label">ALT · MSL</div>'), 'ALT panel label should read "ALT · MSL"');
+  assert.ok(!html.includes('<div class="label">ALTITUDE</div>'), 'bare "ALTITUDE" label should be gone');
+  assert.ok(html.includes('id="hud-agl"'), 'AGL pill element should still exist');
+  assert.ok(hudJs.includes('AUTOLAND READY'), 'WIN cue should show AUTOLAND READY when lined up on final');
+  assert.ok(hudJs.includes('FLY OVER RUNWAY 09 TO WIN'), 'WIN cue should show FLY OVER RUNWAY 09 TO WIN otherwise');
+  assert.ok(hudJs.includes('AUTOPILOT LANDING'), 'WIN cue should show AUTOPILOT LANDING once the win has triggered');
+  assert.ok(!hudJs.includes('TOUCHDOWN READY'), 'old TOUCHDOWN READY string should be gone (no touchdown threshold any more)');
+  assert.ok(!hudJs.includes("vs >= -16.5"), 'old VS-zone colour should be gone (no VS threshold any more)');
+  assert.ok(hudJs.includes('SPD ${Math.round(view.spdKt ?? 0)} KT'), 'WIN cue should show SPD in knots');
+  assert.ok(hudJs.includes('AGL ${Math.round(view.aglFt)} FT'), 'WIN cue should show AGL in feet');
+  assert.ok(mainJs.includes('spdKt: s.speed * 1.94384'), 'main.js hudView should expose speed in knots');
+  assert.ok(mainJs.includes('vsMs: s.verticalSpeed'), 'main.js hudView should still expose VS in m/s');
+  assert.ok(mainJs.includes('aligned'), 'main.js hudView should compute alignment for the pill');
+  assert.ok(mainJs.includes('onFinal: s.ringsPassed >= COURSE.ringCount'), 'main.js hudView should compute onFinal after 12/12');
+  assert.ok(mainJs.includes('autoLanding: s.autoLanding'), 'main.js hudView should expose autoLanding for the pill');
+  assert.ok(html.includes('body.cockpit-view #hud-top-left'), 'cockpit-view CSS should hide the top-left panels');
+  assert.ok(html.includes('body.cockpit-view #attitude'), 'cockpit-view CSS should hide the attitude ball');
+  assert.ok(html.includes('body.cockpit-view #compass'), 'cockpit-view CSS should hide the compass');
+  assert.ok(hudJs.includes('function setCockpitHud(on)'), 'hud.js should define setCockpitHud');
+  assert.ok(hudJs.includes('setCockpitHud }'), 'hud.js should export setCockpitHud');
+  const calls = (mainJs.match(/hud\.setCockpitHud\(/g) || []).length;
+  assert.ok(calls >= 3, `main.js should call hud.setCockpitHud at the C toggle, startGame and runShot (found ${calls})`);
+  assert.ok(mainJs.includes('aglFt'), 'main.js hudView should still compute AGL in feet for the pill');
+  console.log(`  ALT · MSL label OK; WIN cue OK (SPD/AGL/AUTOLAND READY/AUTOPILOT LANDING); cockpit-view CSS OK; setCockpitHud calls in main.js: ${calls}`);
+});
+
+// --- 34. Manual until the win; autopilot ONLY after it (v22, user 27 Nov 15:46) ---
+// The user clarified (27 Nov 15:46 WIB): the player flies MANUAL from
+// the start to ring 12 (rings, racing the other teams, dodging the
+// storm/tornadoes — all manual as usual). ONLY the win is automatic:
+// after 12/12 rings and over the finish line (runway 09 asphalt) the
+// WIN triggers, then the autopilot takes over ONLY for the smooth
+// landing (descend, flare, touchdown, rollout). Manual control during
+// the race must NOT change — the autopilot must never engage before
+// the win triggers. This test proves both halves at flight level:
+// (A) with 11 rings, a sustained player dive + full throttle over the
+// strip is OBEYED (the plane dives and crashes — no autoland, no
+// rescue); (B) with 12 rings, the SAME player dive + full throttle is
+// IGNORED once the win triggers (the autopilot lands it as
+// 'autoland'); (C) with 11 rings mid-race, a sustained player climb
+// input actually climbs the plane (manual authority intact).
+check('manual before the win (11 rings: dive crashes, climb climbs); autopilot only after the win (12 rings: dive ignored, autoland)', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const rw = course.runway;
+  const dive = { pitch: -1, roll: 0, yaw: 0, throttle: 1, stickPitch: -1, stickRoll: 0 };
+  // (A) 11 rings: the player's dive over the strip is obeyed — no win, no rescue.
+  const early = createFlight(course.spawn);
+  const se = early.state;
+  se.x = rw.x; se.y = groundAt(rw.x, rw.z) + 40; se.z = rw.z;
+  se.yaw = Math.atan2(rw.dirX, -rw.dirZ); se.pitch = 0; se.roll = 0;
+  se.speed = 55; se.throttle = 0.3; se.ringsPassed = 11; se.verticalSpeed = 0;
+  for (let i = 0; i < 30 / STEP; i += 1) {
+    if (se.status !== 'flying') break;
+    early.step(STEP, dive, groundAt, rw);
+  }
+  console.log(`  11 rings dive: status=${se.status} autoLanding=${se.autoLanding} kind=${se.landingKind} branch=${se.touchdown ? se.touchdown.branch : '-'}`);
+  assert.equal(se.autoLanding, false, 'autopilot must NOT engage before 12 rings');
+  assert.equal(se.status, 'crashed', `11-ring dive ${se.status} (expected crashed — the player's input is obeyed, no rescue)`);
+  // (B) 12 rings: the SAME dive is ignored once the win triggers — the autopilot lands it.
+  const late = createFlight(course.spawn);
+  const sl = late.state;
+  sl.x = rw.x; sl.y = groundAt(rw.x, rw.z) + 40; sl.z = rw.z;
+  sl.yaw = Math.atan2(rw.dirX, -rw.dirZ); sl.pitch = 0; sl.roll = 0;
+  sl.speed = 55; sl.throttle = 0.3; sl.ringsPassed = 12; sl.verticalSpeed = 0;
+  for (let i = 0; i < 30 / STEP; i += 1) {
+    if (sl.status !== 'flying') break;
+    late.step(STEP, dive, groundAt, rw);
+  }
+  console.log(`  12 rings dive: status=${sl.status} autoLanding=${sl.autoLanding} kind=${sl.landingKind} branch=${sl.touchdown ? sl.touchdown.branch : '-'} spd=${sl.speed.toFixed(1)}`);
+  assert.equal(sl.autoLanding, true, 'win should have triggered over the strip at 12 rings');
+  assert.equal(sl.status, 'landed', `12-ring dive ${sl.status} (expected landed — the autopilot ignores the dive and lands)`);
+  assert.equal(sl.landingKind, 'autoland', `12-ring dive kind=${sl.landingKind} (expected autoland)`);
+  assert.equal(sl.touchdown.branch, 'WIN', `12-ring dive branch=${sl.touchdown.branch} (expected WIN)`);
+  // (C) 11 rings mid-race: a sustained player climb input actually climbs the plane.
+  const climb = createFlight(course.spawn);
+  const sc = climb.state;
+  sc.x = rw.x - 1000; sc.y = groundAt(rw.x - 1000, rw.z) + 60; sc.z = rw.z;
+  sc.yaw = Math.atan2(rw.dirX, -rw.dirZ); sc.pitch = 0; sc.roll = 0;
+  sc.speed = 55; sc.throttle = 0.5; sc.ringsPassed = 11; sc.verticalSpeed = 0;
+  const y0 = sc.y;
+  for (let i = 0; i < 2 / STEP; i += 1) {
+    climb.step(STEP, { pitch: 1, roll: 0, yaw: 0, throttle: 0, stickPitch: 1, stickRoll: 0 }, groundAt, rw);
+  }
+  console.log(`  11 rings climb: y ${y0.toFixed(1)} -> ${sc.y.toFixed(1)} (+${(sc.y - y0).toFixed(1)} m) autoLanding=${sc.autoLanding} status=${sc.status}`);
+  assert.ok(sc.y > y0 + 5, `player climb input should gain altitude (y ${y0.toFixed(1)} -> ${sc.y.toFixed(1)})`);
+  assert.equal(sc.autoLanding, false, 'autopilot must NOT engage mid-race');
+  assert.equal(sc.status, 'flying', `climb run ${sc.status} (expected flying)`);
+});
+
+console.log(`\n${passed}/33 headless tests passed`);
 if (process.exitCode) console.log('HEADLESS TESTS: FAIL');
 else console.log('HEADLESS TESTS: ALL PASS');

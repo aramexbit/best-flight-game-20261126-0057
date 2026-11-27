@@ -142,6 +142,20 @@ function hudView() {
   const idealH = distRwy * 0.0524;
   const dev = (s.y - rw.height) - idealH;
   const glide = Math.abs(dev) < 15 ? 'ON GLIDE' : dev > 0 ? 'HIGH' : 'LOW';
+  // v22 auto-win: the approach readout — live SPD (kt), V/S (m/s),
+  // lateral offset from the centreline, and the alignment verdict.
+  // Aligned = within 30 m of the centreline, heading within 20° of
+  // the runway heading (09 = east, 90°), and within 1000 m of the
+  // strip. The HUD pill (hud.js) shows these after ring 12/12 as
+  // "AUTOLAND READY" when lined up, "FLY OVER RUNWAY 09 TO WIN"
+  // otherwise — and "AUTOPILOT LANDING…" once the win has
+  // triggered (autoLanding). There is no speed/VS threshold to meet
+  // any more; the pill is a cue, not a pass/fail gauge.
+  const latM = -(s.x - rw.x) * rw.dirZ + (s.z - rw.z) * rw.dirX;
+  const rwyHeading = headingOf(Math.atan2(rw.dirX, -rw.dirZ));
+  let hdgErr = headingOf(s.yaw) - rwyHeading;
+  hdgErr = ((hdgErr + 180) % 360 + 360) % 360 - 180;
+  const aligned = Math.abs(latM) < 30 && Math.abs(hdgErr) < 20 && distRwy < 1000;
   return {
     heading: headingOf(s.yaw),
     pitch: s.pitch,
@@ -162,6 +176,12 @@ function hudView() {
     aglFt: aglM * 3.28084,
     distRwy,
     glide,
+    spdKt: s.speed * 1.94384,
+    vsMs: s.verticalSpeed,
+    latM,
+    aligned,
+    onFinal: s.ringsPassed >= COURSE.ringCount && distRwy < 1500,
+    autoLanding: s.autoLanding,
   };
 }
 
@@ -179,6 +199,10 @@ function runShot(name) {
   });
   renderer.setCameraMode(name === 'start' ? CAMERA_HERO : scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
+  // v22: the staged cockpit shot hides the duplicated DOM HUD panels
+  // too (hud.setCockpitHud) — the shot must show what the player
+  // sees, not a fuller HUD than the live game.
+  hud.setCockpitHud(scene.camera === 'cockpit');
   // v21: the title shot hides the rival race-number markers — the
   // v20 title showed #02/#04/#05 floating awkwardly behind the
   // instruction card (Gemini v20). The rival PLANES stay (the red
@@ -236,7 +260,7 @@ function runShot(name) {
   // The landing shot is the end of the run: say so, so the frame reads as an
   // objective and not just another ring.
   if (name === 'landing' && flight.state.ringsPassed >= COURSE.ringCount) {
-    hud.showObjective('LAND ON THE RUNWAY');
+    hud.showObjective('FLY OVER THE RUNWAY TO WIN');
   }
   // The instruments always show the staged flight, even behind the title panel.
   hud.update(hudView(), 0);
@@ -295,6 +319,9 @@ function runGame() {
   // v19 (c): the crash beat — seconds left on the wide camera before
   // the "Crashed!" panel appears.
   let crashTimer = 0;
+  // v22 auto-win: the FINISH toast fires once per run, the moment
+  // the autopilot takes over (see step()).
+  let winToastShown = false;
 
   // v11: the title screen's Start button and settings gear are real buttons
   // on the overlay, not the canvas — the canvas pointerdown listener in
@@ -328,6 +355,7 @@ function runGame() {
     effects.clear();
     rivals.group.visible = true;
     accumulator = 0;
+    winToastShown = false;
     screen = 'play';
     hud.hidePanels();
     // v21b: the live chase is the cover's 3/4 geometry (13 m back,
@@ -344,11 +372,14 @@ function runGame() {
     renderer.setCameraMode(CAMERA_CHASE);
     renderer.setFov(62);
     renderer.setChase(13, -6, 4.2, 24);
+    // v22: a fresh run is chase view — the cockpit HUD dedup clears
+    // with it (the C toggle sets it again if the player switches).
+    hud.setCockpitHud(false);
     audio.start();
     // v16: focus the canvas, so Space (restart) works without a click
     // even after the Start button was clicked.
     canvas.focus();
-    announce('Flying. Twelve rings, then land on the runway.');
+    announce('Flying. Twelve rings, then fly over the runway to win.');
     hud.showMessage('FLY THROUGH RING 1', 3);
   }
 
@@ -376,6 +407,10 @@ function runGame() {
           `Time ${timeStr}`,
           `Best ${Math.max(best, flight.state.score)}`,
         ];
+        // v22 auto-win: the autopilot landing is the win — say so in
+        // the results panel, so the player knows the smooth touchdown
+        // was the autopilot's, not a manual landing they had to nail.
+        if (flight.state.landingKind === 'autoland') lines.push('Autopilot landing — smooth touchdown!');
         effects.fireworkShow(course.runway.x, course.runway.height, course.runway.z);
         effects.confetti(flight.state.x, flight.state.y + 4, flight.state.z);
         audio.fanfare();
@@ -430,6 +465,9 @@ function runGame() {
       cameraMode = cameraMode === CAMERA_CHASE ? CAMERA_COCKPIT : CAMERA_CHASE;
       renderer.setCameraMode(cameraMode);
       planeApi.setCockpitMode(cameraMode === CAMERA_COCKPIT);
+      // v22: cockpit view hides the duplicated DOM HUD panels (the
+      // 3D dials are the instruments); chase view brings them back.
+      hud.setCockpitHud(cameraMode === CAMERA_COCKPIT);
       hud.showMessage(cameraMode === CAMERA_COCKPIT ? 'COCKPIT VIEW' : 'CHASE VIEW', 1.5);
     }
     if (actions & ACTION_MUTE) {
@@ -454,12 +492,23 @@ function runGame() {
       storm.update(STEP, titleTime);
       const s = flight.state;
       const prev = { x: s.x, y: s.y, z: s.z };
-      s.yaw += 0.12 * STEP;
+      // v22 (Gemini v21 #5 / coordinator note a): the title background
+      // is ALIVE now — the orbit turns FASTER (0.22 rad/s, was 0.12:
+      // ~100° of turn in the 8 s staged title shot, so the plane
+      // crosses the frame instead of sitting parked on the shoreline)
+      // and BANKS into the turn (roll 0.42 rad ≈ 24°, a visible lean
+      // that reads as a flyby, not a flat drone pass), at LOWER
+      // altitude (110 m, was 190 — the sea, beaches and hills fill
+      // the frame instead of distant haze). The two gold mission
+      // lines stay exactly as the user approved them — the background
+      // carries the life now, not the text.
+      s.yaw += 0.22 * STEP;
+      s.roll = 0.42;
       const fwd = { x: Math.sin(s.yaw), y: 0, z: -Math.cos(s.yaw) };
       s.x += fwd.x * 42 * STEP;
       s.z += fwd.z * 42 * STEP;
       titleTime += STEP;
-      s.y = 190 + Math.sin(titleTime * 0.25) * 12;
+      s.y = 110 + Math.sin(titleTime * 0.25) * 12;
       s.speed = 42;
       void prev;
       return;
@@ -524,6 +573,16 @@ function runGame() {
       stickRoll: onFinal ? rollInput : rawRoll,
       stickPitch: rawPitch,
     }, terrain.groundAt, course.runway);
+    // v22 auto-win: the moment the autopilot takes over, say so —
+    // the win must be unmistakable (the user's 27 Nov 15:11 report:
+    // the player's plane stayed intact but the win never fired, and
+    // a rival explosion nearby read as the player's fate). The
+    // toast + chime mark the win before the RACE COMPLETE panel.
+    if (flight.state.autoLanding && !winToastShown) {
+      winToastShown = true;
+      hud.showMessage('🏁 FINISH! Autopilot landing…', 8);
+      audio.chime();
+    }
     const pass = course.checkPass(prev, s);
     if (pass && pass.passed) {
       s.ringsPassed += 1;
@@ -531,7 +590,7 @@ function runGame() {
       s.lastBonus = pass.bonus;
       audio.chime();
       const left = COURSE.ringCount - s.ringsPassed;
-      if (left === 0) hud.showObjective('ALL RINGS — LAND ON THE RUNWAY');
+      if (left === 0) hud.showObjective('ALL RINGS — FLY OVER THE RUNWAY');
       // v20 (e): the ring toast lasts 4.0 s (was 2.2) — the v19 live
       // playtest passed ring 1 (score 122) with NO toast visible in any
       // screenshot: 2.2 s is shorter than the screenshot cadence. A
@@ -589,7 +648,21 @@ function runGame() {
       (kind, detail) => {
         window.__raceEvents.push({ kind, time: s.elapsed, ...detail });
         if (kind === 'collision') {
-          hud.showMessage('💥 MID-AIR COLLISION!', 2.5);
+          // The pair is always KUNING + HIJAU — name the teams, so
+          // the blast is unmistakably the OTHER teams' planes, never
+          // the player's (user 27 Nov 15:13: this is a race, not
+          // combat — no "enemy" language anywhere).
+          hud.showMessage('💥 KUNING + HIJAU MID-AIR COLLISION!', 2.5);
+          audio.boom();
+          renderer.triggerShake(0.5);
+        }
+        // v22 auto-win (user 27 Nov 15:13): a rival team's plane
+        // crashing (dive / ring-clip / terrain) gets the same
+        // treatment as the collision — a named HUD message, boom and
+        // shake — so the dramatic explosion is always clearly the
+        // OTHER team's plane, never the player's.
+        if (kind === 'rival-crash') {
+          hud.showMessage(`💥 ${detail.name || 'RIVAL'} CRASHED!`, 2.5);
           audio.boom();
           renderer.triggerShake(0.5);
         }

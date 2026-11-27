@@ -223,10 +223,22 @@ export function createHud() {
     // 12/12 the pill shows the height above ground and the glide
     // alignment (ON GLIDE / HIGH / LOW against a 3° slope), so the
     // landing has a readable cue instead of a bare altitude number.
+    // v22 auto-win (user 27 Nov 15:09): after 12/12 the pill is the
+    // WIN cue, not a landing-window readout — there is no speed/VS
+    // threshold to meet any more. While the autopilot owns the plane
+    // it says AUTOPILOT LANDING…; before that it shows SPD + AGL +
+    // glide and AUTOLAND READY when lined up on final (green) or
+    // FLY OVER RUNWAY 09 TO WIN otherwise (gold).
     if (aglEl) {
       if (view.rings >= view.ringTotal && view.glide) {
         aglEl.style.display = 'flex';
-        aglEl.textContent = `AGL ${Math.round(view.aglFt)} FT · ${view.glide}`;
+        if (view.autoLanding) {
+          aglEl.style.color = '#7dff9a';
+          aglEl.textContent = 'AUTOPILOT LANDING…';
+        } else {
+          aglEl.style.color = view.aligned ? '#7dff9a' : '#FFD52A';
+          aglEl.textContent = `SPD ${Math.round(view.spdKt ?? 0)} KT · AGL ${Math.round(view.aglFt)} FT · ${view.glide} · ${view.aligned ? 'AUTOLAND READY' : 'FLY OVER RUNWAY 09 TO WIN'}`;
+        }
       } else {
         aglEl.style.display = 'none';
       }
@@ -257,5 +269,17 @@ export function createHud() {
     el('over-title').textContent = text;
   }
 
-  return { update, showMessage, showObjective, showPanel, hidePanels, setOverLines, setOverTitle };
+  /** v22: cockpit view hides the DOM panels the 3D dials duplicate
+   * (top-left ALT/SPD/HDG, attitude ball, compass) — the matching
+   * body.cockpit-view rules live in index.html. The ring pointer,
+   * objective, messages, score/time and fuel/throttle stay: they have
+   * no 3D equivalent. The 3D dials ARE the instruments in cockpit
+   * view; keeping both read as dials + floating HUD cards fighting
+   * each other (Gemini v21: dials cluttered, clashing with the outer
+   * HUD). */
+  function setCockpitHud(on) {
+    document.body.classList.toggle('cockpit-view', !!on);
+  }
+
+  return { update, showMessage, showObjective, showPanel, hidePanels, setOverLines, setOverTitle, setCockpitHud };
 }

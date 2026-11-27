@@ -27,8 +27,11 @@ try {
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 
   for (const shot of shots) {
-    await page.goto('http://localhost:' + PORT + '/index.html' + shot.query, { waitUntil: 'load', timeout: 20000 });
-    await page.waitForFunction(() => window.__shotReady, null, { timeout: 20000 });
+    await page.goto('http://localhost:' + PORT + '/index.html' + shot.query, { waitUntil: 'load', timeout: 60000 });
+    // v21c: the cover shot stages 31 s of simulation on a heavier scene
+    // (5 tornadoes, 4 rain systems, 13 islands) — it takes ~26 s to
+    // become ready in software rendering, past the old 20 s timeout.
+    await page.waitForFunction(() => window.__shotReady, null, { timeout: 60000 });
     await page.waitForTimeout(700);
     await page.screenshot({ path: OUT_DIR + '/' + shot.name, type: 'jpeg', quality: 82 });
     const hudState = await page.evaluate(() => {
@@ -56,7 +59,13 @@ try {
   // Playtest: title -> Start button click starts -> hold throttle + roll,
   // HUD must move. (Space is pressed after the click too, as a second start
   // path check — it is a no-op once the game is already in play.)
-  await page.goto('http://localhost:' + PORT + '/index.html', { waitUntil: 'load', timeout: 20000 });
+  await page.goto('http://localhost:' + PORT + '/index.html', { waitUntil: 'load', timeout: 60000 });
+  // v21c: the live title page builds the full scene (5 tornadoes, 4 rain
+  // systems, 13 islands) before the main thread frees up — that takes
+  // ~26 s in software rendering, and the old 800 ms wait left the
+  // #btn-start click timing out (the click's actionability checks need
+  // a responsive main thread). Wait for the scene to be built first.
+  await page.waitForFunction(() => window.__debug, null, { timeout: 60000 });
   await page.waitForTimeout(800);
   // v3: on the title screen the clock must sit at 0:00 and the HUD must be
   // fully hidden behind the panel (opacity 0, visibility hidden); once play
@@ -75,7 +84,22 @@ try {
   // v11: the title screen's big yellow Start button must actually start the
   // game when clicked — not just look like a button. Click it, then check
   // the title panel is gone and the HUD is back before the throttle test.
-  await page.click('#btn-start');
+  // v21c: force + 60 s — the heavier scene (5 tornadoes, 4 rain systems,
+  // 13 islands) saturates the main thread in software rendering, so the
+  // click's stability/hit-target checks starve and time out at 30 s
+  // (the button itself is fine — it shows in the title shot and the
+  // v21b run clicked it). force skips those checks; the titleHidden /
+  // hudVisible assertions below still prove the click really started it.
+  await page.click('#btn-start', { timeout: 60000, force: true });
+  // v21c: the HUD only shows after the first frame is drawn once the
+  // game starts — on the heavier scene that frame takes longer than
+  // the old fixed 500 ms in software rendering, so the startClick
+  // read below saw the HUD still hidden. Wait for it to appear.
+  await page.waitForFunction(() => {
+    const h = document.getElementById('hud');
+    const s = getComputedStyle(h);
+    return s.opacity !== '0' && s.visibility !== 'hidden';
+  }, null, { timeout: 30000 });
   await page.waitForTimeout(500);
   const startClick = await page.evaluate(() => {
     const hudStyle = getComputedStyle(document.getElementById('hud'));
@@ -110,8 +134,15 @@ try {
   console.log('playtest after', JSON.stringify(after));
   // v4: cockpit mode must keep the same HUD as third-person — time, score and
   // ring progress in the upper-right, and the alt/speed/heading chips below.
-  // Pressing C flashes "COCKPIT VIEW" in the message line for 1.5 s, which is
-  // how this check proves the camera actually switched.
+  // v22: the duplicated panels HIDE in cockpit view (top-left ALT/SPD/HDG,
+  // attitude ball, compass) — the 3D dials are the instruments now, and the
+  // v21 blind test called the dials + outer HUD "cluttered, clashing".
+  // What must stay: time, score, ring progress (upper-right), the ring
+  // pointer, objective, messages, fuel/throttle. The hidden panels'
+  // textContent still exists in the DOM (display:none only), so the
+  // reads below still work. Pressing C flashes "COCKPIT VIEW" in the
+  // message line for 1.5 s, which is how this check proves the camera
+  // actually switched.
   await page.keyboard.press('KeyC');
   await page.waitForTimeout(400);
   const cockpitHud = await page.evaluate(() => {
@@ -123,6 +154,12 @@ try {
       rings: document.getElementById('hud-rings').textContent,
       alt: document.getElementById('hud-alt').textContent,
       hudVisible: hudStyle.opacity !== '0' && hudStyle.visibility !== 'hidden',
+      // v22: the duplicated panels hide in cockpit view (the 3D dials
+      // are the instruments); their textContent still exists in the
+      // DOM, so `alt` above still reads — only the display hides.
+      topLeftHidden: getComputedStyle(document.getElementById('hud-top-left')).display === 'none',
+      attitudeHidden: getComputedStyle(document.getElementById('attitude')).display === 'none',
+      compassHidden: getComputedStyle(document.getElementById('compass')).display === 'none',
     };
   });
   console.log('cockpit hud', JSON.stringify(cockpitHud));
@@ -131,8 +168,19 @@ try {
   if (!cockpitHud.time || cockpitHud.time === '0:00') throw new Error('TIME missing in cockpit HUD');
   if (!cockpitHud.score) throw new Error('SCORE missing in cockpit HUD');
   if (!cockpitHud.rings) throw new Error('RING missing in cockpit HUD');
+  if (!cockpitHud.topLeftHidden) throw new Error('cockpit dedup: top-left ALT/SPD/HDG panels should hide in cockpit view');
+  if (!cockpitHud.attitudeHidden) throw new Error('cockpit dedup: attitude ball should hide in cockpit view');
+  if (!cockpitHud.compassHidden) throw new Error('cockpit dedup: compass should hide in cockpit view');
   await page.keyboard.press('KeyC');
   await page.waitForTimeout(400);
+  // v22: toggling back to chase restores the panels.
+  const chaseHud = await page.evaluate(() => ({
+    topLeftShown: getComputedStyle(document.getElementById('hud-top-left')).display !== 'none',
+    msg: document.getElementById('hud-msg').textContent,
+  }));
+  console.log('chase hud after toggle back', JSON.stringify(chaseHud));
+  if (!chaseHud.topLeftShown) throw new Error('cockpit dedup: top-left panels should return in chase view');
+  if (chaseHud.msg !== 'CHASE VIEW') throw new Error('camera did not toggle back to chase view');
 } finally {
   if (browser) await browser.close();
   server.kill();

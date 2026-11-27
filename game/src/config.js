@@ -91,6 +91,12 @@ export const COURSE = {
   // presence. Passing stays easier, not harder, so the autopilot's tight
   // mode (tuned for the small ring) still holds.
   ringRadius: 13,
+  // v22: the OPENING rings (1-5) are 16 m — the Weak pilot's near
+  // misses at 14-20 m (diag: ring 3 at 14.6/15.1 m, ring 4 at 18.5/
+  // 19.7 m) must count as passes, and a human tapping keys needs the
+  // same forgiveness. Rings 6-12 stay 13 m, so the late course keeps
+  // its bite. The visual torus matches the pass radius (rings.js).
+  ringRadiusEarly: 16,
   ringTube: 0.5,
   // The runway waits this far past the last ring, along the final heading.
   runwayPastRing: 520,

@@ -46,14 +46,23 @@ export function createCourse(random, seed, islands) {
   // course's first leg, a turn no autopilot (and no human) can make in one
   // 224 m leg. The spawn must line up with the walk's first step instead.
   const startZ = z;
-  // v21c (user 27 Nov 10:17): LOW START — the walk starts at 55 m
-  // (was 150) and climbs toward the 145 m approach, so the early
-  // rings sit low between the ridge islands at ~55-90 m and the
-  // course CLIMBS out of the sea instead of cruising flat at 150 m.
-  // The lerp below carries the climb: ~62, 76, 88, 98, 107, 115,
-  // 122, 128, 133, 137, 141, 145. The clearance pass still lifts any
-  // ring whose ground is too close.
-  let y = 55;
+  // v21c (user 27 Nov 10:17): LOW START — the walk starts low and
+  // climbs toward the 145 m approach, so the early rings sit low
+  // between the ridge islands and the course CLIMBS out of the sea
+  // instead of cruising flat at 150 m. The clearance pass still lifts
+  // any ring whose ground is too close.
+  // v22: LINEAR climb — the v21 exponential lerp front-loaded the
+  // climb (58→74→100: +16, +26 m steps) and the Weak pilot could
+  // not track it (Weak 4/12, stuck orbiting ring 5 for 150+ s).
+  // The course now climbs in even ~8 m steps from 50 m to the 145 m
+  // approach, so the opening is a gentle staircase. The ramp starts
+  // at 50 (not 55) so ring 1 lands at ~58 m — inside the 40-60 m
+  // AGL low-start band test 22 guards. Early altitude jitter is
+  // ±2 m (was ±12): with a 7.9 m base step, ±12 jitter could still
+  // make a 32 m step, so the early opening must actually BE gentle,
+  // not just average gentle. Rings 6+ keep the ±28 m jitter — the
+  // challenge stays. Headless test 25 guards the early steps (<= 10 m).
+  let y = 50;
   for (let i = 0; i < COURSE.ringCount; i += 1) {
     const legsLeft = COURSE.ringCount - i;
     const dx = approach.x - x;
@@ -88,10 +97,10 @@ export function createCourse(random, seed, islands) {
     const heading = headingTo(x, z, approach.x, approach.z) + random.range(-wander, wander);
     x += Math.sin(heading) * stepLen;
     z += -Math.cos(heading) * stepLen;
-    const targetY = approach.y + (y - approach.y) * (1 - (i + 1) / COURSE.ringCount);
+    const targetY = 50 + (approach.y - 50) * (i + 1) / COURSE.ringCount;
     y = i === COURSE.ringCount - 1
       ? approach.y
-      : clamp(targetY + random.range(early ? -12 : -28, early ? 12 : 28), COURSE.minRingAlt, COURSE.maxRingAlt);
+      : clamp(targetY + random.range(early ? -2 : -28, early ? 2 : 28), COURSE.minRingAlt, COURSE.maxRingAlt);
     const nextHeading = i === COURSE.ringCount - 1
       ? Math.atan2(runway.dirX, -runway.dirZ)
       : headingTo(x, z, approach.x, approach.z);
@@ -102,7 +111,8 @@ export function createCourse(random, seed, islands) {
       // The facing is fixed below, once the spawn is known: each ring faces the
       // pilot flying in from the previous point, never the runway.
       axis: { x: 0, y: 0, z: -1 },
-      radius: COURSE.ringRadius,
+      // v22: opening rings (1-5) are 16 m, the rest 13 m (config).
+      radius: early ? COURSE.ringRadiusEarly : COURSE.ringRadius,
       passed: false,
     });
   }
@@ -118,10 +128,11 @@ export function createCourse(random, seed, islands) {
   // first ring, so the player still starts 10 m above ring 1.
   for (const ring of rings) {
     const ground = islandHeightAt(islands, seed, ring.x, ring.z);
-    // 20 m over the ring radius: on a steep slope the triangulated mesh
-    // can sit a few metres above the analytic height, and the ring's lower
-    // rim must stay clear of that too.
-    const floor = ground + COURSE.ringRadius + 20;
+    // 20 m over the ring's OWN radius (v22: early rings are 16 m, so
+    // their floor is ground + 36): on a steep slope the triangulated
+    // mesh can sit a few metres above the analytic height, and the
+    // ring's lower rim must stay clear of that too.
+    const floor = ground + ring.radius + 20;
     if (ring.y < floor) ring.y = floor;
   }
 
@@ -318,9 +329,15 @@ export function buildRingMeshes(THREE, course) {
   // circular geometry with golden light, per the redesign prompt. The pass
   // radius is unchanged (the tube is visual only; createCourse's ringRadius
   // still decides a pass), so the flight model is untouched.
+  // v22: TWO torus sizes — the opening rings (1-5) are 16 m, the rest
+  // 13 m, and the visual torus MUST match the pass radius, or the
+  // player flies through a hoop that looks bigger than the gate (or
+  // clips a hoop that looks smaller). One geometry per size.
+  const ringGeoEarly = new THREE.TorusGeometry(COURSE.ringRadiusEarly, 0.75, 12, 64);
   const ringGeo = new THREE.TorusGeometry(COURSE.ringRadius, 0.75, 12, 64);
   // v3: a thin outer glow layer around each ring (a fatter, faint torus in the
   // same gold), so the ring reads as light, not as a painted hoop.
+  const glowGeoEarly = new THREE.TorusGeometry(COURSE.ringRadiusEarly, 0.75 * 2.0, 10, 64);
   const glowGeo = new THREE.TorusGeometry(COURSE.ringRadius, 0.75 * 2.0, 10, 64);
   const glowMat = new THREE.MeshBasicMaterial({
     color: PALETTE.ring, transparent: true, opacity: 0.20, depthWrite: false,
@@ -343,14 +360,15 @@ export function buildRingMeshes(THREE, course) {
   // wayfinding on their own.
 
   const meshes = course.rings.map((ring) => {
-    const mesh = new THREE.Mesh(ringGeo, futureMat);
+    const big = ring.radius > COURSE.ringRadius;
+    const mesh = new THREE.Mesh(big ? ringGeoEarly : ringGeo, futureMat);
     mesh.position.set(ring.x, ring.y, ring.z);
     mesh.quaternion.setFromUnitVectors(
       new THREE.Vector3(0, 0, 1),
       new THREE.Vector3(ring.axis.x, ring.axis.y, ring.axis.z),
     );
     group.add(mesh);
-    const glow = new THREE.Mesh(glowGeo, glowMat);
+    const glow = new THREE.Mesh(big ? glowGeoEarly : glowGeo, glowMat);
     glow.position.copy(mesh.position);
     glow.quaternion.copy(mesh.quaternion);
     group.add(glow);
@@ -438,12 +456,15 @@ export function buildRingMeshes(THREE, course) {
     }
     // v11: park the sparkles on the next ring and spin them slowly around
     // its normal, so the particle cloud orbits the gate the plane is
-    // flying toward.
+    // flying toward. v22: the sparkle cloud is built at the 13 m radius,
+    // so it scales to the next ring's own radius (16 m for the opening
+    // rings) — otherwise the sparkles orbit inside the big hoop.
     if (next) {
       const idx = course.rings.indexOf(next);
       sparkleGroup.visible = true;
       sparkleGroup.position.copy(meshes[idx].mesh.position);
       sparkleGroup.quaternion.copy(meshes[idx].mesh.quaternion);
+      sparkleGroup.scale.setScalar(next.radius / COURSE.ringRadius);
       sparkles.rotation.z = time * 0.6;
     } else {
       sparkleGroup.visible = false;

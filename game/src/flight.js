@@ -54,6 +54,28 @@ export function createFlight(spawn) {
     status: 'flying',
     stalled: false,
     verticalSpeed: 0,
+    // v22 auto-win (user 27 Nov 15:09 WIB — REPLACES the v22 P0/Gemini
+    // touchdown tiers): how the run ended — 'autoland' (the autopilot
+    // landing after the win triggered over the runway). main.js
+    // reads it for the results panel; null while flying / after a crash.
+    landingKind: null,
+    // v22 auto-win: after all 12 rings, crossing into the Runway 09
+    // corridor IS the win — no manual touchdown, no speed/VS/pitch
+    // thresholds. autoLanding is set the moment the plane enters the
+    // corridor; from then on step() ignores the player's input and
+    // flies the autopilot landing (descent + flare + rollout).
+    // rollingOut is set at the first ground contact during the
+    // autopilot landing — the plane is pinned to the deck, bleeding
+    // speed, and can never crash. main.js reads autoLanding for the
+    // FINISH toast and the approach pill.
+    autoLanding: false,
+    rollingOut: false,
+    // v22 Gemini: the last touchdown's full telemetry — speed, VS,
+    // pitch, roll, throttle, runway coords, branch (WIN / CRASH)
+    // + reason — logged on EVERY ground contact, so automated and
+    // manual runs can verify the landing decision instead of
+    // guessing from the outcome. Null until the first ground contact.
+    touchdown: null,
     elapsed: 0,
     ringsPassed: 0,
     streak: 0,
@@ -78,6 +100,10 @@ export function createFlight(spawn) {
     state.status = 'flying';
     state.stalled = false;
     state.verticalSpeed = 0;
+    state.landingKind = null;
+    state.autoLanding = false;
+    state.rollingOut = false;
+    state.touchdown = null;
     state.elapsed = 0;
     state.ringsPassed = 0;
     state.streak = 0;
@@ -96,6 +122,76 @@ export function createFlight(spawn) {
     if (state.status !== 'flying') return 0;
     let events = 0;
     state.elapsed += dt;
+    // prevY is the position at the END of the previous step —
+    // captured HERE, before anything in this step moves the plane.
+    // The stall sink below drops y before the integration, so
+    // capturing prevY after it would read a y that already sank
+    // (stall sink 0.041/frame > the frame's whole descent
+    // 0.018/frame) and verticalSpeed would read wrong.
+    const prevY = state.y;
+
+    // v22 auto-win (user 27 Nov 15:09 WIB + clarification 15:11):
+    // after all 12 rings, crossing into the Runway 09 corridor IS
+    // the win — no manual touchdown, no speed/VS/pitch thresholds.
+    // The user's own report: the PLAYER's plane never exploded;
+    // the explosions were the other teams' planes (scripted race
+    // crashes), but the win never triggered. So the win is now a
+    // POSITION check, not a touchdown check: the moment the plane
+    // is over the runway asphalt (|dx| < 250 m, |lat| < 24 m — the
+    // strip + overrun/shoulder margins), the autopilot takes over
+    // and the plane lands itself. Checked HERE, before any input
+    // is applied, so the autopilot owns the very first frame
+    // inside the corridor. The '[win]' log line is the telemetry
+    // the tests and the probe assert on (the touchdown branch WIN
+    // is recorded again at the touchdown, below).
+    if (!state.autoLanding && runway !== null && state.ringsPassed >= COURSE.ringCount
+      && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2 + 25
+      && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2 + 10) {
+      state.autoLanding = true;
+      console.log('[win] ' + JSON.stringify({
+        t: +state.elapsed.toFixed(1),
+        x: Math.round(state.x), y: Math.round(state.y), z: Math.round(state.z),
+        dx: Math.round(state.x - runway.x), lat: Math.round(state.z - runway.z),
+        speed: +state.speed.toFixed(1), rings: state.ringsPassed,
+      }));
+    }
+
+    // v22 auto-win: while the autopilot owns the plane, the player's
+    // input is REPLACED by the synthesized autoland input — a VS-hold
+    // pitch law (-9 m/s above 60 m AGL, -7 below 60 m, flaring to
+    // -2.5 for the last 12 m). STEEP on purpose, and measured, not
+    // guessed: the gentle -6/-5/-1.5 descent floats the plane at low
+    // speed (stall mush + a long -1.5 flare = 8 s at ~25 m/s) and the
+    // baseline touched down 779 m past the strip; at -9/-7/-2.5 the
+    // same profile touches down 279 m past it. (The "gift of diving"
+    // adds speed, but the much shorter time aloft wins by ~500 m.)
+    // Plus a heading-hold + cross-track roll law. Throttle is idle
+    // the whole way down. Once the wheels are on the deck
+    // (rollingOut) the input goes neutral, so the auto-level holds
+    // the wings flat and the speed bleeds off. The parameter `input`
+    // is reassigned to the effective input, so the rest of the step
+    // body is untouched.
+    if (state.autoLanding) {
+      if (state.rollingOut || runway === null) {
+        input = { pitch: 0, roll: 0, yaw: 0, throttle: -1, stickRoll: 0, stickPitch: 0 };
+      } else {
+        const gHere = groundAt(state.x, state.z);
+        const agl = state.y - Math.max(gHere, 0.6);
+        const targetVS = agl < 12 ? -2.5 : agl < 60 ? -7 : -9;
+        const alPitch = clamp((targetVS - state.verticalSpeed) * 0.05, -1, 1);
+        // Heading-hold + cross-track (NOT a far steering point: a
+        // point 500 m past the centre FLIPS the heading error once
+        // the plane flies past it while still descending, and the
+        // first autoland build touched down banked -0.8 rad turning
+        // back toward it). The runway heading never flips, so the
+        // wings stay level all the way to the deck.
+        const rwyHeading = Math.atan2(runway.dirX, -runway.dirZ);
+        const herr = wrapAngle(rwyHeading - state.yaw);
+        const lat = -(state.x - runway.x) * runway.dirZ + (state.z - runway.z) * runway.dirX;
+        const alRoll = clamp(-state.roll * 2 - lat * 0.01 + herr * 1.5, -1, 1);
+        input = { pitch: alPitch, roll: alRoll, yaw: 0, throttle: -1, stickRoll: alRoll, stickPitch: alPitch };
+      }
+    }
 
     // Throttle and fuel. An empty tank means the engine is out: glide, don't climb.
     state.throttle = clamp(state.throttle + input.throttle * PLANE.throttleRate * dt, 0, 1);
@@ -159,11 +255,15 @@ export function createFlight(spawn) {
     }
 
     const fwd = forwardOf(state.yaw, state.pitch);
-    const prevY = state.y;
     state.x += fwd.x * state.speed * dt;
     state.y += fwd.y * state.speed * dt;
     state.z += fwd.z * state.speed * dt;
     state.verticalSpeed = (state.y - prevY) / dt;
+
+    // v22 auto-win: the ground-effect cushion is GONE — it belonged
+    // to the Gemini touchdown tiers (replaced by the auto-win: the
+    // autopilot flies the descent, so no cushion is needed to save
+    // a manual flare).
 
     // Soft ceiling: the sky ends at 900 m and the nose is pushed gently down there.
     if (state.y > 900) {
@@ -171,63 +271,105 @@ export function createFlight(spawn) {
       if (state.pitch > 0) state.pitch = Math.max(0, state.pitch - 0.5 * dt);
     }
 
-    // Ground and water. Touching down is only a landing on the runway, slow and level.
-    // v15: the window is wider and gentler than v14 — the user's own
-    // playtest never saw the finish at all, and a casual pilot lands
-    // slightly long, slightly wide and slightly fast. The strip counts
-    // with its shoulders and a 40 m overshoot, and "gentle" is 48 m/s
-    // (was 42), 0.45 roll / 0.35 pitch (was 0.35 / 0.28), 8 m/s sink
-    // (was 6). A hard touchdown off the strip is still a crash.
-    // v21b: the FINISH ZONE (after all 12 rings) is the FORGIVING win
-    // path, and its tolerances are the ones a real human lands inside
-    // — the user's own playtest (27 Nov 09:39 WIB) crashed on a
-    // manual landing to win, and the reproduction (probe
-    // /tmp/probe-land-profiles2.mjs, 10 human profiles) proved why:
-    // a wings-level, on-centreline, on-strip touchdown at throttle
-    // 0.3 fails on speed ALONE (107 kts = 55 m/s vs the 50 cap — the
-    // plane cruises at 105 kts at throttle 0.3, so a human who slows
-    // down naturally still arrives too fast; only a near-idle glide
-    // at 69 kts passed), and the natural descent from ring 12 (55 m
-    // over ~300 m) at cruise speed is VS -11 m/s vs the 8 cap. Both
-    // caps bite TOGETHER on a normal human approach. The fix widens
-    // ONLY the finish-zone tolerances (the precise onRunway "gentle"
-    // path is untouched): speed 62 m/s (120 kts — above the 0.3
-    // throttle cruise of 55 m/s, below the full-throttle cruise of
-    // 75 m/s, so slowing down still matters and a full-throttle
-    // arrival still crashes), sink 12 m/s (the -11 m/s natural
-    // descent lands; a -12 m/s touchdown is firm but survivable),
-    // pitch 0.45 rad (a hard flare is a landing attitude, not a
-    // crash). The check ORDER is unchanged and was verified: the
-    // landing is tested FIRST (onRunway && gentle, or finish zone &&
-    // softEnough) and the crash is only the else — there is no
-    // separate crash check that can fire before the landing check.
-    // The terrain on the final approach is clean (a 3-degree glide
-    // from ring 12 clears the ground by 27-105 m), so the fix is
-    // purely the touchdown window, not the course.
+    // v22 auto-win: ROLLOUT — once the wheels are down, the plane
+    // stays pinned to the deck EVERY step, even over falling ground.
+    // Without this, the pin only fires on contact steps: over the
+    // eastern downslope the plane floats between contacts, the
+    // rollout stretches ~300 m (measured: baseline final dx 571 vs
+    // touchdown dx 279), and the run ends far past the strip. Pinned
+    // every step it stops in ~60 m. Speed bleeds 6 m/s², wings
+    // level, and the run ends below 8 m/s. The ground block below
+    // only ever sees the FIRST contact (which sets rollingOut).
+    if (state.rollingOut) {
+      const rg = groundAt(state.x, state.z);
+      state.y = rg + 1.6;
+      state.verticalSpeed = 0;
+      state.throttle = 0;
+      state.speed = Math.max(0, state.speed - 6 * dt);
+      state.pitch += (0 - state.pitch) * Math.min(1, 2 * dt);
+      state.roll += (0 - state.roll) * Math.min(1, 2 * dt);
+      if (state.speed < 8) {
+        state.status = 'landed';
+        events |= EVENT_LAND;
+      }
+      return events;
+    }
+
+    // Ground and water. v22 auto-win (user 27 Nov 15:09 WIB +
+    // clarification 15:11): there is NO manual touchdown check any
+    // more. The win already happened the moment the plane entered
+    // the runway corridor (autoLanding, above) — the ground block
+    // only decides HOW the run ends. If the autopilot owns the
+    // plane, the touchdown is a landing, in ANY condition: the
+    // plane is pinned to the deck, its speed bled off, its wings
+    // levelled, and it rolls to a stop — it can NEVER explode
+    // during the autopilot landing. If the autopilot does NOT own
+    // the plane, touching the ground is a crash: the race crash
+    // checks stay as before (terrain/sea before all 12 rings, or
+    // any ground contact before the finish line — the player must
+    // FLY OVER the runway to win). The v21b finish-zone tolerances
+    // and the v22 Gemini tiers (WIN 78 / -16.5 / 0.58, HARD 88 /
+    // -24 / 0.72) are BOTH gone — the user's 15:09 decision
+    // replaces them, and the 15:11 clarification says why: the
+    // player's plane never exploded in the first place; the win
+    // simply never triggered. What still crashes: ditching in the
+    // sea, flying into terrain, and any ground contact before the
+    // finish line is crossed with 12 rings.
     const ground = groundAt(state.x, state.z);
     if (state.y <= ground + 1.6) {
-      const onRunway = runway !== null
-        && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2 + 40
-        && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2 + 20;
-      const gentle = state.speed < 48 && Math.abs(state.roll) < 0.45
-        && Math.abs(state.pitch) < 0.35 && Math.abs(state.verticalSpeed) < 8;
-      // v15: the FINISH ZONE — after all 12 rings, a soft touchdown
-      // anywhere in the extended airfield box (80 m past the strip,
-      // 30 m to each side) counts as a landing too. The player flew
-      // the whole course; the finish must not be lost to a touchdown
-      // 20 m wide of the centreline.
-      const inFinishZone = runway !== null && state.ringsPassed >= COURSE.ringCount
-        && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2 + 80
-        && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2 + 30;
-      const softEnough = state.speed < 62 && Math.abs(state.roll) < 0.45
-        && Math.abs(state.pitch) < 0.45 && Math.abs(state.verticalSpeed) < 12;
+      const dxRunway = runway !== null ? state.x - runway.x : 0;
+      const latRunway = runway !== null ? state.z - runway.z : 0;
+      // Touchdown TELEMETRY on every ground contact — speed, VS,
+      // pitch, roll, throttle, runway coords, branch (WIN / CRASH)
+      // + reason. The tests and the probe assert on branch + kind.
+      const touchdownThrottle = state.throttle;
+      const logTouchdown = (branch, kind, reason) => {
+        state.touchdown = {
+          speed: +state.speed.toFixed(1),
+          vs: +state.verticalSpeed.toFixed(1),
+          pitch: +state.pitch.toFixed(2),
+          roll: +state.roll.toFixed(2),
+          throttle: +touchdownThrottle.toFixed(2),
+          x: Math.round(state.x),
+          z: Math.round(state.z),
+          dx: Math.round(dxRunway),
+          lat: Math.round(latRunway),
+          ground: +ground.toFixed(1),
+          rings: state.ringsPassed,
+          branch,
+          kind,
+          reason,
+        };
+        console.log('[touchdown] ' + JSON.stringify(state.touchdown));
+      };
       state.y = ground + 1.6;
-      if ((onRunway && gentle) || (inFinishZone && softEnough)) {
-        state.status = 'landed';
-        state.speed = Math.max(0, state.speed - 30 * dt);
-        events |= EVENT_LAND;
+      if (state.autoLanding) {
+        // The autopilot landing: NEVER a crash, in any condition.
+        // Pin to the deck, cut the thrust, bleed the speed (6 m/s²
+        // rollout drag — the plane stops in a few seconds), ease the
+        // wings level. The first contact logs the touchdown telemetry
+        // (branch WIN, kind 'autoland'); the run ends once the speed
+        // drops below 8 m/s. A very high entry can touch down long,
+        // past the strip end on the plateau — still a smooth win,
+        // never an explosion.
+        state.rollingOut = true;
+        state.throttle = 0;
+        state.speed = Math.max(0, state.speed - 6 * dt);
+        state.pitch += (0 - state.pitch) * Math.min(1, 2 * dt);
+        state.roll += (0 - state.roll) * Math.min(1, 2 * dt);
+        if (!state.touchdown) {
+          state.landingKind = 'autoland';
+          logTouchdown('WIN', 'autoland', 'autopilot landing after crossing the finish line');
+        }
+        if (state.speed < 8) {
+          state.status = 'landed';
+          events |= EVENT_LAND;
+        }
       } else {
         state.status = 'crashed';
+        state.landingKind = null;
+        logTouchdown('CRASH', null, state.ringsPassed < COURSE.ringCount ? `ground contact before all 12 rings (${state.ringsPassed}/12)`
+          : 'ground contact before the finish line — fly over the runway to win');
         events |= EVENT_CRASH;
       }
     }

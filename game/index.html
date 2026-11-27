@@ -15,6 +15,17 @@
   dimmed, gone (altitude, speed, heading, fuel, throttle, compass, ring
   counter, timer). The v2 dim-to-0.15 still left the numbers readable. */
   body.title-open #hud { opacity: 0; visibility: hidden; }
+  /* v22: in COCKPIT view the 3D dials ARE the instruments — the DOM
+  panels that duplicate them hide, so the cockpit shot reads as one
+  clean panel instead of dials + floating HUD cards fighting each
+  other (Gemini v21: dials cluttered, clashing with the outer HUD).
+  The ring pointer, objective, messages, score/time, fuel/throttle
+  stay: they have no 3D equivalent. The values still exist in the
+  DOM (display:none only) — the shots.mjs cockpit check reads their
+  textContent, so it is unaffected. */
+  body.cockpit-view #hud-top-left,
+  body.cockpit-view #attitude,
+  body.cockpit-view #compass { display: none; }
   /* v11: deep navy panels (#063C85, the redesign prompt's panel colour)
   with rounded corners, a cyan glow outline and a soft drop shadow — the
   charcoal panels are gone, so the HUD matches the title screen's navy
@@ -176,7 +187,7 @@
 
 <div id="hud">
   <div id="hud-top-left">
-    <div class="panel"><div class="label">ALTITUDE</div><div><span class="value" id="hud-alt">0</span><span class="unit">FT</span></div></div>
+    <div class="panel"><div class="label">ALT · MSL</div><div><span class="value" id="hud-alt">0</span><span class="unit">FT</span></div></div>
     <div class="panel"><div class="label">SPEED</div><div><span class="value" id="hud-spd">0</span><span class="unit">KTS</span></div></div>
     <div class="panel"><div class="label">HEADING</div><div><span class="value" id="hud-hdg">000°</span></div></div>
   </div>
