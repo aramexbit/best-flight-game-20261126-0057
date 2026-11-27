@@ -64,14 +64,26 @@ export function createCourse(random, seed, islands) {
       // 22.6 m). The fix is the pitch authority (test 7 proves a tap
       // moves ~2x more altitude now); the legs stay natural.
       : clamp(dist / legsLeft, COURSE.legMin, COURSE.legMax);
-    const wander = (1 - i / COURSE.ringCount) * 0.22;
+    // v20 (a): the FIRST legs are gentler — wander 0.12 rad (was
+    // 0.22) and altitude jitter ±12 m (was ±28) for rings 1-3, so ring
+    // 2 sits nearly straight ahead of ring 1 at nearly the same
+    // altitude. The v19 live playtest failed ring 2 in 3/3 tap-steered
+    // flights (closest 186 m, then the gap grew to kilometres): the
+    // 206 m leg gives only ~3.7 s, and a ±28 m altitude step plus a
+    // 0.22 rad wander is more correction than tap steering can make in
+    // that time. The later rings keep the full wander/jitter, so the
+    // course still snakes — only the opening is forgiving. The legs
+    // stay ~206 m (legMin/legMax untouched — the v19 lesson: a higher
+    // floor collapses the final leg).
+    const early = i < 3;
+    const wander = (1 - i / COURSE.ringCount) * (early ? 0.12 : 0.22);
     const heading = headingTo(x, z, approach.x, approach.z) + random.range(-wander, wander);
     x += Math.sin(heading) * stepLen;
     z += -Math.cos(heading) * stepLen;
     const targetY = approach.y + (y - approach.y) * (1 - (i + 1) / COURSE.ringCount);
     y = i === COURSE.ringCount - 1
       ? approach.y
-      : clamp(targetY + random.range(-28, 28), COURSE.minRingAlt, COURSE.maxRingAlt);
+      : clamp(targetY + random.range(early ? -12 : -28, early ? 12 : 28), COURSE.minRingAlt, COURSE.maxRingAlt);
     const nextHeading = i === COURSE.ringCount - 1
       ? Math.atan2(runway.dirX, -runway.dirZ)
       : headingTo(x, z, approach.x, approach.z);
@@ -329,6 +341,12 @@ export function buildRingMeshes(THREE, course) {
         mesh.scale.setScalar(1 + pulse * Math.sin(time * 3.2));
         glow.visible = true;
         glow.scale.copy(mesh.scale);
+        // v20: the next ring's glow PULSES in opacity too (0.22-0.34),
+        // so the gate ahead reads as luminous light with a direction
+        // of travel, not a static hoop — Gemini v20 asked for a crisp
+        // luminous rim + pulse. The shared glow material is safe to
+        // pulse: only the next ring's glow is visible at all.
+        glowMat.opacity = 0.28 + 0.06 * Math.sin(time * 3.2);
       } else {
         mesh.material = futureMat;
         mesh.scale.setScalar(1);

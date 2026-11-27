@@ -83,7 +83,7 @@ export function createRenderer(canvas, THREE, groups) {
   // planes to the ground below them.
   const contactMesh = new THREE.Mesh(
     new THREE.CircleGeometry(1, 24),
-    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.55, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.75, depthWrite: false }),
   );
   contactMesh.rotation.x = -Math.PI / 2;
   scene.add(contactMesh);
@@ -91,23 +91,30 @@ export function createRenderer(canvas, THREE, groups) {
   for (let i = 0; i < 4; i += 1) {
     const m = new THREE.Mesh(
       new THREE.CircleGeometry(1, 24),
-      new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.55, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.75, depthWrite: false }),
     );
     m.rotation.x = -Math.PI / 2;
     scene.add(m);
     rivalContacts.push(m);
   }
+  // v20 (c): the contact shadows are DARKER and BIGGER — opacity
+  // 0.75 (was 0.55), scale 10 m + agl*0.03 (was 8 + agl*0.02), visible
+  // below 160 m AGL (was 120). The v19 live playtest identified only
+  // ONE shadow in the frame (the player's) out of 9 code-visible
+  // meshes: the 0.55 opacity ellipse over bright grass/sea was too
+  // faint to pick out at chase distance. A darker, bigger ellipse
+  // anchors each plane to the ground below it.
   function placeContact(mesh, terrainApi, x, y, z, visible) {
     if (!visible) { mesh.visible = false; return; }
     const groundY = terrainApi && terrainApi.groundAt ? terrainApi.groundAt(x, z) : 0;
     const floorY = Math.max(groundY, 0.6);
     const agl = Math.max(0, y - floorY);
-    if (agl > 120) { mesh.visible = false; return; }
+    if (agl > 160) { mesh.visible = false; return; }
     mesh.visible = true;
     mesh.position.set(x, floorY + 0.4, z);
-    const sc = 8 + agl * 0.02;
+    const sc = 10 + agl * 0.03;
     mesh.scale.set(sc, sc * 0.72, 1);
-    mesh.material.opacity = 0.55 * (1 - agl / 120);
+    mesh.material.opacity = 0.75 * (1 - agl / 160);
   }
 
   // v15: shared blob-shadow placement — the sun offset, growth and fade
@@ -255,11 +262,15 @@ export function createRenderer(canvas, THREE, groups) {
       // aims further down (-6.5 m at 60 m out, was -3.2) to keep the panel
       // band in the lower frame while the head sits lower.
       // The camera turns with the plane, so the horizon rolls as the wings do.
+      // v20: the camera sits 0.35 m behind the plane centre (was 0.1)
+      // — the v19 cockpit shot half-clipped the leftmost (VSI) dial at
+      // the frame edge. A quarter-metre back keeps all five dials in
+      // frame with the windshield and the ring ahead still in view.
       tmpUp.set(0, 1, 0);
       camera.position.set(
-        s.x - tmpForward.x * 0.1,
+        s.x - tmpForward.x * 0.35,
         s.y + 0.9,
-        s.z - tmpForward.z * 0.1,
+        s.z - tmpForward.z * 0.35,
       );
       lookTarget.set(s.x + tmpForward.x * 60, s.y + tmpForward.y * 60 - 6.5, s.z + tmpForward.z * 60);
       camera.up.copy(tmpUp);

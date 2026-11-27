@@ -24,16 +24,18 @@ const START_SECONDS = 8;
 // ring 12, so the frame shows the fireball ahead over the runway
 // approach instead of a ring — the blast stays the hero moment. This
 // is staging only: the flight model and the shot cameras are untouched.
-const PLAY_SECONDS = 49.5;
-// v19b: 51.6 -> 49.5. The mid-air collision fires at ~50.35 s, only
-// ~14 m from the chase camera, and its debris (10-26 m/s) and split
-// airframe halves (36 m/s) fly past the lens in the next second —
-// the cover at 51.6 s caught random giant coloured slabs splashed
-// across the HUD corner (a different slab every run: the debris uses
-// Math.random, so the cover was a lottery). At 49.5 s the cover
-// catches the pre-collision convergence instead: the player on the
-// final leg, the rivals closing on the meet point ahead, the storm
-// in view — the race climax, clean and deterministic every run.
+const PLAY_SECONDS = 43.5;
+// v20: 49.5 -> 43.5. The cover must be a DIFFERENT moment from the
+// landing shot (Gemini v19: landing was "almost a duplicate" of the
+// cover — same framing, 460 vs 456 FT, 109 vs 113 KTS, same score
+// 3403, because both froze on the final approach). At 43.5 s the
+// player is mid-race around ring 10/11 over the runway island's
+// western slopes — rings < 12, so the AGL pill is hidden too and the
+// HUD reads cleaner. The landing shot now owns the final approach
+// alone, at a low flare. The pre-collision convergence at 49.5 s is
+// gone from the cover, but the blast is not the cover's job any more:
+// the cover's job is the race.
+// v19b: 51.6 -> 49.5. (see above)
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world
@@ -114,13 +116,25 @@ export function autopilotTo(flight, target, throttleTarget, groundAt) {
   // Terrain ahead: sample several points along the nose and climb out of the
   // way of the highest of them before the ground does the deciding. One sample
   // is too easy to fool on a rugged ridge.
+  // v20: a POINT target (a landing aim-point, no axis) gets a gentler
+  // guard — samples only 80/160 m ahead, margin 15 m (was 80-340 m /
+  // 45 m). The ring guard stays strict: the course threads between
+  // hills. But on final the 340 m sample sits PAST the runway, over
+  // the rising ground beyond the strip, so the strict guard pinned the
+  // plane at +45 m above the strip forever and the landing freeze
+  // (+30 m) could never trigger — the first v20 landing shot orbited
+  // at a 77-degree bank for the full 140 s. A landing aim-point is
+  // over the flat strip; the short samples stay on the strip, so the
+  // plane can descend onto its glidepath.
+  const guardSamples = target.axis ? [80, 160, 240, 340] : [80, 160];
+  const guardMargin = target.axis ? 45 : 15;
   let highest = -Infinity;
-  for (const d of [80, 160, 240, 340]) {
+  for (const d of guardSamples) {
     const gx = s.x + Math.sin(s.yaw) * d;
     const gz = s.z - Math.cos(s.yaw) * d;
     highest = Math.max(highest, groundAt(gx, gz));
   }
-  if (highest + 45 > s.y) pitchInput = Math.max(pitchInput, 0.9);
+  if (highest + guardMargin > s.y) pitchInput = Math.max(pitchInput, 0.9);
   // Recovering from a miss means a tight turn back: stay slow while doing it.
   const slowTurn = (Math.abs(headingError) > 0.6 || recovering) ? 0.45 : throttleTarget;
   // Bank with damping: steer by the heading error, but subtract the bank
@@ -168,17 +182,18 @@ export function stageShot(name, game, onStep) {
     let throttleTarget = 0.72;
     if (name === 'landing' && !ring) {
       // Final approach: aim short of the threshold, then down to the strip.
-      // v7: the far target stays at +45 and the freeze window at 300 m /
-      // 50 m — the v6 values, which are proven to catch the plane on final.
-      // (First v7 try: +35 and 260 m / 38 m — the plane never met all four
-      // freeze conditions together and orbited the strip at a steep bank for
-      // the whole 140 s, so the landing frame showed a hillside instead of
-      // the runway. The closer landing camera below is what makes the
-      // threshold read bigger in v7, not a tighter freeze window.)
+      // v20: the far target drops to +25 (was +45) and the near target to
+      // +4 (was +6) — a real glidepath. The old +45 far target plus the
+      // strict terrain guard levelled the plane at +45 m above the strip
+      // and it never descended: the v20 landing freeze (+30 m) could
+      // never trigger and the plane orbited at max bank for 140 s. With
+      // the guard relaxed for point targets (above) and a +25 far target,
+      // the plane descends on a ~4-5 degree slope and the freeze catches
+      // it at +30 m, ~250 m out, wings level.
       const distToRunway = Math.hypot(runway.x - s.x, runway.z - s.z);
       target = distToRunway > 300
-        ? { x: runway.x - runway.dirX * 260, y: runway.height + 45, z: runway.z - runway.dirZ * 260 }
-        : { x: runway.x, y: runway.height + 6, z: runway.z };
+        ? { x: runway.x - runway.dirX * 260, y: runway.height + 25, z: runway.z - runway.dirZ * 260 }
+        : { x: runway.x, y: runway.height + 4, z: runway.z };
       throttleTarget = 0.3;
       // v4: freeze the frame on final approach — inside 300 m, below 50 m
       // above the strip, nose lined up with the runway and wings level, so
@@ -204,13 +219,18 @@ export function stageShot(name, game, onStep) {
       // v11: level < 0.12 (was 0.15), same reason — a straighter final.
       // v12: level < 0.10 — the wings must read level in the frame.
       const level = Math.abs(s.roll) < 0.10;
-      // v4: freeze closer and lower — inside 300 m and below 50 m above the
-      // strip — so the runway fills the frame instead of reading as a narrow
-      // distant strip (v3 froze at 400 m / 65 m). The v3 lesson still holds:
-      // the plane is descending through ~58 m when it lines up, so the height
-      // window must stay generous enough to catch it before it overshoots the
-      // centre and starts orbiting at a steep bank.
-      if (distToRunway < 300 && s.y < runway.height + 50 && aligned && level) break;
+      // v20: freeze the frame on a LOW final — inside 250 m, below
+      // 30 m above the strip (was 300 m / 50 m) — so the landing shot
+      // is a flare, not the same approach the cover used to show: the
+      // runway fills the frame, the PAPI and the threshold numbers are
+      // big, the nose is level in the flare. The alignment and level
+      // conditions stay (0.15 rad / 0.10 roll), proven since v11/v12.
+      // The v4 warning still applies — the plane descends through
+      // ~58 m as it lines up, so a +30 m window must catch it before
+      // it overshoots the centre; the 250 m distance window keeps the
+      // catch on the threshold, and the screenshot run is verified
+      // by eye (a missed freeze would orbit and show a hillside).
+      if (distToRunway < 250 && s.y < runway.height + 30 && aligned && level) break;
     } else if (ring) {
       target = ring;
     } else {

@@ -57,7 +57,7 @@
      background, like the other HUD panels. */
   #hud-bottom-right .hint { display: inline-block; margin-top: 8px; font-size: 12px; background: rgba(6, 60, 133, 0.88); border: 1px solid rgba(130, 210, 255, 0.35); border-radius: 999px; padding: 4px 10px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); max-width: 62vw; white-space: normal; text-align: right; }
 
-  #hud-msg { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); font-size: 34px; font-weight: 800; letter-spacing: 0.08em; color: #ffd94d; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.65); opacity: 0; transition: opacity 0.4s; white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
+  #hud-msg { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); font-size: 40px; font-weight: 800; letter-spacing: 0.08em; color: #ffd94d; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.65); opacity: 0; transition: opacity 0.4s; white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
   /* v15: the landing objective as a compact pill (Gemini's fix prompt:
      ≤36% of screen width, y 6-12% from the top) — the v14 giant centre
      banner covered the runway sightline in the landing shot. */
@@ -108,11 +108,13 @@
   #title-brand .brand-title { font-size: 26px; font-weight: 900; letter-spacing: 0.03em; line-height: 1; background: linear-gradient(#FFE65C, #FFB800); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55)); }
   #title-brand .brand-sub { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: #ffffff; opacity: 0.92; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); margin-top: 3px; }
   #title-top-right { display: flex; align-items: center; gap: 10px; }
-  /* v19 (Gemini v18 #8): the in-flight counters (Fuel pill, 0/12
-     badge) are HIDDEN on the title screen — they belong to the HUD,
-     not the title, and the v18 blind test saw them floating over the
-     title scene. The gear button stays: it is the sound toggle. */
+  /* v20 (d): the gear button is HIDDEN on the title screen too (was
+     kept as the sound toggle) — the v19 live playtest still saw the
+     round sun/gear button floating top-right over the title scene,
+     and Gemini v19 listed it as title clutter. Sound is still
+     toggleable in flight with M. */
   #title-top-right .top-pill { display: none; }
+  body.title-open #btn-gear { display: none; }
   .top-pill { display: flex; align-items: center; gap: 8px; background: rgba(6, 60, 133, 0.88); border: 1px solid rgba(0, 229, 255, 0.4); border-radius: 999px; padding: 8px 14px; color: #ffffff; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), 0 0 10px rgba(0, 229, 255, 0.12); }
   .top-pill .fuel-track { width: 110px; height: 10px; background: rgba(0, 0, 0, 0.45); border-radius: 5px; overflow: hidden; }
   .top-pill .fuel-track > span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #2CE65B, #4ADE80); border-radius: 5px; }
@@ -193,9 +195,14 @@
     <div class="hero-sub">RING RUN</div>
   </div>
   <div id="title-rules">
-    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" style="filter: drop-shadow(0 0 6px rgba(255,213,42,0.8))" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#FFD52A" stroke-width="3.5"/><circle cx="13" cy="13" r="9" fill="none" stroke="#FFE65C" stroke-width="1.2"/></svg></div><div>Fly through all 12 glowing rings, then land on the runway.</div></div>
-    <div class="rule"><div class="rule-icon"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="12" height="18" rx="2" fill="#ffffff"/><rect x="7" y="6" width="6" height="5" rx="1" fill="#2CE65B"/><circle cx="10" cy="16" r="1.6" fill="#063C85"/><path d="M16 8h3v6a2 2 0 0 1-4 0" fill="none" stroke="#ffffff" stroke-width="2"/></svg></div><div>Centre a ring for a bonus. Mind your fuel and your speed.</div></div>
-    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M3 19 L13 5 L15 12 L23 7 L20 14 L24 16 L13 21 Z" fill="#8ec9ff"/><path d="M6 19 L14 10 L16 15 L21 12 L13 21 Z" fill="#5aa9e6"/></svg></div><div>Slow down too much and the wing quits on you.</div></div>
+    <!-- v20 (Gemini v20 #6): the three rules are Gemini's concise
+    lines, with crisp bold SVG icons — a gold ring, a target, a storm
+    cloud + bolt. The old icons (a fuel-pump pictogram and an abstract
+    lightning shape) read as small/blurry/misaligned at 24-26 px, and
+    rule 3 rambled. -->
+    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" style="filter: drop-shadow(0 0 6px rgba(255,213,42,0.8))" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#FFD52A" stroke-width="3.5"/><circle cx="13" cy="13" r="9" fill="none" stroke="#FFE65C" stroke-width="1.2"/></svg></div><div>Fly through all 12 glowing rings, then land on Runway 09.</div></div>
+    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="10" fill="none" stroke="#C83C32" stroke-width="3.5"/><circle cx="13" cy="13" r="5.5" fill="none" stroke="#FFD52A" stroke-width="2.5"/><circle cx="13" cy="13" r="2.5" fill="#C83C32"/></svg></div><div>Hit ring centres for bonus points; watch fuel and airspeed.</div></div>
+    <div class="rule"><div class="rule-icon"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="9" cy="12" r="5" fill="#5aa9e6"/><circle cx="15" cy="10" r="6" fill="#5aa9e6"/><circle cx="18" cy="14" r="4.5" fill="#5aa9e6"/><rect x="5" y="12" width="18" height="5" rx="2.5" fill="#5aa9e6"/><path d="M13 16 L10.5 21.5 L12.8 21.5 L11.5 25.5 L15.5 19.5 L13.2 19.5 Z" fill="#FFD52A" stroke="#B45309" stroke-width="0.6"/></svg></div><div>Avoid stalling at low speed and navigate clear of the storm.</div></div>
   </div>
   <div class="title-keys">
     <div class="keycap"><span class="key">W/S</span><span class="key-label">Pitch</span></div>

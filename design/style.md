@@ -1,4 +1,4 @@
-# Langit Nusantara — Ring Run: Style Guide (v11 palette, v19)
+# Langit Nusantara — Ring Run: Style Guide (v11 palette, v20)
 
 The look is "premium tropical daytime": saturated, sunny, readable at a
 glance. One hero per frame (the plane, the ring, the blast, the runway) —
@@ -111,7 +111,9 @@ the subject must read in one second.
   all visible). v19: a second CONTACT shadow directly under each plane
   (opacity 0.55→0 below 120 m AGL, scale 8 m + agl×0.02) + the
   sun-offset cap 120 → 50 m, so the height above the runway reads in
-  the chase/landing shots.
+  the chase/landing shots. v20: the contact shadow is DARKER and BIGGER
+  (opacity 0.75→0 below 160 m AGL, scale 10 m + agl×0.03) — the v19
+  live playtest identified only 1 of 9 code-visible shadows.
 
 ## Effects
 
@@ -126,6 +128,11 @@ the subject must read in one second.
 - **Crash (player):** fireball at the wreck + boom + camera shake.
   v19: the camera pulls wide on crash (`setChase(45, -10, 20, 40)`)
   and the wreck stays visible for 1.5 s before the over panel.
+  v20: the camera pulls wider and higher (`setChase(48, -12, 30, 40)`,
+  height lifted until the camera clears the terrain behind the wreck
+  by 4 m) and the beat is 3.0 s (the fireball lives 3.5 s) — the v19
+  live playtest saw the fireball for 1.5 s and then the camera pressed
+  against the hillside.
 - **Storm:** tornado (dark, textured, spray ring at the base), rain
   slanted by the wind (`#E6F4FF`, opacity 0.35, v19 — was `#E0F2FE`
   0.45), lightning every 4–9 s, flak bursts along the outer corridors.
@@ -134,16 +141,32 @@ the subject must read in one second.
   (second tier: 5 lobes, y 360–430, `#334155 / #475569`, v18).
   Clouds are FULLY OPAQUE in v19 (no transparent pass — the
   transparency read as grey bubbles) with smaller lobes (base 40–60 m,
-  lower 30–50 m, top 25–40 m).
+  lower 30–50 m, top 25–40 m). v20: the storm wall/anvil are SMALLER,
+  LIGHTER and SMOOTH-shaded (wall 6 lobes 100–150 m, anchor 220 m off
+  the course, `#5F7285/#71849A/#5A6C7E`; anvil 4 lobes 100–140 m at
+  y 320–350, `#6B7E92/#8296A8`; smooth shading, detail 1 — flat-shaded
+  dark slate read as black rock even after lightening), funnel
+  `#46545F` opacity 0.9, spray crown 5 puffs + 18 m ring, second
+  spout 750 m along / 320 m aside at 0.45 scale. Cloud lobes
+  more/smaller/tighter in v20 (base 14–18 × 30–45 m, lower 5–6 ×
+  25–40 m, top 10–13 × 20–30 m).
 - **Cockpit:** 5 dials on light faces (`#F8FAFC`, 84 px numbers at
   radius 120, v19 — was 96 px at 138, glyphs hit the tick ring;
   sub-label in a separate navy badge clear of the "6" and the needle
   pivot; ticks long 180 / major 190 / minor 200, all to 216; needle
   `#E53935`; labels IAS/ALT/HDG/VSI/RPM), pillars 0.05 m, trim
   `#242B35`, glareshield `#1E293B` with a `#C93B2B` accent stripe,
-  red trim strip `#C82828`. ≥72% forward viewport free.
+  red trim strip `#C82828`. ≥72% forward viewport free. v20: the dial
+  faces are redrawn at 1024 px with REAL instrument scales on the
+  −120°..+120° sweep (IAS 0/25/50/75/100, ALT 0/225/450/675/900, VSI
+  −10/−5/0/5/10, RPM 0/1/2/3/4, HDG N/E/S/W with NO badge), numbers
+  96 px at radius 380 (HDG 110 px), ticks major 430→470 / minor
+  445→470, redline r 480 on IAS/RPM only, badge 210×72 at y 800,
+  needle shortened (tip 0.1325 m), anisotropy 8; the cockpit camera
+  sits 0.35 m back (was 0.1) so the leftmost dial is in frame.
 - **Rings:** gold torus + inner glow disc, next ring pulsing brighter.
-  Passed rings turn muted green.
+  Passed rings turn muted green. v20: the next ring's glow pulses
+  0.28+0.06·sin(time·3.2).
 
 ## What NOT to do
 

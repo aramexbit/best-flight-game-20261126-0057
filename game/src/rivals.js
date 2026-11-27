@@ -106,9 +106,9 @@ function makeMarkerSprite(THREE, text, color) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  // v18: pill 5.0 x 2.1 m (192:80 aspect) — compact, reads as a race
-  // number without hiding the plane it marks.
-  sprite.scale.set(5.0, 2.1, 1);
+  // v20: pill 4.0 x 1.7 m (192:80 aspect) — compact, reads as a race
+  // number without hiding the plane it marks (was 5.0 x 2.1).
+  sprite.scale.set(4.0, 1.7, 1);
   return sprite;
 }
 
@@ -330,8 +330,13 @@ export function createRivals(THREE, seed, islands, effects) {
     // above the plane's centre, so 4.5 m left the pill floating a
     // metre and a half above the tail, reading as a detached label.
     // At 3.2 m the pill's lower edge just kisses the fin.
+    // v20: the pill is SMALLER (4.0 x 1.7 m, was 5.0 x 2.1) and sits
+    // LOWER (2.9 m, was 3.2) — the v19 pill still read as a debug tag
+    // floating over the fin and overlapped the ring pointer in the
+    // cockpit shot. At 2.9 m the pill's lower edge hugs the fin top
+    // instead of hovering above it.
     if (r.marker) {
-      r.marker.position.set(s.x, s.y + 3.2, s.z);
+      r.marker.position.set(s.x, s.y + 2.9, s.z);
       r.marker.visible = r.api.group.visible;
     }
   }

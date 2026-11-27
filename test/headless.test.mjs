@@ -22,6 +22,13 @@
 //      player 3-4 s to turn — 0/12 ring 2 in the v18 live playtest).
 //   9. The collision gate refuses a blast beyond 300 m (v19: the
 //      400 m cap let a ~5° fireball fire that nobody could see).
+//  10. A tap-rate-limited pilot (PWM stick) passes ring 2 (v20: the
+//      v19 live playtest failed ring 2 in 3/3 tap flights — the course
+//      must be forgiving enough for a tapping human, not just for a
+//      continuous autopilot).
+//  11. A ring-1 pass pays a toast-worthy bonus (v20: the v19 live
+//      playtest passed ring 1 with no toast visible — the bonus must
+//      be >= 100 so the 4 s toast "RING 1/12 +bonus" means something).
 //
 // Run: node test/headless.test.mjs   (exit 0 = all pass)
 import assert from 'node:assert/strict';
@@ -32,6 +39,7 @@ import { createFlight } from '../game/src/flight.js';
 import { STEP } from '../game/src/config.js';
 import { gustAt } from '../game/src/storm.js';
 import { collisionGate } from '../game/src/collision.js';
+import { autopilotTo } from '../game/src/shots.js';
 
 const SEED = 1;
 const FLAT_GROUND = () => 0; // heading tests fly over flat ground on purpose
@@ -321,6 +329,81 @@ check('ring 1->2 leg >= 200 m with a gentle turn', () => {
   assert.ok(turn < 0.5, `turn into ring 2 is ${(turn * 180 / Math.PI).toFixed(1)}° (limit 29°)`);
 });
 
-console.log(`\n${passed}/14 headless tests passed`);
+// --- 15. Tap-rate-limited pilot passes ring 2 --------------------------
+// v20 (a): the v19 live playtest failed ring 2 in 3 of 3 flights with
+// TAPS (the browser tool can only tap, not hold): the gap grew to
+// 3.7-4.5 km. A human taps the stick ~2x/s, so the stick is only live
+// ~40% of the time. This test flies the same autopilot but applies its
+// stick inputs in 0.2 s pulses every 0.5 s (throttle stays held, as a
+// human holds Shift) and must still pass ring 2 within 30 s — the
+// course must be forgiving enough for a tapping pilot, not just for a
+// continuous autopilot. The v20 course softening (wander 0.12 rad and
+// jitter ±12 m on rings 1-3) is what makes this possible.
+check('tap-rate-limited pilot (0.2 s on / 0.5 s) passes ring 2 in 30 s', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  let rings = 0;
+  for (let i = 0; i < 30 / STEP; i += 1) {
+    if (s.status !== 'flying') break;
+    const t = s.elapsed;
+    const on = (t % 0.5) < 0.2; // stick live 0.2 s of every 0.5 s
+    const ring = course.nextRing();
+    const input = ring ? autopilotTo(flight, ring, 0.72, groundAt) : { pitch: 0, roll: 0, yaw: 0, throttle: 0.3 };
+    const applied = {
+      pitch: on ? input.pitch : 0,
+      roll: on ? input.roll : 0,
+      yaw: 0,
+      throttle: input.throttle,
+      stickRoll: on ? input.roll : 0,
+      stickPitch: on ? input.pitch : 0,
+    };
+    // The gust rides on top of the stick, exactly as main.js applies it.
+    const gust = gustAt(s.elapsed);
+    applied.pitch = clamp1(applied.pitch + gust.pitch);
+    applied.roll = clamp1(applied.roll + gust.roll);
+    const prev = { x: s.x, y: s.y, z: s.z };
+    flight.step(STEP, applied, groundAt, course.runway);
+    const pass = course.checkPass(prev, s);
+    if (pass && pass.passed) rings += 1;
+    if (rings >= 2) break;
+  }
+  console.log(`  rings=${rings} time=${s.elapsed.toFixed(1)} s status=${s.status}`);
+  assert.ok(rings >= 2, `tap pilot passed ${rings} rings in 30 s (expected >= 2)`);
+});
+
+// --- 16. Ring-1 pass pays a toast-worthy bonus --------------------------
+// v20 (e): the v19 live playtest passed ring 1 (score 122) with NO
+// toast visible in any screenshot — 2.2 s is shorter than the
+// screenshot cadence, so the toast now lasts 4.0 s. The bonus itself
+// must be worth announcing: a centre pass pays 150 (100 ring + 50
+// centre), a half-radius pass still pays 125.
+check('ring 1 centre pass pays 150, half-radius pass pays >= 120', () => {
+  const course = buildCourse();
+  const ring = course.nextRing();
+  const ax = ring.axis;
+  const prev = { x: ring.x - ax.x * 10, y: ring.y - ax.y * 10, z: ring.z - ax.z * 10 };
+  const pos = { x: ring.x + ax.x * 10, y: ring.y + ax.y * 10, z: ring.z + ax.z * 10 };
+  const centre = course.checkPass(prev, pos);
+  assert.ok(centre && centre.passed, `expected a centre pass, got ${JSON.stringify(centre)}`);
+  console.log(`  centre pass bonus=${centre.bonus}`);
+  assert.equal(centre.bonus, 150, `centre pass bonus is ${centre.bonus} (expected 150)`);
+
+  const course2 = buildCourse();
+  const ring2 = course2.nextRing();
+  const ax2 = ring2.axis;
+  const perp = { x: -ax2.z, y: 0, z: ax2.x };
+  const half = ring2.radius * 0.5;
+  const prev2 = { x: ring2.x - ax2.x * 10 + perp.x * half, y: ring2.y - ax2.y * 10, z: ring2.z - ax2.z * 10 + perp.z * half };
+  const pos2 = { x: ring2.x + ax2.x * 10 + perp.x * half, y: ring2.y + ax2.y * 10, z: ring2.z + ax2.z * 10 + perp.z * half };
+  const halfPass = course2.checkPass(prev2, pos2);
+  assert.ok(halfPass && halfPass.passed, `expected a half-radius pass, got ${JSON.stringify(halfPass)}`);
+  console.log(`  half-radius pass bonus=${halfPass.bonus} (centre=${halfPass.centre.toFixed(1)} m)`);
+  assert.ok(halfPass.bonus >= 120, `half-radius pass bonus is ${halfPass.bonus} (limit 120)`);
+});
+
+console.log(`\n${passed}/16 headless tests passed`);
 if (process.exitCode) console.log('HEADLESS TESTS: FAIL');
 else console.log('HEADLESS TESTS: ALL PASS');

@@ -13,7 +13,7 @@ import { BEST_KEY, COURSE, SCORE, STEP } from './config.js';
 import { createRandom } from './random.js';
 import { planIslands, buildTerrain } from './terrain.js';
 import { createCourse, buildRingMeshes } from './rings.js';
-import { createFlight, headingOf, EVENT_CRASH, EVENT_FUEL_EMPTY, EVENT_LAND } from './flight.js';
+import { createFlight, headingOf, forwardOf, EVENT_CRASH, EVENT_FUEL_EMPTY, EVENT_LAND } from './flight.js';
 import { buildPlane } from './plane.js';
 import { createRenderer, CAMERA_CHASE, CAMERA_COCKPIT } from './render.js';
 import { createHud } from './hud.js';
@@ -208,11 +208,13 @@ function runShot(name) {
   if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -34, 6.5); }
   else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, -6, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
-  // v14: landing chase pulled back a touch (14 m back, 2.6 m up, was
-  // 12 m / 2.2 m) and closer to centre (lateral -4, was -5) — in v13 the
-  // player's plane sat too big and too close in the landing frame and
-  // covered part of the runway; a step back shows the whole strip.
-  else if (name === 'landing') { renderer.setFov(52); renderer.setChase(14, -2, 2.6); }
+  // v20: the landing chase pulls back and up a touch (16 m back,
+  // 3.0 m up, FOV 55, was 14 m / 2.6 m / FOV 52) with a little more
+  // side (-3, was -2) — the freeze is now a low flare (250 m / +30 m),
+  // so the camera steps back to show the whole flare: threshold,
+  // PAPI, runway stretching ahead, the plane small enough to read its
+  // flare attitude against the strip instead of filling the frame.
+  else if (name === 'landing') { renderer.setFov(55); renderer.setChase(16, -3, 3.0); }
   hud.hidePanels();
   // The title shot is a frozen moment, not a running game: the clock reads 0:00.
   if (scene.screen === 'title') flight.state.elapsed = 0;
@@ -496,7 +498,11 @@ function runGame() {
       audio.chime();
       const left = COURSE.ringCount - s.ringsPassed;
       if (left === 0) hud.showObjective('ALL RINGS — LAND ON THE RUNWAY');
-      else hud.showMessage(`RING ${s.ringsPassed}/${COURSE.ringCount}  +${pass.bonus}`, 2.2);
+      // v20 (e): the ring toast lasts 4.0 s (was 2.2) — the v19 live
+      // playtest passed ring 1 (score 122) with NO toast visible in any
+      // screenshot: 2.2 s is shorter than the screenshot cadence. A
+      // 4 s toast is unmissable in play and in a screenshot.
+      else hud.showMessage(`RING ${s.ringsPassed}/${COURSE.ringCount}  +${pass.bonus}`, 4.0);
     } else if (pass && pass.nearMiss) {
       s.score += pass.bonus;
       hud.showMessage('NEAR MISS +10', 1.2);
@@ -507,17 +513,25 @@ function runGame() {
       // v17: the player's own crash finally explodes — a fireball at
       // the wreck, boom and shake (v16 live playtest: two crashes
       // showed only a 'Crashed!' panel over an intact plane).
-      // v19 (c): the crash camera pulls WIDE (45 m back, 20 m up) and
-      // the "Crashed!" panel waits 1.5 s — the v18 live playtest saw
-      // no fireball at all: the chase camera sat 11 m behind the plane
-      // and flew INTO the fireball/terrain, so the screen filled with
-      // orange polygons. A wide camera sees the fireball as an object.
+      // v20 (b): the crash camera pulls WIDE and HIGH (48 m back,
+      // 30 m up, was 45/20) and the "Crashed!" panel waits 3.0 s
+      // (was 1.5) — the v19 live playtest saw the fireball for 1.5 s
+      // (probe) and then the camera ended up pressed against the
+      // hillside the plane had flown into, with pale bubbles on the
+      // slope. The camera height is now lifted until the camera's own
+      // position clears the terrain behind the wreck by 4 m, so it can
+      // never end up inside the slope; and 3 s covers most of the
+      // fireball's 3.5 s life before the panel appears.
       effects.explode(s.x, s.y + 3, s.z, false);
       audio.boom();
       renderer.triggerShake(0.6);
-      renderer.setChase(45, -10, 20, 40);
+      const crashFwd = forwardOf(s.yaw, s.pitch);
+      let crashHeight = 30;
+      const camGround = terrain.groundAt(s.x - crashFwd.x * 48, s.z - crashFwd.z * 48);
+      if (s.y + crashHeight < camGround + 4) crashHeight = camGround + 4 - s.y;
+      renderer.setChase(48, -12, crashHeight, 40);
       screen = 'crashing';
-      crashTimer = 1.5;
+      crashTimer = 3.0;
       announce('Crashed.');
     }
     // v13: the race flies with the player — rivals step on the player's

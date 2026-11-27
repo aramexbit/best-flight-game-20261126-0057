@@ -59,8 +59,12 @@ export function buildPlane(THREE, livery = null) {
   body.add(bellyStrip);
   // Red cheatline stripe along each side of the cabin — the Caravan's red
   // band, so the fuselage reads as a cabin from the side and the rear.
+  // v20: the cheatline is WIDER (0.30 m tall, was 0.22) — the v19
+  // blind test said the plane melts into the sky from behind; a
+  // broader red band keeps the fuselage readable from the chase
+  // camera, and the red wingtips run further out (to 5.8 m, was 5.5).
   for (const side of [-1, 1]) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 4.2), red);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.30, 4.2), red);
     stripe.position.set(side * 0.58, -0.12, 0.1);
     body.add(stripe);
   }
@@ -157,8 +161,8 @@ export function buildPlane(THREE, livery = null) {
     rootFairing.rotation.z = side * 0.06;
     body.add(rootFairing);
     // Red wingtip: a tapered prism continuing the wing's taper
-    // (chord 1.15 -> 1.05), spanning 4.6-5.5 m.
-    const tip = new THREE.Mesh(taperedPrism(side * 0.9, 0.12, 0.10, 1.15, 1.05), red);
+    // (chord 1.15 -> 1.05), spanning 4.6-5.8 m (v20: was 4.6-5.5).
+    const tip = new THREE.Mesh(taperedPrism(side * 1.2, 0.12, 0.10, 1.15, 1.05), red);
     tip.position.set(side * 4.6, 1.10, -0.4);
     tip.rotation.z = side * 0.06;
     body.add(tip);
@@ -187,7 +191,7 @@ export function buildPlane(THREE, livery = null) {
       new THREE.SphereGeometry(0.09, 8, 6),
       new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff2a1e : 0x2aff5e }),
     );
-    lamp.position.set(side * 5.5, 1.24, -0.4);
+    lamp.position.set(side * 5.8, 1.24, -0.4);
     body.add(lamp);
   }
 
@@ -284,14 +288,16 @@ export function buildPlane(THREE, livery = null) {
     blade.position.set(0, 0, -0.1);
     prop.add(blade);
   }
-  // v12: the blur disc is bigger (1.6 m radius, was 1.45) and stronger —
-  // from the rear chase camera the spinning prop must read as a disc
-  // protruding past the nose and fuselage edges, never hidden.
-  // v13: 1.85 m, so the disc clears the fuselage silhouette on both sides.
+  // v20: the blur disc is DARKER (#8a9199, was #d8d8d8), fainter
+  // (max opacity 0.25, was 0.45) and smaller (1.7 m, was 1.85) — the
+  // pale 1.85 m disc read as a giant translucent bubble on the nose
+  // from the chase camera (v19 live playtest). A darker, fainter disc
+  // reads as a spinning blur, not a pale balloon. The two dark blades
+  // still spin under it.
   const blur = new THREE.Mesh(
-    new THREE.CircleGeometry(1.85, 28),
+    new THREE.CircleGeometry(1.7, 28),
     new THREE.MeshBasicMaterial({
-      color: '#d8d8d8', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
+      color: '#8a9199', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
     }),
   );
   blur.position.set(0, 0, -3.6);
@@ -701,96 +707,130 @@ export function buildPlane(THREE, livery = null) {
   // real instrument instead of a blank cream clock. (The v5 face was a
   // plain cream disc with separate tick meshes.) One texture per label:
   // airspeed, altitude, heading.
-  function makeDialFace(label) {
-    // v7: 512 px canvas (was 256) with a subtle radial shade, 24 ticks
-    // (12 long + 12 short minors) and bolder numbers — the dial markings
-    // stay crisp and readable from the pilot's seat instead of blurring
-    // into the cream face at screenshot distance (Gemini v6).
+  // v20: REAL instrument scales on a 1024 px canvas — the v19 dials
+  // still read as generic clocks (12/3/6/9) with the needle crossing
+  // the numerals, and Gemini v19 called them canvas noise. Each gauge
+  // now draws its own scale on the needle's sweep arc (-120..+120 deg
+  // from 12 o'clock): IAS 0/25/50/75/100, ALT 0/225/450/675/900,
+  // VSI -10/-5/0/5/10, RPM 0/1/2/3/4. HDG is a compass (N/E/S/W at
+  // the cardinals, needle rotates 360 deg, so it gets NO badge — any
+  // fixed label at the bottom would be crossed by the needle when
+  // heading south). Numbers sit at radius 380, ticks outside them
+  // (430-470), redline at 480 (IAS/RPM only). The needle (shortened
+  // in the gauge build below) ends at canvas radius ~339, clear of
+  // the numerals. `kind` is the gauge label (IAS/ALT/HDG/VSI/RPM).
+  function makeDialFace(label, kind) {
     const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 512;
+    c.width = 1024;
+    c.height = 1024;
     const x = c.getContext('2d');
+    const CX = 512;
+    const CY = 512;
     // v18: a clean light face #F8FAFC (was cream #faf3dd) — Gemini's
     // spec: dark numerals on a near-white face, no warm tint.
-    const shade = x.createRadialGradient(256, 256, 40, 256, 256, 256);
+    const shade = x.createRadialGradient(CX, CY, 80, CX, CY, 512);
     shade.addColorStop(0, '#ffffff');
     shade.addColorStop(0.75, '#f8fafc');
     shade.addColorStop(1, '#e2e8f0');
     x.fillStyle = shade;
-    x.fillRect(0, 0, 512, 512);
-    // Redline arc across the top-right of the dial.
-    x.strokeStyle = '#c83c32';
-    x.lineWidth = 22;
-    x.beginPath();
-    x.arc(256, 256, 208, -Math.PI / 2 - 0.18, -Math.PI / 2 + 0.96);
-    x.stroke();
-    // Twelve major tick marks, longer at the quarters, with a minor tick
-    // halfway between each pair.
-    // v8: strokes are thicker and longer (long 16 / major 10 / minor 6,
-    // was 13 / 8 / 5) and the numbers are bigger — at screenshot distance
-    // the v7 markings blurred into the cream face, and a hero cockpit
-    // shot has to read at a glance (Gemini v7).
-    // v19: the ticks are SHORTER (long 180 / major 190 / minor 200, was
-    // 166 / 184 / 196) — the long ticks reached in to radius 166 and
-    // collided with the numerals, which is why the v18 dials still read
-    // crowded (Gemini v18 #4).
-    for (let t = 0; t < 24; t += 1) {
-      const a = (t / 24) * Math.PI * 2;
-      const major = t % 2 === 0;
-      const long = major && (t / 2) % 3 === 0;
-      const r0 = long ? 180 : major ? 190 : 200;
-      x.strokeStyle = '#1a1c22';
-      x.lineWidth = long ? 16 : major ? 10 : 6;
+    x.fillRect(0, 0, 1024, 1024);
+    // A point at `deg` degrees clockwise from 12 o'clock, radius r.
+    const pt = (deg, r) => {
+      const a = (deg * Math.PI) / 180;
+      return [CX + Math.sin(a) * r, CY - Math.cos(a) * r];
+    };
+    const SCALES = {
+      IAS: ['0', '25', '50', '75', '100'],
+      ALT: ['0', '225', '450', '675', '900'],
+      VSI: ['-10', '-5', '0', '5', '10'],
+      RPM: ['0', '1', '2', '3', '4'],
+    };
+    if (kind === 'HDG') {
+      // Compass: major ticks every 30 deg, minors every 15 deg, and
+      // the cardinal letters on the arc — no badge, no redline.
+      for (let t = 0; t < 24; t += 1) {
+        const deg = t * 15;
+        const major = t % 2 === 0;
+        const [x0, y0] = pt(deg, major ? 430 : 445);
+        const [x1, y1] = pt(deg, 470);
+        x.strokeStyle = '#1a1c22';
+        x.lineWidth = major ? 14 : 8;
+        x.beginPath();
+        x.moveTo(x0, y0);
+        x.lineTo(x1, y1);
+        x.stroke();
+      }
+      x.fillStyle = '#0f172a';
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.font = 'bold 110px system-ui, sans-serif';
+      for (const [letter, deg] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) {
+        const [nx, ny] = pt(deg, 380);
+        x.fillText(letter, nx, ny);
+      }
+    } else {
+      const labels = SCALES[kind] || SCALES.IAS;
+      // Redline on the top-right of the airspeed and RPM dials only.
+      if (kind === 'IAS' || kind === 'RPM') {
+        x.strokeStyle = '#c83c32';
+        x.lineWidth = 26;
+        x.beginPath();
+        // deg +60..+120 clockwise from 12 o'clock is canvas angle
+        // -30..+30 deg from 3 o'clock.
+        x.arc(CX, CY, 480, -Math.PI / 6 - 0.05, Math.PI / 6 + 0.05);
+        x.stroke();
+      }
+      // Major ticks at each scale position, minors halfway between.
+      for (let i = 0; i < 5; i += 1) {
+        const deg = -120 + i * 60;
+        const [x0, y0] = pt(deg, 430);
+        const [x1, y1] = pt(deg, 470);
+        x.strokeStyle = '#1a1c22';
+        x.lineWidth = 16;
+        x.beginPath();
+        x.moveTo(x0, y0);
+        x.lineTo(x1, y1);
+        x.stroke();
+      }
+      for (let i = 0; i < 4; i += 1) {
+        const deg = -90 + i * 60;
+        const [x0, y0] = pt(deg, 445);
+        const [x1, y1] = pt(deg, 470);
+        x.strokeStyle = '#1a1c22';
+        x.lineWidth = 8;
+        x.beginPath();
+        x.moveTo(x0, y0);
+        x.lineTo(x1, y1);
+        x.stroke();
+      }
+      // Scale numbers on the arc, clear of the ticks and the needle.
+      x.fillStyle = '#0f172a';
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.font = 'bold 96px system-ui, sans-serif';
+      for (let i = 0; i < 5; i += 1) {
+        const deg = -120 + i * 60;
+        const [nx, ny] = pt(deg, 380);
+        x.fillText(labels[i], nx, ny);
+      }
+      // Sub-label badge in the needle-free bottom sector (the needle
+      // sweeps only the upper 240 deg, never the bottom 120 deg).
+      const badgeW = 210;
+      const badgeH = 72;
+      const badgeY = 800;
+      x.fillStyle = '#0f172a';
       x.beginPath();
-      x.moveTo(256 + Math.sin(a) * r0, 256 - Math.cos(a) * r0);
-      x.lineTo(256 + Math.sin(a) * 216, 256 - Math.cos(a) * 216);
-      x.stroke();
+      x.roundRect(CX - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 20);
+      x.fill();
+      x.fillStyle = '#ffffff';
+      x.font = 'bold 56px system-ui, sans-serif';
+      x.fillText(label, CX, badgeY + 2);
     }
-    // Numbers at 12 / 3 / 6 / 9 and the instrument label at the bottom.
-    // The needle never sweeps the bottom of the dial (its range is the
-    // upper ~240°), so the label down there stays uncovered.
-    x.fillStyle = '#0f172a';
-    x.textAlign = 'center';
-    x.textBaseline = 'middle';
-    // v14: numbers 100 px (was 88) and labels 64 px (was 58) — the v13
-    // cockpit shot's dials still read small, and the main gauges are the
-    // hero of the cockpit frame; bigger numerals, same canvas.
-    // v15: numbers 112 px and labels 72 px — Gemini's fix prompt asks
-    // for each instrument at 11-14% of viewport height with markings
-    // unmistakable at a glance; the canvas stays 512 px, the ink gets
-    // bigger on it.
-    // v18: numbers 96 px (was 120) at radius 138 (centres 106/406) —
-    // Gemini's fix: the v17 numerals crowded the tick ring and read as
-    // overlapping at screenshot distance; smaller numerals with clear
-    // space around them read cleanly. The needle never sweeps the
-    // bottom of the dial, so the label badge down there stays uncovered.
-    // v19: numbers 84 px at radius 120 (centres 136/376) — the v18
-    // numerals still overlapped the tick ring: a 96 px glyph at radius
-    // 138 spans radius 90-186, and the long ticks start at 166. At
-    // radius 120 the 84 px glyph spans 78-162, clear of the (now
-    // shorter) ticks at 180+. The badge shrinks to 150x52 at y 300 so
-    // it stays clear of the '6' (now spanning y 334-418).
-    x.font = 'bold 84px system-ui, sans-serif';
-    x.fillText('12', 256, 136);
-    x.fillText('3', 376, 256);
-    x.fillText('6', 256, 376);
-    x.fillText('9', 136, 256);
-    // v18: the sub-label sits in its own navy badge, clear of the '6'
-    // (which spans y 358-454) and clear of the needle pivot — Gemini's
-    // fix: the v17 label read as a decal overlapping the numerals.
-    const badgeW = 150; const badgeH = 52; const badgeY = 300;
-    x.fillStyle = '#0f172a';
-    x.beginPath();
-    x.roundRect(256 - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 16);
-    x.fill();
-    x.fillStyle = '#ffffff';
-    x.font = 'bold 46px system-ui, sans-serif';
-    x.fillText(label, 256, badgeY + 2);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     // Gemini's fix prompt: high-DPI canvas textures with anisotropy so
     // the dial numbers stay sharp at 1920x1080 and 1280x720 — the canvas
-    // is already 512x512; anisotropy 8 (three.js clamps it to the
+    // is now 1024x1024 (was 512); anisotropy 8 (three.js clamps it to the
     // hardware maximum) keeps the numerals crisp at glancing angles.
     tex.anisotropy = 8;
     return tex;
@@ -834,7 +874,7 @@ export function buildPlane(THREE, livery = null) {
     g.add(rim);
     const face = new THREE.Mesh(
       new THREE.CircleGeometry(def.r * 0.94, 24),
-      new THREE.MeshBasicMaterial({ map: makeDialFace(def.label) }),
+      new THREE.MeshBasicMaterial({ map: makeDialFace(def.label, def.label) }),
     );
     face.position.z = 0.005;
     g.add(face);
@@ -845,10 +885,13 @@ export function buildPlane(THREE, livery = null) {
     // must read at a glance against the cream face at screenshot distance.
     // v17: longer needle (0.185, was 0.17) — it reaches further toward
     // the rim, so the reading is easier at a glance.
-    // v19: needle colour #E53935 (Gemini v19 #4) — a sharper red that
-    // reads against the near-white face without the orange wash.
-    const needleGeo = new THREE.BoxGeometry(0.042, 0.185, 0.006);
-    needleGeo.translate(0, 0.065, 0);
+    // v20: SHORTER needle (0.155 long, tip at 0.1325 m from the pivot,
+    // was 0.185 / tip 0.1575) — the v19 needle tip reached the numerals
+    // (canvas radius 380 = 0.139 m on a 0.20 m dial), so the needle
+    // crossed the numbers it was pointing at. The tip now stops just
+    // short of the scale numerals. Colour #E53935 (Gemini v19 #4).
+    const needleGeo = new THREE.BoxGeometry(0.042, 0.155, 0.006);
+    needleGeo.translate(0, 0.055, 0);
     const needle = new THREE.Mesh(
       needleGeo,
       new THREE.MeshBasicMaterial({ color: 0xe53935 }),
@@ -929,7 +972,7 @@ export function buildPlane(THREE, livery = null) {
   function update(dt, throttle, time) {
     propAngle += (5 + throttle * 46) * dt;
     prop.rotation.z = propAngle;
-    blur.material.opacity = Math.min(0.45, throttle * 0.45);
+    blur.material.opacity = Math.min(0.25, throttle * 0.25);
     // A hint of life even on the ground: the nav lamps breathe gently.
     void time;
   }

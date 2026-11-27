@@ -71,11 +71,15 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // slate #3B4652 / #586675, and 18 spinning debris flecks on the
   // cone surface + at the base, so the rotation is readable from any
   // angle and the funnel reads as a vortex, not a stack.
+  // v20 (f): the funnel reads as weather, not black geometry — the
+  // dark slate lightens a touch (#46545F, was #3B4652) and the opacity
+  // drops to 0.9 (was 0.95), so the vortex keeps its shape without
+  // going solid black against the sky.
   const funnelMat = new THREE.MeshStandardMaterial({
-    color: 0x3b4652, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+    color: 0x46545f, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
   });
   const funnelDark = new THREE.MeshStandardMaterial({
-    color: 0x586675, roughness: 0.9, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+    color: 0x5f707e, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
   });
   function buildFunnel(scale) {
     const funnel = new THREE.Group();
@@ -120,26 +124,27 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
       fleck.rotation.set(f * 0.9, f * 1.4, f * 0.5);
       funnel.add(fleck);
     }
-    // Spray crown at the foot: three flat white puffs churning on the
-    // surface the funnel touches.
+    // v20: a bigger spray crown at the foot — 5 puffs (was 3) — so
+    // the vortex reads as churning dust/spray where it meets the sea,
+    // not a clean cone touching down.
     const sprayMat = new THREE.MeshBasicMaterial({
       color: 0xf4feff, transparent: true, opacity: 0.7, depthWrite: false,
     });
     const sprayGeo = new THREE.SphereGeometry(1, 10, 6);
-    for (let s = 0; s < 3; s += 1) {
+    for (let s = 0; s < 5; s += 1) {
       const spray = new THREE.Mesh(sprayGeo, sprayMat);
       spray.scale.set(16 * scale, 3.5 * scale, 16 * scale);
       spray.position.set(
-        Math.cos(s * 2.1) * 6 * scale, 2.5 * scale + s * 1.5, Math.sin(s * 2.1) * 6 * scale,
+        Math.cos(s * 1.26) * 6 * scale, 2.5 * scale + (s % 2) * 1.5, Math.sin(s * 1.26) * 6 * scale,
       );
       funnel.add(spray);
     }
     // v17: a spray RING on the surface at the funnel's foot — a flat
     // white ring, so the waterspout reads as churning water, not a
     // smooth cone touching a flat sea (Gemini v17: tornado needs a
-    // spray ring at its base).
+    // spray ring at its base). v20: 18 m (was 14), matching the bigger crown.
     const sprayRing = new THREE.Mesh(
-      new THREE.TorusGeometry(14 * scale, 1.4 * scale, 6, 28),
+      new THREE.TorusGeometry(18 * scale, 1.4 * scale, 6, 28),
       new THREE.MeshBasicMaterial({ color: 0xf4feff, transparent: true, opacity: 0.55, depthWrite: false }),
     );
     sprayRing.rotation.x = -Math.PI / 2;
@@ -152,16 +157,20 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   group.add(funnel);
 
   // --- Second waterspout ahead of the spawn (title staging). ---
-  // 500 m along the course from the spawn, 180 m to the side: inside the
-  // title camera's view, clear of ring 1 (600 m out, on the line).
+  // v20 (f): 750 m along the course from the spawn, 320 m to the
+  // side (was 500 m / 180 m), at 0.45 scale (was 0.55). In v19 it sat
+  // almost exactly on the spawn->ring-1 line, so from the chase camera
+  // the funnel pierced the centre of ring 1 and the title camera saw
+  // it towering over the first gate. Now it is clearly a hazard beside
+  // the course, not a spike through the gate.
   const spawn = course.spawn;
   const sfx = Math.sin(spawn.yaw);
   const sfz = -Math.cos(spawn.yaw);
   const spx = Math.cos(spawn.yaw);
   const spz = Math.sin(spawn.yaw);
-  const spout2 = buildFunnel(0.55);
-  const s2x = spawn.x + sfx * 500 + spx * 180;
-  const s2z = spawn.z + sfz * 500 + spz * 180;
+  const spout2 = buildFunnel(0.45);
+  const s2x = spawn.x + sfx * 750 + spx * 320;
+  const s2z = spawn.z + sfz * 750 + spz * 320;
   spout2.position.set(s2x, Math.max(0.6, groundAt(s2x, s2z)), s2z);
   group.add(spout2);
 
@@ -179,42 +188,55 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // crown colours #3B4652 / #586675 — the smooth detail-1 lobes read
   // as separate grey oval blobs / floating rocks; faceted slabs merge
   // into one thunderhead mass.
+  // v20 (f2): the storm lobes use SMOOTH shading (flatShading false,
+  // detail 1, was flat detail 0) — the first v20 screenshots showed the
+  // lightened anvil STILL reading as a black cut rock behind the title:
+  // the problem was never just the colour, it is hard facet steps on a
+  // dark surface. Smooth-shaded mid grey-blue reads as cloud volume;
+  // the white cumulus banks keep their flat-shaded style (bright
+  // facets read as cloud, dark facets read as rock).
   const wallMats = [
-    new THREE.MeshStandardMaterial({ color: 0x55677a, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
-    new THREE.MeshStandardMaterial({ color: 0x64748a, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
-    new THREE.MeshStandardMaterial({ color: 0x47586a, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x5f7285, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x71849a, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x5a6c7e, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
   ];
-  const lobeGeo = new THREE.IcosahedronGeometry(1, 0);
-  const wallAnchor = { x: cellX + perpX * 150 * side, z: cellZ + perpZ * 150 * side };
-  for (let i = 0; i < 7; i += 1) {
+  const lobeGeo = new THREE.IcosahedronGeometry(1, 1);
+  const wallAnchor = { x: cellX + perpX * 220 * side, z: cellZ + perpZ * 220 * side };
+  for (let i = 0; i < 6; i += 1) {
     const lobe = new THREE.Mesh(lobeGeo, wallMats[i % wallMats.length]);
-    const rx = 120 + rnd.range(0, 60);
+    const rx = 100 + rnd.range(0, 50);
     lobe.scale.set(rx, rx * rnd.range(0.5, 0.65), rx * rnd.range(0.75, 1.0));
     lobe.position.set(
-      wallAnchor.x + (ax / alen) * (i - 3) * 80 + rnd.range(-20, 20),
-      290 + rnd.range(-15, 45),
-      wallAnchor.z + (az / alen) * (i - 3) * 80 + rnd.range(-20, 20),
+      wallAnchor.x + (ax / alen) * (i - 2.5) * 80 + rnd.range(-20, 20),
+      280 + rnd.range(-15, 45),
+      wallAnchor.z + (az / alen) * (i - 2.5) * 80 + rnd.range(-20, 20),
     );
     lobe.rotation.y = rnd.range(0, Math.PI * 2);
     wall.add(lobe);
   }
-  // v18: a SECOND anvil tier above the wall (5 bigger lobes, y 360-430,
-  // darker #334155 / #475569) — Gemini's fix: the v17 storm read as a
-  // row of grey blobs with a flat top; a multi-tier anvil gives the
-  // cell a real thunderhead crown.
-  // v19: anvil colours are Gemini's dark crown #3B4652 / #586675.
+  // v20 (f): the anvil is SMALLER, LIGHTER and LOWER — 4 lobes of
+  // 100-140 m at y 320-350 (was 5 lobes of 140-200 m at y 375-425),
+  // in mid grey-blue #6B7E92/#8296A8 (was #3B4652/#586675, then
+  // #4A5A6A/#6B7C8C). The v19 anvil was a giant faceted black mass
+  // sitting right over ring 1 and behind the title text ("NUSANTARA"),
+  // reading as a floating black rock, not a storm cloud — and the first
+  // v20 screenshots showed it STILL doing that, because flat-shaded
+  // dark slate reads as rock whatever its size. Mid grey-blue facets
+  // read as cloud shading instead, and the lower ceiling (320-350)
+  // drops it out of the title text's band. Smaller + lighter + lower
+  // keeps it a storm ceiling, not the sky's main event.
   const anvilMats = [
-    new THREE.MeshStandardMaterial({ color: 0x3b4652, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
-    new THREE.MeshStandardMaterial({ color: 0x586675, roughness: 1, flatShading: true, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x6b7e92, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x8296a8, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
   ];
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 4; i += 1) {
     const lobe = new THREE.Mesh(lobeGeo, anvilMats[i % anvilMats.length]);
-    const rx = 140 + rnd.range(0, 60);
+    const rx = 100 + rnd.range(0, 40);
     lobe.scale.set(rx, rx * rnd.range(0.45, 0.6), rx * rnd.range(0.7, 0.95));
     lobe.position.set(
-      wallAnchor.x + (ax / alen) * (i - 2) * 110 + rnd.range(-25, 25),
-      375 + rnd.range(-15, 50),
-      wallAnchor.z + (az / alen) * (i - 2) * 110 + rnd.range(-25, 25),
+      wallAnchor.x + (ax / alen) * (i - 1.5) * 110 + rnd.range(-25, 25),
+      320 + rnd.range(-10, 30),
+      wallAnchor.z + (az / alen) * (i - 1.5) * 110 + rnd.range(-25, 25),
     );
     lobe.rotation.y = rnd.range(0, Math.PI * 2);
     wall.add(lobe);

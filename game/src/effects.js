@@ -290,13 +290,30 @@ export function createEffects(THREE, scene) {
     // (was 8-12), grow 0.5 (was 0.8). A puff at 2.5-4 m growing
     // 0.8/s for 12 s reaches ~24 m across; fourteen of those read as
     // giant clouds piling into the HUD. Capped puffs top out near 8 m.
-    const smokeColors = [0x475569, 0x64748b, 0xcbd5e1];
+    // v20: the pale #CBD5E1 puffs are OUT (replaced by mid-slate
+    // #7A8CA0) and the cluster is TIGHTER (±18 m horizontal, ±12 m
+    // vertical, was ±30/±20) — the v20 live crash frame showed the
+    // pale puffs scattered wide over the grass reading as big
+    // translucent BUBBLES (the same "pale bubbles on the slope" the
+    // v19 live playtest named, a third bubble source the v19 fix
+    // missed: emitSmoke + cloud lobes were fixed, blast smoke was
+    // not). Dark-to-mid slate puffs clustered on the fireball read as
+    // smoke; pale spheres floating apart read as bubbles.
+    // v20 (rev 3): opacity 0.85 (was 0.55) and the lightest colour
+    // dropped — the rev-2 crash frame still showed pale spheres: at
+    // 0.55 over bright sand/grass the mid-slate washes out to pale
+    // grey, and a pale translucent sphere IS a bubble. At 0.85 the
+    // dark slate stays dark enough to read as smoke (the soft radial
+    // texture keeps the soft edges Gemini v17 asked for; the smooth
+    // spheres stay, so no return to the faceted "flat dark polygons"
+    // of v15).
+    const smokeColors = [0x475569, 0x64748b];
     for (let p = 0; p < 14; p += 1) {
       smokePuff(
-        x + (Math.random() - 0.5) * 60,
-        y + (Math.random() - 0.5) * 40,
-        z + (Math.random() - 0.5) * 60,
-        2.5 + Math.random() * 1.5,
+        x + (Math.random() - 0.5) * 36,
+        y + (Math.random() - 0.5) * 24,
+        z + (Math.random() - 0.5) * 36,
+        2 + Math.random() * 1.5,
         {
           color: smokeColors[p % smokeColors.length],
           life: 6 + Math.random() * 2,
@@ -306,7 +323,7 @@ export function createEffects(THREE, scene) {
             y: air ? -2 - Math.random() * 1.5 : 2 + Math.random() * 2,
             z: (Math.random() - 0.5) * 5,
           },
-          opacity: 0.55,
+          opacity: 0.85,
         },
       );
     }

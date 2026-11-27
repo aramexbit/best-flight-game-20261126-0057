@@ -1,4 +1,4 @@
-# Langit Nusantara — Ring Run: v19 Plan
+# Langit Nusantara — Ring Run: v20 Plan
 
 Competition: make.fun "Make the best flight game", $500 (top 50 share).
 Deadline: **Saturday 28 Nov 2026, 07:57 WIB**. Repo: `best-flight-game-20261126-0057`.
@@ -189,7 +189,101 @@ the sea the background is uniform pale blue — no horizon, no sea.
   convergence (player on the final leg, rivals closing on the meet
   point, storm visible) — deterministic every run.
 
-## What v19 does NOT change
+## Why v20 exists
+
+Blind test v19 (Gemini) verdict NO — Cover 5.5 / Cockpit 5.0 (−0.8) /
+Title 6.5 (+0.1) / Landing 5.5. The criticism: the cover angle is a
+flat rear silhouette, the plane blends into the sky, the prop is a
+blur, tree shadows float/offset on slopes, the mountains are sharp
+and pinched, the runway sits on a ridge back, the cover HUD is busy
+(AGL pill, heading tape, control hints); the cockpit dials STILL read
+as canvas noise (overlapping/generic clock faces), the storm is a pile
+of black polygons, rival tags look like debug markers, the canopy
+frame is heavy; the title's bullet icons are small/blurry/misaligned,
+bullet 3 rambles, the storm sits behind the title, a ring is cut by a
+rival badge; the landing is ALMOST A DUPLICATE of the cover (same
+framing, 460 vs 456 FT, 109 vs 113 KTS, same score 3403) — drop one of
+the four screenshots. Live playtest v19 (27 Nov 06:21–06:36 WIB)
+added seven P0 findings the seed screenshots never showed: (a) ring 2
+never passed in 3 tap flights (gap grew to 3.7–4.5 km, closest 186 m
+— the browser tool can only tap, not hold; the 1→2 leg is 206 m);
+(b) the blast fired at 0:41 and the player's plane crashed itself at
+0:42 — no fireball in frame, and the crash camera ended pressed
+against the hillside with pale bubbles on the slope; (c) only 1 of 9
+code-visible shadows identifiable live; (d) the round sun/gear button
+still visible on the title screen; (e) no toast visible when ring 1
+passed (only the score/counter changed); (f) the giant faceted black
+storm anvil sits exactly over ring 1 (piercing its centre) and behind
+the title text, and the white faceted clouds read as floating rocks;
+(g) the Weak sim fell 9/12 → 4/12 (pitchRate 0.9 amplifies the noisy
+pilot's oscillation).
+
+## What v20 changes (patch on v19, never a rebuild)
+
+**Flight / fairness (the P0 fixes)**
+- Ring 2 forgiving (finding (a)): rings 1–3 wander 0.22 → 0.12 rad,
+  altitude jitter ±28 → ±12 m (rings 4+ unchanged). New headless
+  test 15: a tap-rate-limited pilot (stick live 0.2 s per 0.5 s,
+  throttle held) passes ring 2 in 11.7 s (limit 30 s). Live probe
+  phase A9: the same with a 33%-duty tap driver.
+- Crash camera (finding (b)): `crashing` beat 1.5 → 3.0 s (the
+  fireball lives 3.5 s), camera `setChase(48, -12, 30, 40)` with the
+  height lifted until the camera clears the terrain behind the wreck
+  by 4 m — it can never end up inside the slope. Live proof: probe
+  phase A4.
+- Contact shadows (finding (c)): opacity 0.55 → 0.75, scale 8 +
+  agl×0.02 → 10 + agl×0.03, visible below 160 m AGL (was 120).
+- Gear hidden on title (finding (d)): `body.title-open #btn-gear
+  { display: none; }` (v19 only hid Fuel + 0/12).
+- Ring toast (finding (e)): 2.2 → 4.0 s, font 34 → 40 px. New
+  headless test 16: centre pass pays 150, half-radius pass 125.
+- Weak sim (finding (g)): 4/12 → 7/12 (score 652 → 1375) — the
+  gentler early course helps the noisy pilot recover; Reference stays
+  12/12 + landed (59.6 s, 3406).
+
+**Visuals (Gemini v20 prompt, per scene)**
+- Dials redrawn at 1024 px with REAL instrument scales on the
+  −120°..+120° sweep (IAS 0/25/50/75/100, ALT 0/225/450/675/900, VSI
+  −10/−5/0/5/10, RPM 0/1/2/3/4, HDG N/E/S/W with NO badge — the 360°
+  HDG needle would cover a bottom label), numbers 96 px at radius
+  380 (HDG 110 px), ticks major 430→470 / minor 445→470, redline r
+  480 on IAS/RPM only, badge 210×72 at y 800, needle shortened (tip
+  0.1325 m), anisotropy 8. Cockpit camera pulled back 0.1 → 0.35 m
+  so the leftmost dial is no longer clipped.
+- Storm reads as weather (finding (f)): anvil 4 lobes of 100–140 m
+  at y 320–350 (was 5 of 140–200 m at y 375–425), colours
+  #6B7E92/#8296A8; wall 6 lobes of 100–150 m, anchor 150 → 220 m off
+  the course; funnel #46545F opacity 0.9; spray crown 5 puffs + 18 m
+  ring; spout2 moved to 750 m along / 320 m aside at 0.45 scale (was
+  500/180/0.55) so it no longer pierces ring 1. Second pass: the
+  wall/anvil lobes use SMOOTH shading, detail 1 (was flat detail 0)
+  — the first v20 screenshots showed the lightened anvil STILL
+  reading as a black cut rock: hard facet steps on a dark surface are
+  the problem, not just the colour.
+- Trees planted: burial −0.15 m; ground discs tilt to the terrain
+  normal at +0.08 (was flat at +0.15); mountains softened (ridge
+  detail 0.2 → 0.12, detail2 ±12% → ±8%, landmark spine 0.22 →
+  0.10); cloud lobes more/smaller/tighter (base 14–18 × 30–45 m, top
+  10–13 × 20–30 m).
+- Prop disc no longer a pale bubble: #8a9199, opacity max 0.25
+  (was #d8d8d8 / 0.45), radius 1.7 m; livery contrast up (cheatline
+  0.30 m, red wingtips to 5.8 m).
+- Rival tags compact: pill 4.0×1.7 m at y+2.9 (was 5.0×2.1 at +3.2).
+- Title card: sharp SVG icons (gold ring, red/gold target, blue
+  storm cloud + gold bolt) + Gemini's 3 concise lines; gear hidden.
+- Landing is a LOW flare, truly different from the cover:
+  `PLAY_SECONDS` 49.5 → 43.5 (cover: mid-race ring 10/11, AGL pill
+  hidden since rings < 12); landing freeze 300 m/+50 m → 250 m/+30 m
+  with the glidepath rebuilt (far target +45 → +25 m, near +6 → +4 m)
+  and the autopilot terrain guard relaxed for point targets (samples
+  80/160 m, margin 15 m). The first v20 landing shot FAILED the
+  freeze — the strict guard pinned the plane at +45 m and it orbited
+  at a 77° bank for the full 140 s — diagnosed with a headless trace
+  and fixed at the root. The freeze now triggers at t=47.2 s (250 m,
+  +25 m, aligned 3.7°, roll 4.6°). Landing camera 16/−3/3.0 FOV 55.
+- Ring glow pulses 0.28+0.06·sin(time·3.2) (was flat 0.22).
+
+## What v20 does NOT change
 
 Caravan shape, 3/4 camera, race system, 12-ring + land mission, yellow
 key-caps, no "Press Space" line, daytime, v11 premium palette, W climbs
@@ -200,18 +294,18 @@ key-caps, no "Press Space" line, daytime, v11 premium palette, W climbs
 1. **3-tier sim** (`sim-3tier.mjs`, pure Node, real game logic):
    Reference (autopilot) must pass 12 rings AND land; Weak (noisy input)
    gets some rings, no finish; Idle (no input) must fail. Must pass before
-   v19 is declared ready. v19 run: Reference 12/12 + landed, score 3403,
-   59.7 s; Weak 4/12, score 652 (DOWN from v18's 9/12 — the stronger
-   pitchRate amplifies the noisy pilot's oscillation; the criterion
-   still holds); Idle 2/12, score 277.
+   v20 is declared ready. v20 run: Reference 12/12 + landed, score 3406,
+   59.6 s; Weak 7/12, score 1375 (UP from v19's 4/12 — the gentler early
+   course helps the noisy pilot recover); Idle 3/12, score 427.
 2. **Headless tests** (`test/headless.test.mjs`, Node): heading holds with
    no input (+ gust applied, the v16 regression); ring-centre pass counts;
    crossing rivals fire the collision gate; v18 adds pitch-hold with
    zero stick + gust (test 5) and no-input straight flight passes ring 1
    (test 6); v19 adds pitch-tap symmetry (test 7), ring 1→2 spacing
-   (test 8) and the 400 m no-fire gate (test 9). 14/14 pass. Logic lives
-   in pure modules (`flight.js`, `rings.js`, `collision.js`, `storm.js`
-   gust) — no browser.
+   (test 8) and the 400 m no-fire gate (test 9); v20 adds the
+   tap-rate-limited ring-2 pilot (test 15) and the toast-worthy ring-1
+   bonus (test 16). 16/16 pass. Logic lives in pure modules
+   (`flight.js`, `rings.js`, `collision.js`, `storm.js` gust) — no browser.
 3. **Checklist** (`verification.md`): every item checked only with proof
    (screenshot / sim / test), never a claim.
 4. **This design doc set**: plan + style + asset list, so the direction
@@ -220,4 +314,4 @@ key-caps, no "Press Space" line, daytime, v11 premium palette, W climbs
 ## Submit rule
 
 Submit only on the user's explicit order per version, after screenshots +
-an outside blind test. v19 is not submitted by the builder.
+an outside blind test. v20 is not submitted by the builder.

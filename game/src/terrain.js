@@ -55,12 +55,17 @@ function islandHeight(islands, fbm, x, z) {
     // into distinct low-poly hills instead of one unbroken green dome.
     // v11: a touch softer (0.88 + 0.12, was 0.85 + 0.15) — the hills stay
     // smooth and rolling with texture, not lumpy noise.
-    const detail2 = 0.88 + 0.12 * fbm(x * 0.006 + i * 3.7, z * 0.006 - i * 5.9, 2);
+    // v20: softer detail — the high-frequency term drops to ±8%
+    // (was ±12%) and the ridged term to +12% (was +20%), so the
+    // distant peaks lose their sharp pinched crests (Gemini v19: the
+    // mountains read as sharp/pinched polygon spikes) and settle into
+    // layered rolling silhouettes.
+    const detail2 = 0.90 + 0.08 * fbm(x * 0.006 + i * 3.7, z * 0.006 - i * 5.9, 2);
     // v4: a ridged term, so the hills grow real crests and valleys instead of
     // smooth domes — the skyline reads as terrain with shape, not a coloured
     // mound. Kept small (±10%) so the course and the runway stay valid.
     const ridge = 1 - Math.abs(fbm(x * 0.004 + i * 11.1, z * 0.004 - i * 7.7, 2));
-    const detail3 = 0.9 + 0.2 * ridge * ridge;
+    const detail3 = 0.9 + 0.12 * ridge * ridge;
     h += isl.height * bump * detail * detail2 * detail3;
   }
   return h;
@@ -909,10 +914,20 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   const groundDiscGeo = new THREE.CircleGeometry(1, 20);
   const groundDiscMat = new THREE.MeshBasicMaterial({ map: groundDiscTex, transparent: true, depthWrite: false });
   function plantGroundDisc(px, pz, r) {
+    // v20: the disc tilts to the local terrain normal (was flat) and
+    // sits at +0.08 (was +0.15) — on a slope a flat disc floated above
+    // the grass on the downhill edge and clipped into it uphill, which
+    // read as a shadow drifting sideways off the trunk (Gemini v19:
+    // "bayangan pohon melayang/offset"). The disc now hugs the slope
+    // directly under the trunk.
     const disc = new THREE.Mesh(groundDiscGeo, groundDiscMat);
-    disc.rotation.x = -Math.PI / 2;
+    const e = 1.5;
+    const nx = -(meshHeight(px + e, pz) - meshHeight(px - e, pz)) / (2 * e);
+    const nz = -(meshHeight(px, pz + e) - meshHeight(px, pz - e)) / (2 * e);
+    const n = new THREE.Vector3(nx, 1, nz).normalize();
+    disc.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
     disc.scale.setScalar(r);
-    disc.position.set(px, meshHeight(px, pz) + 0.15, pz);
+    disc.position.set(px, meshHeight(px, pz) + 0.08, pz);
     group.add(disc);
   }
   let treesPlanted = 0;
@@ -962,9 +977,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     crown.scale.set(cr, cr * 0.85, cr);
     crown.position.set(vegRandom.range(-0.4, 0.4) * s, trunkH + (1.1 + vegRandom.range(0, 0.4)) * s, vegRandom.range(-0.4, 0.4) * s);
     tree.add(crown);
+    // v20 (Gemini v20 #1): burial offset -0.15 — the tree group sits
+    // 0.15 m into the ground, so no trunk ever floats on a slope crest.
     // v5: snap to the MESH height — the passed ph is the analytic height,
     // which can sit metres above or below the rendered ground on a slope.
-    tree.position.set(px, meshHeight(px, pz), pz);
+    tree.position.set(px, meshHeight(px, pz) - 0.15, pz);
     tree.rotation.y = vegRandom.range(0, Math.PI * 2);
     group.add(tree);
     // v8: a grounding disc under the trunk, so the tree reads as rooted.
@@ -1030,8 +1047,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     nuts.scale.setScalar(s);
     nuts.position.set(0.3 * s, -0.25 * s, 0.2 * s);
     crown.add(nuts);
+    // v20: burial offset -0.15 (see plantShadeTree).
     // v5: snap to the MESH height (see plantShadeTree).
-    palm.position.set(px, meshHeight(px, pz), pz);
+    palm.position.set(px, meshHeight(px, pz) - 0.15, pz);
     palm.rotation.y = vegRandom.range(0, Math.PI * 2);
     group.add(palm);
     // v16: register for the wind-sway pass in update().
@@ -1077,7 +1095,7 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       s * vegRandom.range(0.45, 0.75),
       s * vegRandom.range(0.7, 1.4),
     );
-    bush.position.set(px, meshHeight(px, pz) + 0.2 * s, pz);
+    bush.position.set(px, meshHeight(px, pz) + 0.05 * s, pz);
     bush.rotation.y = vegRandom.range(0, Math.PI * 2);
     group.add(bush);
     bushesPlanted += 1;
@@ -1534,8 +1552,10 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       // Fade to exactly zero at every footprint edge, so the foot meets the ground.
       const edge = 1 - smoothstep(0.72, 1.0, Math.abs(cu));
       const endFade = 1 - smoothstep(0.8, 1.0, Math.abs(along) / (length / 2));
-      // A narrow spine along the crest line: the top is a sharp ridgeline.
-      const spine = 0.22 * prof * Math.exp(-((across / 70) * (across / 70)));
+      // v20: the crest spine softens (0.10, was 0.22) — the narrow
+      // sharp ridgeline is what made the ranges read as pinched
+      // spikes; a gentler spine keeps the summits but rounds the crest.
+      const spine = 0.10 * prof * Math.exp(-((across / 70) * (across / 70)));
       // v10: three noise harmonics (±25% total) — the v9 two-harmonic crest
       // still read as a smooth grey tent in the cover and landing shots.
       const crest = 1 + (0.12 * (fbm(along * 0.008 + 5.5, across * 0.008 - 2.2, 2) - 0.5)
@@ -1762,14 +1782,16 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       }
       if (!placed) continue;
       const cloud = new THREE.Group();
-      // v19b: more, smaller base lobes (10-13 x 40-60 m, was 8-11 x
-      // 60-95) — a bank of many small puffs reads as one cumulus mass;
-      // a few 95 m lobes read as separate giant balls (the bubbles).
-      const baseLobes = 10 + cloudRandom.int(0, 3);
+      // v20: more, smaller base lobes (14-18 x 30-45 m, was 10-13 x
+      // 40-60) packed tighter (±28 m, was ±35) — a bank of many small
+      // puffs reads as one cumulus mass; a few big faceted balls read
+      // as separate floating rocks (Gemini v19, still present in the
+      // v19 cockpit shot). Fully opaque is kept (v19b).
+      const baseLobes = 14 + cloudRandom.int(0, 4);
       for (let p = 0; p < baseLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
-        // v19b: radii 40-60 m (was 60-95).
-        const rx = cloudRandom.range(40, 60);
+        // v20: radii 30-45 m (was 40-60).
+        const rx = cloudRandom.range(30, 45);
         // v17: taller base lobes (0.65-0.9, was 0.55-0.75) — the banks
         // read as flat slabs from the side; more vertical mass makes
         // them read as towering cumulus.
@@ -1777,9 +1799,9 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
         const rz = rx * cloudRandom.range(0.8, 1.1);
         lobe.scale.set(rx, ry, rz);
         lobe.position.set(
-          cloudRandom.range(-35, 35),
+          cloudRandom.range(-28, 28),
           ry * cloudRandom.range(0.9, 1.1),
-          cloudRandom.range(-30, 30),
+          cloudRandom.range(-24, 24),
         );
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
         cloud.add(lobe);
@@ -1789,34 +1811,34 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       // base reads as a billowing cumulus bottom, not a flat grey disc.
       // Spread tighter (±35 m) so the bank merges. They use the cool
       // blue-grey underside material (#d7e2ee) from Gemini's fix prompt.
-      const lowerLobes = 4 + cloudRandom.int(0, 1);
+      const lowerLobes = 5 + cloudRandom.int(0, 1);
       for (let p = 0; p < lowerLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[2]);
-        // v19b: radii 30-50 m (was 45-75).
-        const rx = cloudRandom.range(30, 50);
+        // v20: radii 25-40 m (was 30-50).
+        const rx = cloudRandom.range(25, 40);
         const ry = rx * cloudRandom.range(0.45, 0.6);
         lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.05));
         lobe.position.set(
-          cloudRandom.range(-35, 35),
+          cloudRandom.range(-28, 28),
           ry * cloudRandom.range(0.2, 0.5),
-          cloudRandom.range(-25, 25),
+          cloudRandom.range(-22, 22),
         );
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
         cloud.add(lobe);
       }
       // v17: more top lobes (7-9, was 5-7) piled higher (40-70 m, was
       // 34-50 m) — a bumpy, towering top instead of a low cap.
-      const topLobes = 8 + cloudRandom.int(0, 3);
+      // v20: 10-13 top lobes of 20-30 m (was 8-11 of 25-40).
+      const topLobes = 10 + cloudRandom.int(0, 3);
       for (let p = 0; p < topLobes; p += 1) {
         const lobe = new THREE.Mesh(lobeGeo, cloudMats[cloudRandom.int(0, 1)]);
-        // v19b: radii 25-40 m (was 35-55).
-        const rx = cloudRandom.range(25, 40);
+        const rx = cloudRandom.range(20, 30);
         const ry = rx * cloudRandom.range(0.6, 0.85);
         lobe.scale.set(rx, ry, rx * cloudRandom.range(0.8, 1.0));
         lobe.position.set(
-          cloudRandom.range(-25, 25),
+          cloudRandom.range(-20, 20),
           40 + cloudRandom.range(0, 30),
-          cloudRandom.range(-22, 22),
+          cloudRandom.range(-18, 18),
         );
         lobe.rotation.y = cloudRandom.range(0, Math.PI * 2);
         cloud.add(lobe);
