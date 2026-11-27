@@ -22,6 +22,159 @@ Rule: an item is checked ONLY with proof (screenshot / sim / test), never
 a claim. Evidence is cited per item. Re-verify after any game-code change
 (the 5 screenshots are regenerated last, before commit).
 
+# Langit Nusantara — Ring Run: Verification Checklist (v25)
+
+Rule: an item is checked ONLY with proof (screenshot / sim / test), never
+a claim. Evidence is cited per item. Re-verify after any game-code change
+(the 4 screenshots are regenerated last, before commit).
+
+## What changed in v25 (vs v24) — all patched on top of v24 (already submitted)
+
+Perintah pengguna 27 Nov 22:36 WIB: "Kerjakan" — HANYA dua tugas:
+(1) pinggir aspal runway di finish tidak konsisten warnanya,
+(2) kemudi pesawat bundar seperti mobil diganti yoke U Cessna 208.
+TIDAK ada kontrol sentuh HP (pengguna pakai PC), TIDAK ada perubahan
+syarat win (tetap 12 ring + autoland v24). Flight model, auto-win,
+lembah v24 dan syarat win TIDAK disentuh.
+
+- [x] **(1) Pinggir aspal: PENYEBAB = z-fighting, bukan geometri
+  asimetris, bukan lembah v24.** Di 4-landing.jpg v24, pinggir kanan
+  runway ada strip cokelat-muda lebar yang lebarnya berubah-ubah,
+  pinggir kiri hampir tidak ada strip itu (aspal gelap langsung
+  bertemu rumput + garis putih tipis putus-putus). Probe in-page
+  (`out/v25-edge-probe.mjs`, shot landing seed 1) mengukur adegan
+  yang sesungguhnya: runway (1250, 120), tinggi 90,3, dir (1, 0);
+  tinggi tanah di ±15,5 m = 90,3 di KEDUA sisi pada semua along
+  (−200/−100/0/100/200); warna vertex tanah simetris kiri/kanan
+  (mis. pita 30–60 m: utara [71,93,27], selatan [76,100,29]; pita
+  110–180 m: utara [64,124,26], selatan [52,117,23] — sama-sama
+  hijau-tan yang memudar ke hijau); ke-24 kotak shoulder SEMUA di
+  y 90,3 (12 utara + 12 selatan, min = maks = 90,3). Jadi geometri
+  dan warna TERRAIN simetris — yang tidak simetris adalah RENDER:
+  puncak kotak shoulder (90,3 + 0,2 = 90,5) TEPAT COPLANAR dengan
+  bidang underlay gelap (runway.height + 0,2 = 90,5), dan garis tepi
+  luar putih (pusat 90,52, tebal 0,08) MENYILANG bidang itu
+  (bawah 90,48, atas 90,56 — hanya 0,06 m di atas underlay). Pada
+  jarak kamera landing 250–500 m, depth buffer tidak bisa memisah
+  permukaan-permukaan itu, jadi tiap sisi menyelesaikan seri itu
+  berbeda: selatan menampilkan shoulder cokelat, utara menampilkan
+  underlay gelap, garis putih berkedip putus-putus. Lembah v24
+  BUKAN penyebab: carve hanya berlaku along −550..−225, strip
+  (along ≥ −225) dan semua shoulder (pusat segmen ≥ −206,25)
+  tidak tersentuh — tinggi di ±15,5 m tetap 90,3 di kedua sisi.
+- [x] **(1) Perbaikan (terrain.js saja, minimal): shoulder lebih
+  TEBAL (0,8 m, dulu 0,4) dan diangkat +0,1 m** — puncak kini
+  90,8, yaitu 0,3 m di atas underlay (90,5) dan 0,2 m di atas aspal
+  (90,6); bawah kotak tetap terkubur 0,3 m di bawah pad datar, jadi
+  tidak ada yang melayang. **Garis tepi luar putih pindah 0,4 m
+  ke luar (across 17,4 m, lepas dari shoulder) dan naik (+0,45,
+  dulu +0,22)** — bawahnya kini 0,21 m di atas underlay. **Lampu
+  tepi naik mengikuti shoulder** (alas +0,56 / kubah +0,7, dulu
+  +0,36 / +0,5), karena lampu duduk DI ATAS shoulder (across
+  ±15,5 m) dan akan tertelan shoulder yang lebih tinggi bila tidak
+  diangkat. Semua perubahan simetris menurut konstruksi (loop
+  `side` yang sama untuk −1 dan +1). Probe pasca-perbaikan:
+  shoulder-N/S pusat 90,4 (12 + 12, min = maks), puncak 90,8;
+  edgeline-N/S pusat 90,8 (bawah 90,71); underlay tetap 90,5;
+  tinggi + warna tanah TIDAK berubah (H dan bins identik).
+- [x] **(1) Sebelum/sesudah (dibaca sendiri):** v24 — kanan strip
+  cokelat lebar bergelombang, kiri aspal gelap + garis putih
+  putus-putus. v25 4-landing.jpg — KEDUA pinggir kini sama: strip
+  shoulder cokelat `#BBA77F` seragam selebar 3 m sepanjang strip
+  + garis putih luar kontinu tanpa putus di kedua sisi, dari
+  threshold sampai ujung jauh; "09", piano keys, aiming points,
+  centreline, PAPI kiri dan lampu tepi (titik putih kecil di kedua
+  sisi) tetap terbaca. Pita tanah cokelat-hijau di luar shoulder
+  kini juga simetris kiri/kanan (itu warna vertex yang memang
+  simetris — bukan cacat).
+- [x] **(2) Yoke kokpit: torus bundar PENUH DIGANTI yoke U /
+  ram's horn Cessna 208** (plane.js saja, per prompt build Gemini
+  verbatim + foto referensi Cessna 208B G-SYLV). Satu grup
+  `yokeGroup` di (0, −0,26, 0,30), rotation.x 0,35 — batang bawah
+  datar gelap `#262c36` (silinder 0,30 m, bukan lingkaran),
+  dua lengan miring ke luar + dua grip hitam tebal `#1c2129`
+  (0,06 × 0,13 × 0,05, miring ±0,12 rad) di ujung atas, tombol
+  merah kecil `#d92b2b` di grip kiri atas, hub abu-abu `#7a8090`
+  berupa kotak low-poly (0,11 × 0,10 × 0,07, seperti Caravan)
+  yang duduk di batang bawah dan melingkungi kolom, tutup merah
+  `#d92b2b` di tengah depan hub. Kolom tebal abu-abu + shroud
+  TIDAK berubah (tetap menempel di dash). **Defleksi:** `setGauges`
+  menggerakkan grup U + hub bersama — miring roll ±0,12 rad
+  (roll × 0,4) dan dorong/tarik pitch ±0,025 m — sementara kolom
+  tetap diam, jadi kolom tidak pernah lepas. 5 dial, panel,
+  flight model, kontrol TIDAK berubah (tidak ada baris lain di
+  plane.js yang disentuh; grip tetap selebar dulu, U merentang
+  ±0,20 m lawan roda lama ±0,21 m).
+- [x] **(2) Verifikasi visual (dibaca sendiri):** 2-cockpit.jpg
+  v25 — torus SUDAH HILANG TOTAL; yang terbaca adalah U terbuka:
+  dua grip hitam tegak di kiri-kanan dengan celah terbuka di
+  tengah-atas (panel terlihat lewat celah itu), hub abu-abu +
+  tutup merah kecil di tengah, kolom abu-abu di bawah. Kelima
+  dial (ATT/IAS/ALT/HDG/RPM) utuh dan terbaca penuh — U TIDAK
+  menutupi dial ALT tengah (puncak grip lebih rendah dari puncak
+  roda lama). Tuas throttle, tuas, dan tiga titik indikator di
+  bawah dial tengah tidak berubah. Petir tebal + 2 rival + ring 3
+  (186 m) tetap ada seperti v24.
+- [x] **Verifikasi pasca-revisi (semua angka terukur, setelah
+  revision pass gate authorship — edit + revisi tiap file yang
+  disentuh di dalam sesi terekam):** `node --check` lolos
+  terrain.js + plane.js; **headless 39/39 ALL PASS**;
+  **sim-win-autoland 15/15 ALL PASS**; **sim-3tier ALL PASS**
+  (Reference 12/12 landed 58,7 dtk skor 3411; Weak 9/12 skor
+  2102; Idle crash 2/12; Manual 12/12 landed 57,5 dtk skor 3411 —
+  SEMUA sama persis dengan v24, karena flight model / groundAt /
+  syarat win tidak disentuh).
+  `node shots.mjs` 2 run, exit 0, errors none; playtest: Start
+  click OK, HUD bergerak, COCKPIT VIEW + dedup OK. Keempat
+  screenshot (run 2, yang dikirim): cover sha256
+  `494a2cfedc6521f880616b2000899d32af2903d4a03ac2e5bd087a8afd6dedca`
+  (127.930 byte), kokpit
+  `31de7d227f91ea4dcbb865f2f1e3a3dd3add1ed6f87c792dd956e220c0810bda`
+  (123.052 byte), start
+  `0d20fceae23c17073d7d65c662caee5ca09df3466ab0d874483d92cc5a4d5f33`
+  (99.524 byte), landing
+  `dab7a13db1c8dd420ac2559c353ba96412e12081046730a50958e5a2b473d65d`
+  (109.281 byte). **Catatan jujur soal hash:** keempat hash beda
+  dari v24 — SAMA seperti v24 beda byte dari v23 di keempat shot
+  (cover/start v24 pun tidak identik dengan v23). Buktinya ini
+  drift harness, bukan regresi: run 1 vs run 2 v25 (kode identik,
+  tanpa perubahan di antaranya) JUGA beda di keempat shot
+  (run 1: cover `67eeca44…`, kokpit `37867aea…`, start
+  `9cff2096…`, landing `fa2f352e…`). Yang mengikat adalah
+  ENTRYPOINT, bukan screenshot: **entrypoint 2× byte-identik**
+  (`MAKEFUN_OUTPUT_DIR=out-a|out-b node main.ts`, exit 0
+  dua-duanya; dossier sha256
+  **`d71f4d1dc894e6a72a65f93bcb980fdb15c193b0b2754c8814c4c27ace3cb9f6`**
+  di keduanya; dossier.json **784.406 byte**; total entrypoint
+  **2.434.249 byte** di keduanya; out-a/out-b dihapus setelah
+  perbandingan — scratch, tidak di-commit).
+- [x] **4 screenshot v25 DIBACA SENDIRI (run 2):** cover 127.930
+  byte — pesan ORANYE + fireball kiri (terpotong sebagian di tepi
+  kiri, caveat sama seperti v23/v24) + pesawat pemain utuh
+  kanan-tengah + ring 4 emas 57 m + kolom petir putih tebal
+  (komposisi sama dengan v24); kokpit 123.052 — U ram's horn
+  (lihat di atas) + 5 dial utuh + petir + 2 rival + ring 3;
+  title 99.524 — layar judul FINAL tak tersentuh (teks misi
+  "then land on Runway 09" tetap seperti yang pengguna setujui);
+  landing 109.281 — flare bersih di atas runway 09 (ALT·MSL
+  378 FT, SPD 109 KTS, HDG 086°, POSITION 1/5, pill "FLY OVER
+  THE RUNWAY TO WIN" + "SPD 109 KT · AGL 165 FT · ON GLIDE ·
+  AUTOLAND READY", 2 rival di depan, PAPI kiri) + pinggir aspal
+  kini simetris kiri/kanan (lihat di atas). Veg counts tidak
+  dicatat ulang (kode vegetasi tidak disentuh).
+- [x] **Caveat jujur:** (a) perbaikan aspal dibuktikan lewat
+  render headless + pengukuran geometri in-page, BUKAN lewat
+  playtest live manusia — finish live masih harus diuji pengguna
+  sendiri (v24: pengguna gagal finish 3× di live, padahal sim +
+  probe lolos). (b) Garis tepi DALAM (di atas aspal, +0,45)
+  tidak disentuh — terbaca baik di v24 dan v25. (c) Yoke
+  terdefleksi maksimal 7° saat bank — di shot kokpit ini
+  nyaris netral (roll kecil pada 12 dtk), jadi U terbaca tegak;
+  defleksi besar belum tertangkap di screenshot. (d) Commit
+  LOKAL saja — TIDAK push, TIDAK bundle, TIDAK submit (itu
+  tugas koordinator, hanya atas perintah eksplisit pengguna
+  per versi).
+
 ## What changed in v24 (vs v23) — all patched on top of v23 (already submitted)
 
 Perintah pengguna 27 Nov 20:36 WIB: "Karena sudah bisa submit, dan
@@ -1365,6 +1518,10 @@ bundle).
   glareshield #C93B2B accent. Windshield, glareshield and console
   read as separate built parts. (The leftmost dial is half-clipped by
   the frame edge in the staged shot; the 5 dials are all present.)
+  v25: the full-circle torus wheel is gone — the yoke is now an
+  open-top U / ram's horn (two black grips, grey box hub + red cap,
+  thick grey column), per the Gemini build prompt; the 5 dials are
+  untouched and the U does not cover the middle ALT dial.
 
 ## Runway
 
@@ -1377,7 +1534,12 @@ bundle).
   end, fading 250–360 m (v14/v16). Live probe Phase B: RACE COMPLETE
   in 15.08 s, Position 1/5, Score 2999, touchdown (1113.2, 95.6, 120),
   lat 0 the whole final, roll 0, Space restart without canvas click
-  works. (`/tmp/probe-v18-live.log`)
+  works. (`/tmp/probe-v18-live.log`) v25: the shoulder tops no
+  longer z-fight the dark underlay (shoulders raised, tops 0.3 m
+  clear) and the outer white edge lines sit 0.21 m clear of it, so
+  both runway edges read identically (tan shoulder + continuous
+  white line, full length) — the cause was coplanar surfaces, not
+  the v24 valley and not asymmetric geometry.
 
 ## Clouds
 

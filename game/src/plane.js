@@ -680,26 +680,57 @@ export function buildPlane(THREE, livery = null) {
   yokeCol.position.set(0, -0.30, 0.24);
   yokeCol.rotation.x = 0.35;
   dash.add(yokeCol);
-  // v13: the wheel is bigger still (0.24 m radius, was 0.22), so it
-  // anchors the lower centre of the frame as a real control wheel.
-  const yokeWheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.028, 12, 32), yokeMat);
-  yokeWheel.position.set(0, -0.26, 0.30);
-  yokeWheel.rotation.x = 0.35;
-  dash.add(yokeWheel);
-  const yokeHub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 12), yokeMat);
-  yokeHub.position.set(0, -0.26, 0.30);
-  yokeHub.rotation.x = Math.PI / 2 + 0.35;
-  dash.add(yokeHub);
-  const yokeCap = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), new THREE.MeshBasicMaterial({ color: 0xc83c32 }));
-  yokeCap.position.set(0, -0.272, 0.325);
-  yokeCap.rotation.x = 0.35;
-  dash.add(yokeCap);
+  // v25: the yoke is a Cessna 208 ram's horn, not a car steering
+  // wheel — the full-circle torus (v10-v24) was wrong; the real
+  // Caravan yoke is an open-top U with two black grips (Gemini
+  // build prompt, reference photo cessna-208-yoke-ref.jpg). The U
+  // is one group, so its deflection (setGauges, roll/pitch) moves
+  // the U + hub together while the column and shroud stay fixed to
+  // the dash — the column never detaches. The grip tops stay at the
+  // old wheel's height, so the U still does not cover the middle
+  // ALT dial, and the U spans ±0.20 m against the old wheel's
+  // ±0.21 m, so the footprint in the frame is unchanged. Only the
+  // yoke build below changes; the 5 dials, the panel, the flight
+  // model and the controls are untouched.
+  const yokeGroup = new THREE.Group();
+  yokeGroup.position.set(0, -0.26, 0.30);
+  yokeGroup.rotation.x = 0.35;
+  dash.add(yokeGroup);
+  const yokeDark = new THREE.MeshStandardMaterial({ color: '#262c36', roughness: 0.7, metalness: 0.1 });
+  const yokeGripMat = new THREE.MeshStandardMaterial({ color: '#1c2129', roughness: 0.75, metalness: 0.1 });
+  const yokeRed = new THREE.MeshBasicMaterial({ color: 0xd92b2b });
+  // Bottom bar: a straight dark bar joining left and right, so the
+  // U's bottom is flat like the Caravan's, not a round hoop.
+  const yokeBar = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.30, 10), yokeDark);
+  yokeBar.rotation.z = Math.PI / 2;
+  yokeBar.position.set(0, -0.10, 0);
+  yokeGroup.add(yokeBar);
+  // Arms rising from the bar ends, tilted slightly out, with a thick
+  // black grip on top of each — the two grips are the U's open ends.
   for (const side of [-1, 1]) {
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.05), yokeMat);
-    grip.position.set(side * 0.18, -0.26, 0.30);
-    grip.rotation.x = 0.35;
-    dash.add(grip);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.13, 10), yokeDark);
+    arm.position.set(side * 0.158, -0.035, 0);
+    arm.rotation.z = -side * 0.12;
+    yokeGroup.add(arm);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.05), yokeGripMat);
+    grip.position.set(side * 0.17, 0.095, 0.005);
+    grip.rotation.z = -side * 0.12;
+    yokeGroup.add(grip);
   }
+  // Small red button on the upper-left grip (the Caravan's yoke button).
+  const yokeButton = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.012, 10), yokeRed);
+  yokeButton.rotation.x = Math.PI / 2;
+  yokeButton.position.set(-0.17, 0.13, 0.032);
+  yokeGroup.add(yokeButton);
+  // Grey centre hub: a firm low-poly box housing like the Caravan's,
+  // sitting on the bottom bar and around the column, with a small red
+  // cap on its front centre.
+  const yokeHub = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.10, 0.07), yokeMat);
+  yokeHub.position.set(0, -0.05, 0);
+  yokeGroup.add(yokeHub);
+  const yokeCap = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), yokeRed);
+  yokeCap.position.set(0, -0.05, 0.037);
+  yokeGroup.add(yokeCap);
   // Throttle quadrant: a sloped pedestal in the console's own shell
   // grey (NOT a dark floating box) with a visible slot the levers
   // slide in — the second control that makes the cockpit read as a
@@ -1190,6 +1221,14 @@ export function buildPlane(THREE, livery = null) {
     if (attDisc) {
       attDisc.rotation.z = -roll;
       attDisc.position.y = Math.max(-0.02, Math.min(0.02, -pitch * 0.06));
+    }
+    // v25: the yoke follows the stick — a small roll tilt and a
+    // push/pull with pitch, so the U + hub move together while the
+    // column stays fixed to the dash (it can never detach). Both
+    // are clamped small, so the U keeps reading as a U in any shot.
+    if (yokeGroup) {
+      yokeGroup.rotation.z = Math.max(-0.12, Math.min(0.12, -roll * 0.4));
+      yokeGroup.position.z = 0.30 + Math.max(-0.025, Math.min(0.025, pitch * 0.05));
     }
   }
 

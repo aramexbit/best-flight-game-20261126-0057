@@ -456,7 +456,25 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   // symmetric for the full length of the strip.
   const edgeMat = new THREE.MeshStandardMaterial({ color: '#f5f0dc', roughness: 0.8 });
   const shoulderMat = new THREE.MeshStandardMaterial({ color: '#BBA77F', roughness: 0.95 });
-  const shoulderGeo = new THREE.BoxGeometry(COURSE.runwayLength / 12, 0.4, COURSE.runwayShoulder);
+  // v25: the shoulder boxes are TALLER (0.8 m, was 0.4) and raised
+  // (+0.1 m), so their tops sit 0.3 m clear of the dark underlay
+  // plane (runway.height + 0.2) instead of EXACTLY on it — the v24
+  // landing shot proved the coplanar tops z-fight: at 250-500 m the
+  // depth buffer cannot separate them, so the south shoulder read as
+  // a wide tan band while the north one vanished into the dark
+  // underlay (the probe measured both sides identical: all 24
+  // shoulder centres at meshHeight 90.3, vertex colours symmetric —
+  // the asymmetry was rendering, not geometry, and not the v24
+  // valley, which never touches the strip). The thicker box keeps
+  // its bottom buried 0.3 m under the flat pad, so nothing floats.
+  // The outer white edge line moves 0.4 m further out (across
+  // 17.4 m, clear of the shoulder) and up (+0.45, was +0.22), so
+  // its bottom clears the underlay by 0.21 m instead of straddling
+  // it — the old line's top sat only 0.06 m above the underlay and
+  // read as broken/dashed on the north side. The strip top
+  // (height + 0.3) stays 0.2 m below the shoulder top (height +
+  // 0.5), so the tan edge reads as a raised border, not a step.
+  const shoulderGeo = new THREE.BoxGeometry(COURSE.runwayLength / 12, 0.8, COURSE.runwayShoulder);
   const shoulderLineGeo = new THREE.BoxGeometry(COURSE.runwayLength / 12, 0.08, 0.8);
   for (const side of [-1, 1]) {
     for (let seg = 0; seg < 12; seg += 1) {
@@ -465,16 +483,16 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
       const sz = runway.z + dirZ * along + perpZ * side * (COURSE.runwayWidth / 2 + COURSE.runwayShoulder / 2);
       const shoulder = new THREE.Mesh(shoulderGeo, shoulderMat);
       shoulder.rotation.y = Math.atan2(-dirZ, dirX);
-      shoulder.position.set(sx, meshHeight(sx, sz), sz);
+      shoulder.position.set(sx, meshHeight(sx, sz) + 0.1, sz);
       group.add(shoulder);
-      // Outer white edge line on the shoulder's outer edge, same segments
-      // — so the strip has a continuous white line on BOTH sides, full
-      // length, with no gap.
-      const ox = runway.x + dirX * along + perpX * side * (COURSE.runwayWidth / 2 + COURSE.runwayShoulder);
-      const oz = runway.z + dirZ * along + perpZ * side * (COURSE.runwayWidth / 2 + COURSE.runwayShoulder);
+      // Outer white edge line just outside the shoulder's outer edge,
+      // same segments — so the strip has a continuous white line on
+      // BOTH sides, full length, with no gap.
+      const ox = runway.x + dirX * along + perpX * side * (COURSE.runwayWidth / 2 + COURSE.runwayShoulder + 0.4);
+      const oz = runway.z + dirZ * along + perpZ * side * (COURSE.runwayWidth / 2 + COURSE.runwayShoulder + 0.4);
       const line = new THREE.Mesh(shoulderLineGeo, edgeMat);
       line.rotation.y = Math.atan2(-dirZ, dirX);
-      line.position.set(ox, meshHeight(ox, oz) + 0.22, oz);
+      line.position.set(ox, meshHeight(ox, oz) + 0.45, oz);
       group.add(line);
     }
   }
@@ -575,12 +593,15 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
     for (const side of [-1, 1]) {
       const lx = runway.x + dirX * along + perpX * side * (COURSE.runwayWidth / 2 + 1.5);
       const lz = runway.z + dirZ * along + perpZ * side * (COURSE.runwayWidth / 2 + 1.5);
+      // v25: the lights ride ON the raised shoulder (top at
+      // runway.height + 0.5), so base +0.56 / dome +0.7 (was +0.36 /
+      // +0.5) — otherwise the taller shoulder would swallow them.
       const base = new THREE.Mesh(baseGeo, baseMat);
-      base.position.set(lx, runway.height + 0.36, lz);
+      base.position.set(lx, runway.height + 0.56, lz);
       group.add(base);
       const dome = new THREE.Mesh(domeGeo, mat);
       dome.scale.y = 0.6;
-      dome.position.set(lx, runway.height + 0.5, lz);
+      dome.position.set(lx, runway.height + 0.7, lz);
       group.add(dome);
     }
   }

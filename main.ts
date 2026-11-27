@@ -1,5 +1,17 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v24: the three v22 live-playtest fixes, on top of
+// standard library only). v25: the two user-reported v24 defects, on top of
+// v24 (already submitted) — the runway edges made consistent (the tan shoulder
+// tops z-fought the dark underlay: both at runway.height + 0.2, so one side read
+// tan and the other dark, and the outer white line straddled the same plane and
+// read broken — shoulders are now taller/raised, tops 0.3 m clear, the outer
+// lines moved out and up 0.21 m clear, edge lights raised to ride the shoulder;
+// the v24 valley never touched the strip and the terrain was measured symmetric)
+// + the cockpit yoke rebuilt as a Cessna 208 ram's horn (open-top U: flat dark
+// bottom bar, two black grips, grey box hub + red cap, thick grey column; the
+// full-circle torus is gone for good; the U + hub deflect with roll/pitch in
+// setGauges while the column stays fixed). 5 dials, panel, flight model and win
+// condition (12 rings + autoland) untouched. Headless 39/39, sim-win-autoland
+// 15/15, sim-3tier ALL PASS, entrypoint 2x byte-identical. v24: the three v22 live-playtest fixes, on top of
 // v23 (already submitted) — an approach valley carved in the western ridge
 // (floor 32 m to x=970, 63.8 m at x=1000, strip untouched at 90.3) + the win
 // corridor widened lat 24 → 40 m + a pull-up assist on final (dive/10 m =
