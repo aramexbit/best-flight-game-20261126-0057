@@ -1,5 +1,18 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v25: the two user-reported v24 defects, on top of
+// standard library only). v25-fix: the v25 yoke's bar + hub + red cap never
+// showed in the cockpit shot — they sat INSIDE the console shelf box (its
+// front face is ~0.10 m ahead of the bar at that height), so the shot read as
+// two separate grips; the first fix (bar to local y -0.055, thicker, shorter
+// arms) did not work either. Raising the whole yokeGroup was NOT an option:
+// the bar needs +0.09 m to clear the shelf, but that would lift the grip tops
+// to dash y -0.02, deep into the 5 dials (bottoms -0.17) — the v16 defect.
+// Fix (plane.js only): the bar + hub + cap rise INSIDE the group to local y
+// +0.02, clearing the shelf's top surface, while the grips stay at their old
+// height (tops dash y -0.11, below the dial bottoms) and meet the bar directly
+// (arm stubs deleted). The U now reads in the cockpit shot: two black grips +
+// dark bottom bar + grey hub + red cap. 5 dials, panel, flight model and win
+// condition (12 rings + autoland) untouched. Headless 39/39, sim-win-autoland
+// 15/15, sim-3tier ALL PASS, entrypoint 2x byte-identical. v25: the two user-reported v24 defects, on top of
 // v24 (already submitted) — the runway edges made consistent (the tan shoulder
 // tops z-fought the dark underlay: both at runway.height + 0.2, so one side read
 // tan and the other dark, and the outer white line straddled the same plane and

@@ -692,6 +692,33 @@ export function buildPlane(THREE, livery = null) {
   // ±0.21 m, so the footprint in the frame is unchanged. Only the
   // yoke build below changes; the 5 dials, the panel, the flight
   // model and the controls are untouched.
+  // v25-fix: the v25 bottom bar (local y -0.10, r 0.026) did NOT
+  // read from the cockpit camera — the shot showed two separate
+  // black grips + grey hub with no bar joining them, so it read as
+  // two levers, not a U. The bar sat below the console shelf's
+  // bottom lip and blended into the panel. Fix: raise the bar to
+  // hub height (local y -0.055, flush with the hub's front face),
+  // thicken it (r 0.036), and shorten the arms to meet it — the
+  // bar is now visible on both sides of the hub, as in the
+  // reference photo. Grip tops, hub, cap, button, column, shroud
+  // are unchanged; the U's footprint and deflection are unchanged.
+  // v25-fix REVISION (after reading the regenerated shot + 4x crop):
+  // the first fix did NOT work — the bar is STILL invisible, and
+  // the hub + red cap are invisible too (the grey shape in the shot
+  // is the shroud's top, not the hub; no red cap shows). Diagnosis:
+  // the bar AND hub sit INSIDE the console shelf box — the shelf's
+  // front face at the bar's height is ~0.10 m in front of the bar,
+  // so raising the bar to hub height was not enough. Raising the
+  // WHOLE yokeGroup is NOT an option: the bar needs +0.09 m to
+  // clear the shelf, but that would lift the grip tops (+0.09 m, to
+  // dash y -0.02) deep into the 5 dials (bottoms -0.17) — the v16
+  // defect all over again. Correct minimal fix: raise the BAR +
+  // HUB + CAP inside the group (local y +0.02) so they clear the
+  // shelf's top surface (bar centre 0.02 m above it), while the
+  // GRIPS STAY at their old height (tops dash y -0.11, still below
+  // the dial bottoms). The grips now meet the bar directly, so the
+  // arm stubs are deleted. Column, shroud, button, grip size and
+  // group origin/deflection are unchanged.
   const yokeGroup = new THREE.Group();
   yokeGroup.position.set(0, -0.26, 0.30);
   yokeGroup.rotation.x = 0.35;
@@ -701,17 +728,30 @@ export function buildPlane(THREE, livery = null) {
   const yokeRed = new THREE.MeshBasicMaterial({ color: 0xd92b2b });
   // Bottom bar: a straight dark bar joining left and right, so the
   // U's bottom is flat like the Caravan's, not a round hoop.
-  const yokeBar = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.30, 10), yokeDark);
+  // v25-fix: raised to hub height (y -0.055, was -0.10) and
+  // thickened (r 0.036, was 0.026) — the v25 bar sat below the
+  // console shelf's bottom lip and was invisible from the cockpit
+  // camera. The hub (local y -0.10..0.00) sits on the bar; the bar
+  // shows on both sides of the hub, as in the reference photo.
+  // v25-fix REVISION: local y +0.02 (was -0.055) — the -0.055 bar
+  // was still buried INSIDE the console shelf box (its front face
+  // is ~0.10 m ahead of the bar at that height), so the bar, hub
+  // and red cap were all invisible in the shot. At +0.02 the bar
+  // centre sits 0.02 m above the shelf's top surface and reads
+  // clearly; the hub rides on it, as in the reference photo.
+  const yokeBar = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.30, 10), yokeDark);
   yokeBar.rotation.z = Math.PI / 2;
-  yokeBar.position.set(0, -0.10, 0);
+  yokeBar.position.set(0, 0.02, 0);
   yokeGroup.add(yokeBar);
-  // Arms rising from the bar ends, tilted slightly out, with a thick
-  // black grip on top of each — the two grips are the U's open ends.
+  // Two thick black grips on top of the bar ends — the grips ARE
+  // the U's open ends (they meet the bar directly, as on the real
+  // Caravan yoke, whose grips rise straight from the bar). The
+  // v25 arm stubs are deleted: with the bar raised to +0.02 the
+  // grip bottoms (local y 0.03) already overlap the bar (top
+  // +0.056), so no connector is needed. Grip size, tilt and
+  // position are unchanged — their tops stay at dash y -0.11,
+  // below the dial bottoms.
   for (const side of [-1, 1]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.13, 10), yokeDark);
-    arm.position.set(side * 0.158, -0.035, 0);
-    arm.rotation.z = -side * 0.12;
-    yokeGroup.add(arm);
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.05), yokeGripMat);
     grip.position.set(side * 0.17, 0.095, 0.005);
     grip.rotation.z = -side * 0.12;
@@ -725,11 +765,16 @@ export function buildPlane(THREE, livery = null) {
   // Grey centre hub: a firm low-poly box housing like the Caravan's,
   // sitting on the bottom bar and around the column, with a small red
   // cap on its front centre.
+  // v25-fix REVISION: hub + cap ride up with the bar (local y +0.02,
+  // was -0.05) — at -0.05 they were buried in the console shelf with
+  // the bar, so neither the hub nor the red cap ever showed in the
+  // shot. At +0.02 the hub sits on the bar above the shelf surface
+  // and the red cap reads on its front face.
   const yokeHub = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.10, 0.07), yokeMat);
-  yokeHub.position.set(0, -0.05, 0);
+  yokeHub.position.set(0, 0.02, 0);
   yokeGroup.add(yokeHub);
   const yokeCap = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), yokeRed);
-  yokeCap.position.set(0, -0.05, 0.037);
+  yokeCap.position.set(0, 0.02, 0.037);
   yokeGroup.add(yokeCap);
   // Throttle quadrant: a sloped pedestal in the console's own shell
   // grey (NOT a dark floating box) with a visible slot the levers

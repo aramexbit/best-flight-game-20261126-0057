@@ -175,6 +175,110 @@ lembah v24 dan syarat win TIDAK disentuh.
   tugas koordinator, hanya atas perintah eksplisit pengguna
   per versi).
 
+## What changed in v25-fix (vs v25) — patch di atas commit lokal v25 1753b173 ("v25: fix runway edge colors + Cessna ram's-horn yoke")
+
+Temuan koordinator dari membaca sendiri 2-cockpit.jpg v25 + crop zoom area
+yoke: torus bundar SUDAH hilang — bagus. TAPI yoke baru TIDAK terbaca sebagai
+U dari kamera kokpit: yang terlihat hanya dua grip hitam tegak yang berdiri
+terpisah + hub abu-abu di tengahnya, tanpa batang bawah yang menghubungkan
+keduanya. Tanpa batang bawah yang terlihat, itu bukan U — itu dua tuas
+terpisah.
+
+- [x] **Percobaan pertama GAGAL (jujur dicatat, bukan disembunyikan).**
+  Bar dinaikkan ke local y -0,055 + ditebalkan (r 0,036) + lengan
+  dipendekkan (0,085). Shot hasil regenerasi + crop zoom (x 380–780,
+  y 520–720, 3x) + crop ketat (x 520–780, y 570–680, 4x) dibaca
+  sendiri: batang bawah TETAP tidak terlihat, DAN hub + tutup merah
+  juga tidak terlihat (bentuk abu-abu di tengah shot ternyata ATAS
+  shroud, bukan hub; tidak ada titik merah di situ — satu-satunya
+  titik merah adalah tombol di grip kiri). Jadi yang terlihat tetap
+  dua grip terpisah.
+- [x] **Diagnosis yang benar (diukur dari geometri, bukan tebakan):**
+  batang + hub + tutup merah duduk DI DALAM kotak console shelf —
+  muka depan shelf pada ketinggian batang ada ~0,10 m DI DEPAN batang
+  (shelf: BoxGeometry 2,0 × 0,34 × 0,42 di (0, −0,36, 0,12),
+  rotation.x 0,45; muka depannya di z ≈ 0,376 pada y batang −0,312,
+  sementara batang di z 0,281). Grip terlihat karena ada DI ATAS
+  bibir atas shelf (y −0,172 lawan bibir −0,298) dan lebih ke depan
+  (z 0,337); atasan shroud terlihat karena puncaknya (y −0,18) juga
+  di atas bibir. Tuas throttle terlihat dengan alasan yang sama
+  (y −0,20, di atas bibir); kotak quadrant (y −0,30) juga tertelan
+  shelf — pola yang sama di codebase ini.
+- [x] **Kenapa TIDAK menaikkan seluruh yokeGroup:** batang butuh
+  +0,09 m untuk melewati bibir shelf, tapi itu akan mengangkat
+  puncak grip ke dash y −0,02 — jauh masuk ke 5 dial (bawah dial
+  −0,17), cacat v16 ("dials as cut by the yoke") terulang. Jendela
+  vertikal antara bibir shelf (−0,298) dan bawah dial (−0,17)
+  hanya ~0,11 m, sementara U butuh 0,21 m dari batang ke puncak
+  grip — U tidak muat di jendela itu bila batang harus di atas
+  bibir DAN grip harus di bawah dial.
+- [x] **Perbaikan yang berhasil (plane.js saja, minimal): batang +
+  hub + tutup merah naik DI DALAM grup (local y +0,02)** — pusat
+  batang kini 0,02 m DI ATAS permukaan atas shelf, jadi terbaca
+  jelas; hub menumpang di atasnya, tutup merah terbaca di muka
+  depannya. **Grip TIDAK berubah** (puncak tetap dash y −0,11, di
+  bawah bawah dial) dan kini bertemu batang secara langsung, jadi
+  **lengan penghubung (arm stubs) DIHAPUS** — seperti yoke Caravan
+  asli, yang gripnya naik langsung dari batang. Kolom, shroud,
+  tombol merah grip kiri, ukuran/posisi grip, origin grup dan
+  defleksi (setGauges) TIDAK berubah. terrain.js TIDAK disentuh
+  (perbaikan aspal v25 utuh); 5 dial, panel, flight model, kontrol,
+  syarat win TIDAK berubah.
+- [x] **Verifikasi visual (dibaca sendiri, shot run 2):** 2-cockpit.jpg
+  — U TERBACA JELAS, di gambar penuh DAN di crop zoom (380–780 /
+  520–720, 3x) DAN di crop ketat (520–780 / 570–680, 4x): dua grip
+  hitam tegak (kiri bertombol merah) + BATANG BAWAH GELAP yang
+  menghubungkan keduanya di kedua sisi hub + hub abu-abu + tutup
+  merah kecil di tengah-depan hub. Kelima dial (ATT/IAS/ALT/HDG/RPM)
+  utuh dan terbaca penuh — U TIDAK menutupi dial. Petir tebal + 2
+  rival + ring 3 (186 m) tetap seperti v24/v25.
+- [x] **3 screenshot lain DIBACA SENDIRI (run 2):** cover — pesan
+  ORANYE + fireball kiri (terpotong sebagian di tepi kiri, caveat
+  sama seperti v23/v24/v25) + pesawat pemain utuh kanan-tengah +
+  ring 4 emas 57 m + kolom petir putih tebal; title — layar judul
+  FINAL tak tersentuh (teks misi "then land on Runway 09" tetap);
+  landing — flare bersih di atas runway 09 (ALT·MSL 378 FT, SPD 109
+  KTS, HDG 086°, POSITION 1/5, pill "FLY OVER THE RUNWAY TO WIN" +
+  "SPD 109 KT · AGL 165 FT · ON GLIDE · AUTOLAND READY", 2 rival di
+  depan, PAPI kiri) + pinggir aspal tetap simetris kiri/kanan
+  (shoulder cokelat seragam + garis putih kontinu — terrain.js tidak
+  disentuh, jadi ini memang harus sama dengan v25).
+- [x] **Verifikasi pasca-revisi (semua angka terukur, setelah revision
+  pass — baca ulang tiap file yang disentuh di dalam sesi terekam):**
+  `node --check` lolos plane.js; **headless 39/39 ALL PASS**;
+  **sim-win-autoland 15/15 ALL PASS**; **sim-3tier ALL PASS**
+  (Reference 12/12 landed 58,7 dtk skor 3411; Weak 9/12 skor
+  2102; Idle crash 2/12; Manual 12/12 landed 57,5 dtk skor 3411 —
+  SEMUA sama persis dengan v24/v25, karena flight model / groundAt /
+  syarat win tidak disentuh). `node shots.mjs` 2 run, exit 0, errors
+  none; playtest: Start click OK, HUD bergerak, COCKPIT VIEW + dedup
+  OK. Keempat screenshot (run 2): cover sha256
+  `e2e637c8653f7f102022897ed6fbc38efaad78f3709cf979c1eb158d938c19e9`
+  (127.795 byte), kokpit
+  `66b0435e39c8acec6e6c88701a38bfab9b4d5d37b7041d36cd8b3cdc7f39b123`
+  (123.209 byte), start
+  `818823e2da68b4e9acc2a1097b9b9fdceece2e181fce13f775c4b3aacab5d0a1`
+  (99.611 byte), landing
+  `89b7a755ef6d9d64a3b90192dac00bbebdf2d320d855570c64ae2b2378b174a9`
+  (108.844 byte). **Catatan jujur soal hash:** keempat hash beda
+  dari v25 — SAMA seperti v24 beda byte dari v23 dan v25 beda dari
+  v24 (cover/start/landing pun tidak identik antar run dengan kode
+  yang sama). Yang mengikat adalah ENTRYPOINT: **entrypoint 2×
+  byte-identik** (`MAKEFUN_OUTPUT_DIR=out-a|out-b node main.ts`,
+  exit 0 dua-duanya; dossier sha256
+  **`008b8ab38cc530f8099b824dffd776ade1a0ddf305f0645555e384dab537436f`**
+  di keduanya; dossier.json **780.682 byte**; total entrypoint
+  **2.430.698 byte** di keduanya; out-a/out-b dihapus setelah
+  perbandingan — scratch, tidak di-commit). Hash dossier BARU
+  dibanding v25 (d71f4d1d…, 784.406 byte) — wajar, plane.js
+  berubah (lengan dihapus, komentar bertambah).
+- [x] **Caveat jujur:** (a) Yoke terdefleksi nyaris netral di shot
+  kokpit ini (roll kecil pada 12 dtk), jadi U terbaca tegak —
+  sama seperti v25; defleksi besar belum tertangkap di screenshot.
+  (b) Commit LOKAL saja — TIDAK push, TIDAK bundle, TIDAK submit
+  (itu tugas koordinator, hanya atas perintah eksplisit pengguna
+  per versi).
+
 ## What changed in v24 (vs v23) — all patched on top of v23 (already submitted)
 
 Perintah pengguna 27 Nov 20:36 WIB: "Karena sudah bisa submit, dan
