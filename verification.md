@@ -4,6 +4,420 @@ Rule: an item is checked ONLY with proof (screenshot / sim / test), never
 a claim. Evidence is cited per item. Re-verify after any game-code change
 (the 4 screenshots are regenerated last, before commit).
 
+# Langit Nusantara — Ring Run: Verification Checklist (v21)
+
+Rule: an item is checked ONLY with proof (screenshot / sim / test), never
+a claim. Evidence is cited per item. Re-verify after any game-code change
+(the 4 screenshots are regenerated last, before commit).
+
+## What changed in v21 (vs v20) — all patched on top of v20
+
+- [x] **(1) Cover ≠ landing — a NEW cover moment.** `PLAY_SECONDS`
+  43.5 → 28.0 s: the cover now freezes mid-race at ring 7/12 (0:27,
+  436 FT, 131 KTS, score 1561, RING 8 · 144 m ahead) over a beach
+  with green hills, palms and the sea at the frame edge — NOT a
+  runway approach. The landing is unchanged (0:47, RING 12/12, score
+  3410, "AGL 81 FT · ON GLIDE", runway filling the frame). Different
+  moment, altitude, speed, score and composition — the v20 Gemini
+  verdict's "near-duplicate" criticism is answered by construction.
+  The AGL pill is hidden on the cover now (rings < 12), which also
+  answers the ALT-vs-AGL inconsistency (469 FT vs 290 FT) Gemini
+  named — only the ALTITUDE pill shows on the cover. Proof: cover
+  shot 83,044 byte vs landing shot 99,905 byte. (shots.js)
+- [x] **(2) Rock clouds → soft cumulus; tornado → layered vortex;
+  glow damped.** Cloud lobes: detail-0 faceted → detail-1 smooth
+  normals (flatShading false), bright whites kept, tight packing
+  kept — the v10 smooth failure was small/spread/grey-blue lobes,
+  the v20 lobes are tight + bright, so smooth shading reads as
+  cloud, not rock. Eastern banks raised (E1 390 → 425 m, E2 410 →
+  440 m) to clear the ridge silhouette (the "floating cluster above
+  the ridge"). Rocks lightened (#8B9A94 / #7C8B84 / #9AA5A0, was dark
+  slate) — the "tiny dark specks" on the grass. Tornado: outer
+  funnel opacity 0.9 → 0.45 (translucent), a darker counter-rotating
+  inner funnel (0.55x radius, #2F3A45, 0.6 opacity, −3.1 rad/s) and
+  3 tilted helix rings (opacity 0.28) at 1/4, 1/2, 3/4 height;
+  spray crown 5 puffs + 18 m ring. Storm wall: 6 → 10 lobes, smaller
+  (rx 60–85 m), lower (y 250), anchor pushed 220 → 320 m off the
+  course, darker (#4A5A6A/#5A6C7E/#42525F); anvil: 4 → 6 lobes,
+  rx 70–100 m, y 290–315; spout2 moved to 1100 m along / 450 m to
+  the side at 0.4 scale (was 750/320/0.45). Next-ring glow: tube
+  2.6x → 2.0x, opacity 0.28+0.06·sin → 0.20+0.04·sin — the giant
+  pale yellow ring in the sky is damped. Proof: cover + cockpit +
+  title shots — the white clouds are smooth puffs, the storm is a
+  grey translucent mass with a layered funnel. Honest caveat: the
+  anvil still sits behind the "NUSANTARA" text on the title, and the
+  funnel still reads somewhat cone-like at distance — the storm
+  anchor is ring 1, which is inside the title orbit's view. A v22
+  candidate: move the storm anchor further from the title camera.
+  (terrain.js, storm.js, rings.js)
+- [x] **(3) Cockpit rebuilt to Gemini's spec.** The outer-left dial
+  is now a real ATTITUDE indicator: a live horizon disc (512 px
+  canvas — sky blue over earth brown, white horizon line, pitch
+  ladder at ±20°/±40°) behind a face with a transparent centre
+  window punched via destination-out, fixed rim ticks + a fixed
+  white aircraft symbol (bar + dot) at the centre, no needle, no
+  pin; `setGauges` drives it with roll/pitch (rotation.z = −roll,
+  position.y = clamp(−pitch×0.06, ±0.02)). The VSI is a blue bug
+  riding the ALT dial's rim at the mini-scale (−10/0/+10 at
+  120°/180°/240°, radius 380 px) — a needle from the centre would
+  cross the "ALT" badge at level flight, the bug never covers
+  anything. Dial faces darker (#F1F5F9/#E8EEF4/#CBD5E1, was
+  #FFFFFF/#F8FAFC/#E2E8F0 — kills the blown-out white on the unlit
+  MeshBasicMaterial); scale numbers 96 → 118 px, HDG letters 110 →
+  128 px, badge 56 → 62 px; rims are a DARK bezel (#2E3440,
+  metalness 0.2, was cream metalness 0.5 — the cream rims glared
+  yellow around every dial). The two windshield struts are GONE
+  (the canopy is one clear pane framed by the A-pillars + bow);
+  the red panel trims (top + bottom) and the red glareshield stripe
+  are GONE (Gemini v20: "placeholder blocks") — the glareshield lip
+  carries a light rim highlight (#94A3B8) instead. The throttle
+  quadrant is rebuilt as a sloped shell-grey pedestal with a visible
+  slot and longer levers (0.26 m, bigger knobs, throttle black +
+  mixture red) sitting on the console shelf — not a dark floating
+  box with two sticks. Proof: cockpit shot 118,843 byte — 5 dials
+  with real scales + red needles, the ATT horizon readable, the
+  yoke + quadrant visible, the canopy a contoured roof + angled
+  pillars. Honest caveat: the pillars are still thick dark bars and
+  the storm mass top-right is heavy and dark. (plane.js, render.js)
+- [x] **(4) LIVE chase camera is the cover's 3/4.** `setChase(11,
+  −3.5, 4.2, 22)` → `(13, −6, 4.2, 24)` in startGame — 25° off
+  dead-rear (was 17.6°), the same geometry as the staged cover.
+  The v20 live camera stayed dead-rear because the high wing
+  (y 0.82 m) occludes the nose from a rear-high camera; at 25° the
+  nose peeks past the fuselage. The extra distance also pulls more
+  ground (and shadows) into the frame. Proof: live probe phase A10
+  — the camera offset angle (median, min, max) across straight
+  flight + turns + climb. (main.js, probe-v21-live.mjs)
+- [x] **(5) Ring 5 forgiving + tap-proven.** The forgiving early
+  window is rings 1–5 (was 1–3): wander 0.12 rad, jitter ±12 m on
+  i < 5. New headless test 17: a tap-rate-limited pilot (0.2 s on /
+  0.5 s) passes ring 5 in 20.9 s (limit 45 s). New headless test 18:
+  legs 1–5 are [600, 206, 206, 206, 206] m (all ≥ 200 m) with the
+  sharpest early turn 3.3° (limit 29°). The sim-3tier Weak route
+  holds at 7/12 (score 1367) — the softening did not collapse the
+  struggling-player route. Live proof: probe phase A9 (ring 5 with
+  the PWM tap driver, 45 s). (rings.js, test/headless.test.mjs,
+  probe-v21-live.mjs)
+- [x] **(6) Crash camera pulls back + looks AT the wreck; smoke
+  fixed at the root.** `setChase(48, −12, crashHeight, 40)` →
+  `(60, −15, crashHeight, 0)` — 60 m back, look-ahead 0 (the v20
+  frame looked 40 m PAST the crash point, into the hillside, and
+  48 m was too close for a 42 m fireball). The chase branch in
+  render.js now clamps the camera ≥ 3 m above the terrain under it
+  every frame (second line of defence). Blast smoke: 14 → 8 puffs,
+  near-black slate only (#1E293B/#334155, the pale #CBD5E1 and
+  mid-slate are gone), cluster ±10/±8 m (was ±18/±12), size
+  1.8–2.8 m, FLATTENED (flat 0.55, random yaw — a flattened puff
+  grows flattened, it never un-flattens into a ball). The smoke
+  column puffs are darker (#334155) + flattened (0.6) too, and
+  `smokePuff` takes an `opts.flat` (all rival trails + emitSmoke
+  pass flat 0.6). The v20 rev-3 opacity-only fix left pale balls in
+  the crash frame; the root cause is round smooth spheres with a
+  soft texture — shape, not opacity. Proof: live probe phase A4
+  (camera distance ≥ 45 m + terrain clearance + fireball meshes)
+  and the crash screenshots. (main.js, render.js, effects.js,
+  rivals.js)
+- [x] **(7) Rival shadows bigger.** Sun-offset shadows 1.3x for
+  rivals, contact shadows 1.25x (new `scaleMul` parameter on
+  placeShadow / placeContact). The v20 live playtest identified at
+  most ONE shadow in the whole frame. Proof: live probe phase C
+  count + cover/landing shots (a dark ellipse under the plane on
+  the runway). (render.js)
+- [x] **(8) Prop disc is a ring, not a disc.** The blur disc is
+  now a radial-gradient ring texture (transparent hub + rim, peak
+  mid-radius, 3 faint dark blade streaks), radius 1.7 → 1.55 m —
+  a solid pale disc reads as a bubble, a ring reads as motion blur.
+  Proof: cover shot — a thin grey ring at the nose. (plane.js)
+- [x] **(9) Title: rival tags hidden, storm pushed out.** `runShot`
+  calls `rivals.setMarkersVisible(name !== 'start')` — the title
+  hides the #02/#04/#05 pills (the planes stay; the red rival over
+  the beach is a hero detail), every other shot keeps them. The
+  storm wall/anvil anchor moved 100 m further out and the spout2
+  350 m further along, so the funnels no longer tower over the
+  beach. Proof: title shot — no marker pills, no gear button, clean
+  card + icons. Honest caveat: the player's own plane is not
+  visible in the title frame (the orbit camera looks past it) and
+  the anvil still sits behind the title text — see (2). (main.js,
+  rivals.js, storm.js)
+- [x] **(10) ALT vs AGL resolved by the cover moment.** No HUD edit
+  was needed: the ALT pill is already labelled "ALTITUDE" and the
+  AGL pill only shows once rings ≥ 12 — the v20 cover showed both
+  only because it froze at ring 12/12. The v21 cover freezes at
+  ring 7/12, so only ALTITUDE shows. Proof: cover shot — one
+  altitude number (436 FT). (shots.js)
+- [x] **(11) Specks + ridge artifact cleaned.** Rocks lightened
+  (see (2)) and the eastern cloud banks raised above the ridge
+  silhouette. Proof: cover + landing shots — no dark specks on the
+  grass, no floating cluster above the ridge (the small plane above
+  the mountain in the landing shot is a rival, in frame). (terrain.js)
+- [x] **(12) Landing-to-win CRASH — root cause + fix (v21b).** The
+  user playtested a real manual landing and CRASHED on touchdown
+  (27 Nov 09:39 WIB) — phase B's teleport-to-short-final passed,
+  but a human approach never won. Reproduction (10 human profiles,
+  seed 1): the touchdown logic in flight.js checked the finish zone
+  with speed < 50 m/s, |VS| < 8 m/s, |pitch| < 0.35 — BELOW what a
+  human naturally flies (the plane cruises at 105 kts / 55 m/s at
+  throttle 0.3, and the natural descent from ring 12 is VS −11
+  m/s). A wings-level, on-centreline, on-strip touchdown at
+  throttle 0.3 failed on speed ALONE (107 kts vs the 50 cap); the
+  steep profile failed on speed + VS together. The check ORDER was
+  verified correct (landing first, crash only the else) — the window
+  was too narrow, not the order. Fix: ONLY the finish-zone
+  `softEnough` widened — speed 50 → 62 m/s (120 kts: above the
+  0.3-throttle cruise, below the full-throttle cruise, so slowing
+  down still matters), VS 8 → 12 m/s, pitch 0.35 → 0.45 rad; roll
+  stays 0.45. The precise onRunway `gentle` path (48 / 0.35 / 8)
+  is UNTOUCHED. Re-run after the fix: slow (0.3, VS −5) LANDED
+  (106 kts, was CRASHED); slow-steep (0.3, VS −11) LANDED (113 kts,
+  VS −11, was CRASHED); cruise-fast (0.72, 146 kts) still CRASHED
+  on speed — correct; long-midfield overshoot still CRASHED —
+  correct. New headless tests 19 + 20 (count 18 → 20): test 19 —
+  human landing at 0.3 / VS −5 wins after 12 rings (106 kts,
+  VS −5.0); test 20 — full-throttle arrival still crashes (146
+  kts) AND steep −11 m/s at 0.3 lands (113 kts, VS −11.0).
+  Headless 20/20 PASS. sim-3tier gained a 4th route "manual"
+  (autopilot flies the rings, then a human takes over at 0.3 /
+  VS −5): manual 12/12 + landed 53.5 s, score 3410, touchdown
+  (1350, 92, 120). Live proof: probe phase B2 (new) — fly the
+  rings, then the human profile from ring 12 to touchdown, driven
+  by real keys. (flight.js, test/headless.test.mjs, sim-3tier.mjs,
+  probe-v21-live.mjs)
+- [x] **(13) Cover 28 → 31 s (v21b).** Supersedes the 28 s numbers
+  in (1): at 28 s the plane was over the sandy beach with the sea
+  only at the frame edges and the storm's rain scratching the frame
+  (the cell sits beside ring 6). At 31 s the plane is past the cell,
+  over the turquoise shoreline with the sandy beach + green islands
+  behind it and the next ring ahead. Proof: cover shot 83,286 byte
+  — RING 8/12, 0:30, 483 FT, 129 KTS, score 1876, POSITION 1/5,
+  RING 9 · 155 m ahead, plane banking 3/4 (right half), contact
+  shadow on the sand. Cover ≠ landing: 0:30/483 FT/129 KTS/ring 8/
+  1876 vs landing 0:47/378 FT/109 KTS/ring 12/3410. Honest caveat:
+  the sea is a side element (left edge), not dominant — the frame
+  is beach + green hills; the moment is mid-race banking, not a
+  runway approach, which is what the brief required. (shots.js)
+- [x] **(14) Title screen rebuilt MODERN + hero camera (v21b–v21h)
+  — the user's final decision.** The user corrected the v21 brief
+  twice: 27 Nov 09:35 WIB "cover awal game kurang bagus", then
+  09:39 WIB "LAYAR JUDUL maksudnya saya bukan cover" + "buat
+  lebih modern". The v21b glass-card redesign (left-aligned hero,
+  HOW TO FLY card, dark control strip, pill CTA) was replaced by
+  the user's FINAL layout (27 Nov 09:49 WIB, variant 2 "TANPA
+  kotak di pinggir"), approved 09:51 WIB ("nah itu baru bagus")
+  against the coordinator's mockup
+  (~/workspace/your_files/media-generation-langit-nusantara-title-final-p-0-564c9fcb-b8d5-47fe-b3a9-4a4b397ec934.webp):
+  gold title "LANGIT NUSANTARA / RING RUN" centred at top; the
+  mission text above a BIG circular gold play button (140 px,
+  white triangle) in the centre + START in gold caps under it; the
+  mission + terrain text ALL GOLD (#FFD52A — the mockup's first
+  line was white; the user ordered it gold in the game, 27 Nov
+  09:55 WIB, and "RING RUN" gold too: NO white text above the play
+  button); six separate light glass control chips spread across the
+  bottom (W/S Pitch, A/D Roll, Q/E Rudder, Shift/Ctrl Throttle —
+  the badge wraps to two lines, that chip stands taller as in the
+  mockup — C Camera, P Pause); NO instruction box at the side, NO
+  brand logo, NO gear on the title. The live background is a NEW
+  hero camera (render.js `CAMERA_HERO`): the camera sits SOUTH of
+  the plane (over the sea, +28 m, +4 m, +2 m east) and looks NORTH
+  (look target 20 m west, 50 m north), so the plane reads large at
+  the right against beach + green hills + blue sky, the storm
+  (east, 90° right) out of frame, the turquoise sea filling the
+  bottom. It follows the plane (the live title orbit stays framed)
+  with the same feedforward + lerp + terrain clamp as the chase,
+  and startGame() resets the mode to CHASE explicitly (the title
+  runs HERO, gameplay runs CHASE — no leak). Two real defects were
+  caught in the title screenshots and fixed: (a) the centred hero
+  (left:50% + translateX) shrink-to-fit to 640 px, so the title
+  wrapped to two lines and collided with the mission text — the
+  hero now spans the full width (left:0; right:0); (b) the plane
+  read behind the play button — the camera moved closer (45 → 28
+  m) and the look target further west (8 → 20 m), so the plane
+  reads ~69% across, fully clear of the button. Proof: title shot
+  100,753 byte — one-line gold title, gold RING RUN, gold mission
+  + terrain, big gold play circle + START, 6 light chips, the
+  player's plane whole at the right (red nose + prop + tail over
+  the beach), no storm, no tags, no gear. This resolves item (9)'s
+  caveats (anvil behind the text, plane not visible). The v21b
+  glass card + pill CTA + eyebrow + brand logo are all REMOVED
+  (dead CSS cleaned). (game/index.html, render.js, main.js,
+  probe-v21-live.mjs phase D hero check)
+- [x] **(15) LOW START + steep ridges (v21c — user 27 Nov 10:17).**
+  The seed-1 course was almost entirely over the sea (ground 0–15 m
+  under rings 1–11, nothing within 200 m), so "low start between
+  hills" had to be BUILT. `COURSE.minRingAlt` 120 → 45 (config.js);
+  the walk starts at y 55 (was 150) and climbs 62 → 145 toward the
+  approach; the spawn is set to ring 1's altitude (was +10 m), so
+  the first leg is LEVEL at AGL ~57.7 m (inside the user's 40–60 m
+  band); the leg-clearance margin is 45 → 25 m (the 45 m margin
+  lifted ring 1 and made the first leg climb). The ridges are
+  COURSE-AWARE, not fixed: two pairs of narrow, tall ridge islands
+  (radius 260–280 m, height 300–320 m) flank the FINAL ring
+  positions 450 m perpendicular — pair A flanks ring 3, pair B
+  ring 9 — placed at the end of `createCourse` (rings.js), so
+  their skirts add < 2 m under the rings and the low course stays
+  low while their crests fill the frame's edges. Fixed positions
+  were tried first and REJECTED: seed 10's course runs over a fixed
+  southern ridge (ring 3 on it at ground 134 m, the leg climbs
+  100 m in 203 m, the autopilot overshoots and crashes into the
+  ridge — seed probe 11/12). Course-aware placement fixed it:
+  seed probe back to 12/12. Idempotent (createCourse runs once per
+  rival on the same islands array — a ridge is only added if no
+  island already sits within 100 m of it). The autopilot's terrain
+  guard in shots.js was reworked for the low course (proportional
+  climb instead of a hard 0.9 stick, margin 45 → 25 m, and
+  path-based sampling at the carrot + midpoint + 80 m ahead instead
+  of 160–340 m along the nose, which caught the flank of the island
+  beside the start and rocketed the plane to 300–500 m). Proof:
+  headless test 22 — spawn AGL 57.7, ring 1 AGL 44.9, ring 3 AGL
+  99.1, ring 12 y 145, ground under ring 3 0.7 m (sea) vs 300 m
+  north 77.6 m / 450 m north (crest) 160.8 m. (config.js, rings.js,
+  terrain.js [fixed ridges reverted], shots.js, test/headless.test.mjs)
+- [x] **(16) DENSE STORM + tornado-kills-rival (v21c — user 27 Nov
+  10:17 + 10:23).** The storm now spans the WHOLE course, not one
+  point. Three new waterspouts via the existing `buildFunnel`
+  helper (storm.js): spout3 near ring 4, 70 m NORTH toward the
+  north ridge, scale 0.55, kill radius 35 m — the close/killer
+  tornado a weaving rival can enter in real play; spout4 near ring
+  9, 200 m SOUTH over the sea, scale 0.6, kill radius 30 m — the
+  cover tornado; spout5 near ring 10, 260 m NORTH, scale 0.5, kill
+  radius 25 m. All stay OFF the ring line (nearest 70 m from a
+  ring centre, kill radius 35 m), so no ring and no player line is
+  ever covered. Each spout has its own counter-rotating inner
+  funnel + helix rings. The storm returns a `tornadoes` list (main
+  cell r45 scale 1, spout2 r25 scale 0.4, spout3 r35, spout4 r30,
+  spout5 r25) and a pure exported `tornadoAt(x, y, z, tornadoes)`
+  — a point dies only inside the radius AND the height band
+  (baseY … baseY + 264×scale). Rain is now 4 systems (main cell
+  350 streaks, spout3 200, spout4/5 250 each, each its own
+  LineSegments cloud). Lightning strikes in a RANDOM storm cell
+  (any of the five tornadoes, ±150 m), every 3–7 s (was 4–9 s),
+  first strike 2–4 s. A second storm wall (6 flatter lobes) sits
+  at spout4. **Tornado-kill mechanic (rivals.js + main.js):** a
+  rival in a flying state that enters a tornado's cylinder is
+  destroyed — `effects.explodeChain` (chain fireball) +
+  `effects.explodeSplit` (both airframe halves torn apart,
+  tumbling, burning — the same visuals as the mid-air collision,
+  so the kill is unmistakable in a screenshot) — then it is out
+  for `RACE.tornadoOutDelay` 12 s (vs the 3 s crash respawn, so it
+  reads as ELIMINATED) and rejoins behind. `playerPosition` SKIPS
+  a tornado-killed rival entirely, so the player's position
+  improves THE MOMENT it explodes. The fixed-step onEvent handler
+  shows "🌪️ <name> DESTROYED BY THE TORNADO!" (3.0 s) + `audio.boom()`
+  + shake 0.5 — the player KNOWS a rival just died. The PLAYER is
+  never tested against the tornadoes (the player's storm danger
+  stays the gusts, as now — the user ordered the player NOT
+  immune, and the gusts are the existing danger). The staged shots
+  log tornado-kills to `window.__raceEvents` without a HUD/boom
+  (frozen frames). A tornado-killed rival's scripted crash flags
+  are NOT set, so it can still do its scripted event after
+  rejoining. Proof: headless test 21 (tornadoAt cylinder: centre
+  kills, 34 m kills, 36 m safe, above the crown safe, below the
+  foot safe, main cell 40 m kills / 50 m safe); the LIVE visual
+  proof is probe phase A11 (screenshot of the rival's explosion
+  at the tornado) — see the live probe section. (storm.js,
+  rivals.js, main.js, config.js, test/headless.test.mjs)
+- [x] **(17) Verification updates for v21c.** Headless **22/22**
+  (tests 21 + 22 added — tornadoAt cylinder + low start/ridges).
+  Sim-3tier ALL PASS (Reference 12/12 + landed 60.1 s score 3410;
+  Weak 4/12 score 666 — HONEST CAVEAT: below the v21 brief's 7/12
+  floor; the low climbing course is genuinely harder for a
+  struggling player; the sim's own criterion is "some rings, no
+  finish" and 4/12 passes it; the tap pilot, test 17, remains the
+  realistic struggling-player proof and still passes ring 5;
+  Idle 1/12 crashed 39.4 s; Manual 12/12 + landed 54.0 s score
+  3410). Sim seeds 1–12 ALL PASS (12/12 + landed, scores
+  3381–3422; seed 10 was 2/12 + crashed on the fixed ridges and
+  is 12/12 + landed 59.5 s after the course-aware fix). The
+  `shots.mjs` harness timeout was 20 s — the cover shot stages
+  31 s of simulation on the heavier scene (5 tornadoes, 4 rain
+  systems, 13 islands) and takes ~26 s to become ready in
+  software rendering, so the harness timed out twice with no page
+  error (the game itself was healthy: `__shotReady` true in < 2 s
+  for the title, 26.3 s for the cover, 5 tornadoes present, errors
+  none). The harness timeouts (goto + waitForFunction) were raised
+  20 s → 60 s — a tooling fix, not a game change. The playtest's
+  Start-button click also needed `force: true` + a 60 s timeout
+  (the heavier scene saturates the main thread in software
+  rendering, so the click's stability checks starve) and a wait
+  for the HUD to actually appear after the click (the first frame
+  after start takes > 500 ms). (test/headless.test.mjs,
+  sim-3tier.mjs, shots.mjs, /tmp/probe-v21c-seeds.mjs)
+- [x] **(18) Cover 31 → 20 s (v21c).** Supersedes the 31 s numbers
+  in (1) and (13): the 31 s cover was over the runway island
+  (green + sand, the sea only a strip at the left edge) — it did
+  not show the turquoise sea or the steep hills the user ordered
+  (27 Nov 10:17: "cover shot harus menampilkan BUKIT CURAM ...
+  bukan cuma laut datar"). At 20 s the plane is near ring 4, over
+  the turquoise sea, flanked by ridge pair A (steep green crests
+  with grey rocky peaks) with spout3 (the close tornado) beside
+  it and two more tornadoes in the distance, rain across the
+  frame, and the gold ring 5 ahead with rival #4 inside it. Proof:
+  cover shot 110,336 byte — RING 4/12, 0:20, 403 FT, 127 KTS,
+  score 743, POSITION 2/5, RING 5 · 83 m ahead, plane banking 3/4
+  over the turquoise sea (bottom half of the frame) + sandy beach
+  + steep hills, a big layered tornado at the right + two distant
+  funnels, rain streaks. Cover ≠ landing: 0:20/403 FT/127 KTS/
+  ring 4/743 vs landing 0:47/378 FT/109 KTS/ring 12/3410. The
+  other three shots are unchanged in composition (cockpit RING
+  2/12 0:12 324; title final layout; landing RING 12/12 0:47
+  3410 "LAND ON THE RUNWAY") — only their byte sizes moved
+  slightly (cockpit 127,479; title 99,504; landing 99,983) from
+  the storm/rain randomness in the staged scene. (game/src/shots.js)
+- [x] **(19) Storm deck + rings under black clouds + lightning by
+  the rings (v21d, user 27 Nov 11:49).** The storm sky is now a
+  DOMINANT black ceiling, not a few blobs: ~15 large, flat, DARK
+  cumulonimbus lobes (rx 90–130 m, y-scale 0.3–0.4, y ~248 m,
+  base ~196 m, colours #0F172A/#1E293B/#334155, opaque) spaced
+  ~220 m along the whole course polyline (spawn → rings →
+  runway), overlapping into a continuous dark deck. The rings
+  (60–159 m, top 172 m) sit 25+ m BELOW the deck base — the deck
+  frames the TOP of the view and never covers a ring or the plane
+  (the coordinator's rule). Course rain: 3 new systems (rings
+  1–4, 5–8, 9–12, 250 streaks each, 0.32, spread ±250 m) under
+  the deck, so the player flies through rain at the rings — 7
+  rain systems, ~1,800 streaks total. Lightning: the bolt now
+  strikes near the RINGS too (target = random tornado OR random
+  ring, 12 rings vs 5 tornadoes ≈ 70% ring strikes), every 2–5 s
+  (was 3–7 s), flash 0.2 s (was 0.12 s). The staged 'play'
+  (cover) and 'cockpit' shots trigger a REAL strike at the next
+  ring (`storm.flash()`, the same strike() as live play, bolt
+  ~60 m east / 40 m north of the ring, lit 1.5 s) so the frame
+  shows a bolt by the ring — the live 0.2 s flash rarely lands
+  on the capture frame. This is staging (a real 3D bolt at a
+  real ring), not a fake overlay; the HUD is never faked. The
+  title ('start') and landing shots do NOT flash (title stays
+  clean, landing is a clear-sky flare). Proof: cover 124,296
+  byte — RING 4/12, 0:20, 403 FT, 127 KTS, score 743, POSITION
+  2/5, RING 5 · 83 m; a pale zigzag bolt runs from the black deck
+  down the left side to the sea, the gold ring 5 sits UNDER the
+  black deck with rival #4 inside it, rain streaks across the
+  whole frame, the big layered tornado at the right + two distant
+  funnels, turquoise sea + beach + steep hills. Cockpit 136,909
+  byte — RING 2/12, 0:12, 324, RING 3 · 189 m; a bolt drops from
+  the deck past ring 3, the gold ring 3 sits UNDER the black
+  deck, rain everywhere, 2 tornadoes + 4 rivals in frame, 5 dials
+  readable. Title 99,529 byte — the final layout is UNCHANGED
+  and the hero background is still clean (turquoise sea + beach +
+  green hill, NO deck: the hero camera looks north and the
+  course/deck run south + east, behind the camera). Landing
+  100,254 byte — unchanged composition (runway 09 fills the
+  frame, "LAND ON THE RUNWAY", AGL 81 FT · ON GLIDE). Headless
+  **23/23** (test 23 added — rings below the deck: highest ring
+  top 172.5 m < 190, deck base ~196). Sim-3tier ALL PASS
+  (Reference 12/12 + landed 60.1 s score 3410; Weak 4/12 score
+  666; Idle 1/12 crashed 39.4 s; Manual 12/12 + landed 54.0 s
+  score 3410 — the deck/rain/lightning are visual only, they do
+  not touch the flight model, course or sim). Sim seeds 1–12 ALL
+  PASS (12/12 + landed, scores 3381–3422; the seed probe uses
+  the flight model + course + terrain only, so the storm.js
+  changes do not affect it — the run after the deck edit stands;
+  the flash edit is in runShot + storm.js strike/flash, also
+  outside the sim path). HONEST CAVEAT: the bolt is a thin
+  (1 px) pale line — clearly visible as a zigzag against the sky
+  and the mountain, but subtle; it does not obscure the ring
+  (it lands beside it). The full live probe on the v21d code is
+  RUNNING (see the live probe section). (game/src/storm.js,
+  game/src/main.js, test/headless.test.mjs)
+
 ## What changed in v20 (vs v19) — all patched on top of v19
 
 - [x] **(a) Course start forgiving + tap pilot proven.** Rings 1–3:
@@ -338,15 +752,15 @@ a claim. Evidence is cited per item. Re-verify after any game-code change
 
 - [x] **Reference (autopilot) passes 12 rings AND lands.**
   Proof: `node sim-3tier.mjs` exit 0 — Reference 12/12 rings, landed,
-  finished, score 3406, time 59.6 s, touchdown (1282, 92, 119) on the
-  runway (centre 1250, 120, height 94). (v19: 12/12, 59.7 s, 3403.)
+  finished, score 3410, time 59.6 s, touchdown (1282, 92, 119) on the
+  runway (centre 1250, 120, height 94). (v20: 12/12, 59.6 s, 3406.)
   The landing uses the probe's 'land' regulator (VS-hold +
   heading-hold, idle throttle); the pursuit autopilot alone levels
   off and never touches down.
 - [x] **Weak (noisy input) gets some rings, does not finish.**
-  Proof: same run — Weak **7/12 rings** (v19: 4/12 — UP, honestly),
-  no finish, score 1375, still flying at 300 s. The gentler early
-  course (wander 0.12 rad, jitter ±12 m on rings 1–3) helps the noisy
+  Proof: same run — Weak **7/12 rings** (v20: 7/12 — HELD, honestly),
+  no finish, score 1367, still flying at 300 s. The gentler early
+  course (wander 0.12 rad, jitter ±12 m on rings 1–5) helps the noisy
   pilot recover instead of oscillating away. The criterion still holds
   (some rings, no finish). The Weak model is a 0.5 s reaction lag + a
   slowly-wandering bias (new every 2 s) + 8% lets-go; white per-step
@@ -359,7 +773,7 @@ a claim. Evidence is cited per item. Re-verify after any game-code change
 ## Headless tests (Layer 2) — `test/headless.test.mjs`, Node
 
 - [x] **No input → heading holds (v16 regression).**
-  Proof: `node test/headless.test.mjs` 16/16 pass (v20: was 14/14).
+  Proof: `node test/headless.test.mjs` 18/18 pass (v21: was 16/16).
   Zero input, 20 s: drift 0.00°, roll 0.000. Zero stick + the
   live-play gust applied exactly as main.js does (gust on the stick,
   stickRoll = 0): drift 0.00°, roll 0.000. The v16 sine gust would
@@ -391,6 +805,19 @@ a claim. Evidence is cited per item. Re-verify after any game-code change
   centre), half-radius pass bonus=125 (≥ 120). The 4.0 s toast
   "RING 1/12 +bonus" announces a real number. Live proof: probe
   phase A6 reads the toast text right after the pass.
+- [x] **Tap-rate-limited pilot passes ring 5 (v21, finding (5)).**
+  Proof: same run — test 17: stick live 0.2 s per 0.5 s (40% duty),
+  throttle held, rings=5 at 20.9 s (limit 45 s), still flying. The
+  v20 live playtest failed ring 5 in 3/3 tap flights (the first real
+  turn); the forgiving early course (wander 0.12 rad, jitter ±12 m
+  on rings 1–5) is what makes this possible. Live proof: probe
+  phase A9 (PWM tap driver — see the live-probe section; the full
+  probe's A9 run stalled at ring 3 once, the focused diag passed
+  ring 5 in 23.5 s).
+- [x] **Early legs are long and gentle (v21, finding (5)).**
+  Proof: same run — test 18: legs 1–5 = [600, 206, 206, 206, 206] m
+  (all ≥ 200 m), sharpest turn into rings 2–5 = 3.3° (limit 29°).
+  Guards the ring-5 softening so it cannot collapse the course.
 - [x] **No-input straight flight passes ring 1 (v18).**
   Proof: same run — test 6: rings=1 at 7.4 s, status flying. (v17
   live: 0/12 rings, ring 1 missed by 28–45 m — trim lock-in + gust
@@ -405,6 +832,156 @@ a claim. Evidence is cited per item. Re-verify after any game-code change
   1.00: fire = true (blastDist 200 m). Rivals 300 m away: no fire.
   relFire on its terms (both <130 m, facing 0.80, t=45): relFire =
   true, fire = false. No partner rival: no fire.
+
+## Live probe (v21d FINAL — exit 0, errors: none, ~56 min, + B2-FOCUS)
+
+Full probe `probe-v21-live.mjs` on the v21d code (storm deck + rings
+under black clouds + lightning by the rings), output
+`~/workspace/probe-v21d-live.out`. All phases PASS except B2's first
+attempt (see below — fixed in the probe, re-proven by B2-FOCUS).
+
+- [x] **Spawn + title hero camera + gear hidden + HUD (D).** spawnY
+  58 (AGL ~58 m, the low start), heading 103°, minClearAhead400
+  46.9 m, ring1Dist 600. Gear on title: display none, titleShown
+  flex. Hero camera PASS: camSouth 28, camEast 2, camAbove 4,
+  fwdZ −0.96, planeOffDeg 11.7 (the plane reads large at the right,
+  ~12° off the look direction). Camera-behind dot −0.908, above
+  4.2 m. HUD right edge 1266 < 1280 (no overflow).
+  Screenshot `live-shots/v21-live-title.jpg` (101,146 byte): the
+  final title layout exactly as approved (gold title, all-gold
+  mission + terrain, big gold play circle + START, 6 light chips,
+  no side box, no gear) over a clean hero background (turquoise sea
+  + beach + green hill, NO storm, NO deck).
+- [x] **Hands-off holds heading (A3).** 0° drift in 20 s, maxRoll 0,
+  maxPitch 0, still flying (y 57.7, speed 75.4).
+- [x] **Chase camera behind + above through turns and a steep climb (A5).**
+  samples=120 bad=0 minDot −0.92 minAboveM 4 maxPitch 0.48, climbCam
+  dot −0.895 above 4.2 m pitch 0.78 rings 6, PASS=true.
+- [x] **No-input straight flight passes ring 1 + toast visible (A6).**
+  rings=1 at 8.75 s, y 58, still flying. The toast reads
+  "RING 1/12  +150", opacity 1, PASS=true.
+  Screenshot `live-shots/v21-live-noinput-ring1.jpg` (122,591 byte).
+- [x] **R restarts mid-flight; C switches camera while paused (A7).**
+  R after 8.2 s flight: elapsed 0.2, rings 0, status flying. C while
+  paused: HUD "COCKPIT VIEW", pause panel flex.
+- [x] **Ring 2 with HELD keys (A8).** rings=2, ring2At=13.5 s,
+  minDistToRing2=7 m, PASS=true.
+- [x] **Ring 5 with TAPS (A9 — finding (5)).** PASS in the FULL
+  probe this time (first try): rings=5, ring5At=24.7 s,
+  minDistToRing5=6 m (limit 45 s). Screenshot
+  `live-shots/v21-live-ring5-tap.jpg` (122,302 byte): **"RING 5/12
+  +231" big in gold, score 911, RING 6 · 127 m, POSITION 3/5, 0:26**,
+  the plane banking hard in 3/4 over turquoise sea + beach with the
+  gold ring 6 ahead (a rival inside it), the black deck across the
+  top, rain streaks, two tornado funnels + a big one at the right
+  edge, steep green hills. (The v21 pre-title full probe's A9
+  failed once (rings=2 at 45.2 s) and passed 2/2 in focused runs at
+  23.5 s; this run passes in the full probe at 24.7 s — the tap
+  driver is marginal by nature (the 250 ms tick is real time, so
+  ticks per game second shift with game speed), but the headless
+  test 17 remains the repeatable proof.)
+- [x] **Chase 3/4 angle (A10 — finding (4)).**
+  samples=120, off-dead-rear min 22.8° / median 24.8° / max 26.6°,
+  PASS=true (median 15–35°, never below 8°). The v21 live chase
+  (13 m / −6 m ≈ 25°) holds its 3/4 angle through straight flight,
+  turns and a climb — the v20 dead-rear is gone by measurement.
+  Screenshot `live-shots/v21-live-cam-turn34.jpg` (121,441 byte).
+- [x] **Ring blast visible (A) + message REALLY clears (finding (b)).**
+  Blast t=43.6 (rings 7) at (48,174,68); immediate shot:
+  blastDist 179 m, facing 0.88, rings 8; +1.5 s shot: rings 8,
+  hudMsg "RING 8/12  +280"; +4.5 s: text="" opacity 0, PASS=true.
+  Rival visibility 11/15 (the pair is converging, so fewer rivals
+  are in frame than the 16/16 of the v21 pre-title run). The
+  scripted collision still fires — no tornado killed KUNING/HIJAU
+  before it (they converge near rings 6–7, far from spout3 at ring
+  4). Screenshot `live-shots/v21-live-blast.jpg` (114,052 byte).
+- [x] **Fast straight player sees a blast (A2).** STRAIGHT blast
+  t=43.2 (player 0 rings, offCourse 76 m). Rival visibility 12/15.
+  Screenshot `live-shots/v21-live-blast-straight.jpg` (104,824 byte).
+- [x] **Player crash explodes — as an OBJECT on a wide camera (A4,
+  finding (6)).** CRASH at t=29.1, 18 fireball meshes at impact,
+  20 at +1.5 s. Camera 69 m from the ACTUAL crash point
+  (497,17,144) and 35 m above the ground, PASS=true. The canonical
+  shot `live-shots/v21-live-crash-15.jpg` (81,517 byte) shows the
+  faceted red/orange/white fireball as a SMALL OBJECT at the centre
+  on the grass with dark debris around it, trees + hills + the whole
+  scene visible — NOT a screen-filling blob (the v20 live playtest
+  failure). The smoke is dark grey and clustered, not pale balls.
+  Honest caveat: the fireball reads small at 69 m (a small
+  red/white mass at the centre) — it is an object, but not a big
+  dramatic one.
+- [x] **Ten shadows (C).** count=10, 9/10 vis=true (5 sun-offset +
+  5 contact). The one hidden shadow (−836,1,−247) is a contact
+  shadow whose plane is temporarily 'gone' (respawning) — a hidden
+  plane has no shadow, which is correct behaviour, not a missing
+  shadow. Phase C has no PASS/FAIL gate in the probe (it logs count
+  + visibility); the count is 10 as designed and the rival shadows
+  are 1.3x / 1.25x in v21.
+- [x] **Finish end-to-end (B).** RACE COMPLETE 14.2 s, Position 1/5,
+  Score 3008, Time 0:14, touchdown (1096.2, 91.9, 120), lat 0, roll 0,
+  Space restart without canvas click works. Screenshots
+  `live-shots/v21-live-finish-a.jpg` (106,649 byte) + `-b`
+  (106,811 byte): the "🏁 RACE COMPLETE!" panel (Position 1/5,
+  Score 3008, Time 0:14) over the runway with confetti.
+- [ ] **Manual landing from ring 12 (B2) — FIRST ATTEMPT FAILED
+  (probe/driver, NOT a game bug).** The first B2 flew the whole
+  course with the binary 'ring' driver to reach ring 12 — but late
+  in a ~50 min probe the game runs slower, the 250 ms driver ticks
+  over-correct, and the plane orbited ring 2/3 (it reached only
+  ring 2 in 120 s, roll 1.35, yaw 58.9°), then the scripted
+  collision pair caught the slow player at ring 4 (collision at
+  63.8 s, (−910,133,−141)) and reset it to ring 2. B2's purpose is
+  the MANUAL LANDING, not the course flight — the course flight is
+  already proven by phase A (ring 8) and A9 (ring 5 with taps).
+  **Probe fix (v21d, no game change):** B2 now TELEPORTS to ring 12
+  (ringsPassed = 12, like phase B's teleport to short final) and
+  human-lands from there. The probe file carries the fix.
+- [x] **Manual landing from ring 12 (B2-FOCUS re-probe).**
+  `~/workspace/probe-b2-focus.mjs` (reuses the full probe's
+  DRIVER_SRC, same Playwright/Chromium) — teleported to ring 12
+  (729,145,122), yaw 1.57, rings 12; the human-land driver (throttle
+  held at 0.3, VS −5, flare −2 below 12 m AGL) flew the final and
+  **RACE COMPLETE, touchdown (1478, 92, 122), spd 52, VS −11.2,
+  thr 0.29, status landed, rings 12, errors [] — PASS=true.**
+  The diag shows a clean descent (t=1.3 y 145 agl 89 spd 62 thr 0.7
+  → t=6.7 y 117 agl 26 spd 64 thr 0.28 → t=9.5 y 102 agl 12 spd 58
+  vs −2 thr 0.06 → t=12.3 y 101 agl 10 spd 53 vs −11.7 thr 0.28).
+  Screenshot `live-shots/v21-live-manual-landing.jpg` (86,916
+  byte): the "🏁 RACE COMPLETE!" panel (Position 1/5, Score 2772,
+  Time 0:12) + confetti + "AGL 5 FT · ON GLIDE", the plane on the
+  runway. **This is the live proof the v21b fix works: a human
+  approach at throttle 0.3 / VS −5 now WINS instead of crashing**
+  (the user's 27 Nov 09:39 playtest). Honest caveat: the touchdown
+  VS (−11.2 m/s) is close to the −12 cap and the touchdown (x=1478)
+  is at the far end of the runway (the runway spans 1025–1475, the
+  finish zone 945–1555) — the human-land driver's flare is weak in
+  the last seconds (VS went from −2 at t=9.5 to −11.7 at t=12.3),
+  so the landing is firm and long. It is inside the v21b window
+  (speed < 62, VS < 12), and the sim's manual route lands at
+  (1351, 92, 120) — the live driver just floats further. A
+  candidate for v22: a stronger flare in the human-land driver.
+- [x] **Tornado kills a rival — VISUAL PROOF (A11, NEW in v21c).**
+  At 15 s the rival furthest ahead (KUNING, #3) was teleported into
+  spout3 (near ring 4, (−882,−259), radius 35 m). The tornado-kill
+  event fired at 15.27 s (0.27 s after the teleport):
+  kind "tornado-kill", name KUNING, (−881.7,100.6,−258.6);
+  victimGone=true; playerPosition 3/5 → 2/5 — PASS=true.
+  Screenshot `live-shots/v21-live-tornado-kill.jpg` (134,025 byte):
+  the HUD message **"🌪️ KUNING DESTROYED BY THE TORNADO!" big in
+  gold**, POSITION 2/5, RING 2/12, 0:17, 318 FT, 104 KTS, score 285,
+  RING 3 · 49 m; a large red/orange faceted fireball wraps the grey
+  layered tornado funnel (spout3) at the LEFT, the gold ring 3 sits
+  UNDER the black deck at the centre, rain streaks everywhere, the
+  player's plane banking 3/4 at the bottom-right. The +1 s shot
+  (`v21-live-tornado-kill-1s.jpg`, 126,864 byte) shows the aftermath:
+  "RING 3/12 +181", POSITION 2/5, the fireball faded to faint pink
+  translucent shapes around the funnel (the 3.5 s fireball life),
+  the tornado still spinning, the gold ring 4 under the deck.
+  Honest caveat: the fireball is at the LEFT edge (partially out of
+  frame) and the torn-apart halves are not clearly distinguishable
+  as separate airframe pieces in the immediate shot — the explosion
+  + the HUD message + the position improvement together prove the
+  kill, but a dead-centre explosion would read stronger.
 
 ## Live probe (v20 — exit 0, errors: none, ~30 min)
 

@@ -315,3 +315,99 @@ key-caps, no "Press Space" line, daytime, v11 premium palette, W climbs
 
 Submit only on the user's explicit order per version, after screenshots +
 an outside blind test. v20 is not submitted by the builder.
+
+## v21 (Gemini v20 blind-test fixes + v20 live-playtest P0s)
+
+- Cover is a NEW moment (31.0 s, ring 8 over the shoreline) — never a runway
+  approach duplicating the landing. The AGL pill hides on the cover
+  (rings < 12), which also resolves the ALT-vs-AGL confusion.
+- Clouds: smooth-shaded multi-puff cumulus (detail-1), never faceted
+  polyhedra. Tornado: translucent layered vortex (outer 0.45 + darker
+  counter-rotating inner funnel + 3 helix rings + spray), never a solid
+  grey cone. Storm wall/anvil pushed 100 m out, spout2 to 1100/450 m.
+- Cockpit: a real ATTITUDE gauge (live horizon disc), VSI as a blue bug
+  on the ALT dial, dark bezels, darker faces, no struts, no red trims,
+  light glareshield rim highlight, sloped shell-grey throttle pedestal.
+- LIVE chase is the cover's 3/4 (13 m / −6 m ≈ 25°); live A10
+  measures median 24.8° off dead-rear (min 22.8°, max 26.6°). Rings
+  1–5 forgiving; tap pilot passes ring 5 (test 17: 20.9 s; live A9:
+  the full probe's run stalled at ring 3 once, the focused diag
+  passed ring 5 in 23.5 s — the PWM tap driver is marginal, it
+  wobbles ±25° in heading and can orbit a ring on an unlucky gust).
+- Crash camera 60 m back looking AT the wreck + terrain clamp; blast
+  smoke 8 near-black FLATTENED puffs (shape fix, not opacity).
+  The A4 camera-distance check was fixed to measure from the ACTUAL
+  crash point (the plane flies ~2 km past the teleport before it
+  hits the ground; the first run measured 2085 m from the teleport).
+- Rival shadows 1.3x / 1.25x. Title hides rival markers. Prop disc is
+  a ring texture (1.55 m). Next-ring glow damped (2.0x / 0.20).
+- v21b LANDING FIX: a real manual landing crashed on touchdown (old
+  finish-zone caps speed < 50, VS < 8 — below a human's natural
+  approach). The finish-zone window is now speed < 62, VS < 12,
+  pitch < 0.45; the onRunway gentle path is untouched. Tests 19+20
+  + sim "manual" route (12/12 + landed 53.5 s, 3410) prove it.
+- v21b–v21h TITLE FINAL (the user's decision, 27 Nov 09:49–09:55
+  WIB, approved mockup): the title is MODERN — centred gold title,
+  ALL-GOLD mission text above a big circular gold play button +
+  START, six light glass control chips across the bottom, NO side
+  box, NO logo, NO gear. The live background is a HERO camera
+  (south of the plane, looking north — the storm stays out of
+  frame, the plane reads large at the right, clear of the button).
+- Verification: headless 20/20, sim-3tier ALL PASS (Reference 12/12 +
+  landed 59.6 s score 3410; Weak 7/12; Idle 3/12; manual 12/12 +
+  landed 53.5 s score 3410), sim seeds 1–12 12/12 + landed +
+  collisions 12/12 (scores 3369–3422), live probe
+  probe-v21-live.mjs (phases D-hero/A3/A5/A6/A7/A8/A9-ring5-taps/
+  A10-3/4/A/A2/A4-crash/C/B/B2-manual-landing). v21 is not submitted
+  by the builder.
+- v21c LOW START + STEEP RIDGES (user 27 Nov 10:17): spawn AGL
+  ~57.7 m over the sea (minRingAlt 45, walk starts y 55, spawn =
+  ring 1's altitude so the first leg is level); the course climbs
+  62 → 145 m to the approach. Two pairs of narrow, tall ridge
+  islands (r 260–280 m, h 300–320 m) flank the FINAL ring positions
+  450 m perpendicular (pair A ring 3, pair B ring 9) — placed at the
+  end of createCourse, course-aware, idempotent. Fixed positions
+  were tried and rejected (seed 10's course runs over a fixed
+  southern ridge and crashes). The autopilot terrain guard in
+  shots.js is proportional + path-based for the low course.
+- v21c DENSE STORM + TORNADO-KILLS-RIVAL (user 27 Nov 10:17 +
+  10:23): 5 tornadoes along the whole course (main cell r45,
+  spout2 r25, spout3 near ring 4 r35 — the close killer, spout4
+  near ring 9 r30 — the cover tornado, spout5 near ring 10 r25),
+  all OFF the ring line; 4 rain systems; lightning in a random
+  cell every 3–7 s; a second storm wall at spout4. A rival that
+  enters a tornado's cylinder EXPLODES (explodeChain fireball +
+  explodeSplit torn-apart halves, tumbling, burning) and is out
+  12 s (tornadoOutDelay) — the player's position improves the
+  moment it dies, and the HUD shows "🌪️ <name> DESTROYED BY THE
+  TORNADO!" + boom + shake. The player is never tested against
+  the tornadoes (the gusts are the player's storm danger, as now).
+  Readability is kept: no tornado covers a ring or the player line.
+- v21c verification: headless 22/22 (tests 21 tornadoAt cylinder +
+  22 low start/ridges), sim-3tier ALL PASS (Reference 12/12 +
+  landed 60.1 s 3410; Weak 4/12 — below the v21 brief's 7/12
+  floor, honest caveat, the low course is harder for a struggling
+  player; Idle 1/12 crashed; Manual 12/12 + landed 54.0 s 3410),
+  sim seeds 1–12 12/12 + landed (scores 3381–3422). The shots.mjs
+  harness timeouts were raised 20 s → 60 s (the heavier scene
+  takes ~26 s to become ready in software rendering) + the
+  playtest waits for window.__debug before clicking Start. The
+- v21d STORM DECK + RINGS UNDER BLACK CLOUDS (user 27 Nov 11:49):
+  a black cumulonimbus DECK ceilings the whole course (~15 flat
+  dark lobes, rx 90–130 m, y-scale 0.3–0.4, y ~248 m, base ~196 m,
+  #0F172A/#1E293B/#334155, opaque, spaced ~220 m along the course
+  polyline) — the storm sky is dominant, not a few blobs. The
+  rings (60–159 m, top 172 m) sit UNDER the deck, in rain: 3 new
+  course rain systems (rings 1–4, 5–8, 9–12, 250 streaks each,
+  0.32) join the 4 cell systems (7 systems, ~1,800 streaks).
+  Lightning strikes near the rings too (random tornado OR random
+  ring, ~70% ring strikes), every 2–5 s, flash 0.2 s. The staged
+  cover/cockpit shots fire a real bolt at the next ring
+  (storm.flash()) so the frame shows lightning by the ring. The
+  title stays clean (the hero camera looks north; the deck is
+  south + east, behind the camera) and the landing stays a
+  clear-sky flare (the deck is overhead, out of the FOV 55°
+  frame). Headless 23/23 (test 23: rings below the deck).
+  Sim-3tier ALL PASS (unchanged numbers — the deck/rain/lightning
+  are visual only).
+  live probe gains phase A11 (tornado kill, visual screenshot).

@@ -1,5 +1,54 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v20: the Gemini v19 blind-test fixes + the seven
+// standard library only). v21: the Gemini v20 blind-test fixes + the
+// eleven v20 live-playtest P0s + the v21b landing-to-win fix + the
+// v21b–v21h title rebuild (the user's final decision, 27 Nov 09:49–
+// 09:55 WIB, approved mockup) + v21c low start + steep ridges + dense
+// storm + tornado-kills-rival (user 27 Nov 10:17 + 10:23) + v21d storm
+// deck + rings under black clouds + lightning by the rings (user 27
+// Nov 11:49). A black cumulonimbus deck (~15 flat dark lobes, base
+// ~196 m) now ceilings the whole course and the rings (60–159 m) sit
+// UNDER it, in rain (7 systems) with lightning striking by the rings
+// every 2–5 s; the staged cover/cockpit shots fire a real bolt at the
+// next ring for the capture. The cover
+// is a NEW moment (20.0 s, ring 4 over the turquoise sea — steep
+// ridge crests + a layered tornado + rain + the next ring ahead,
+// score 743) — no longer a runway approach duplicating the landing
+// (47.2 s, ring 12/12, score 3410). The spawn is LOW (AGL ~58 m)
+// and the course CLIMBS between steep ridge islands (300–320 m
+// crests flanking rings 3 and 9). Five tornadoes span the whole
+// course; a rival that enters one EXPLODES (chain fireball + torn-
+// apart burning halves) and is out 12 s, and the player's position
+// improves the moment it dies. The title is MODERN: centred gold title, ALL-GOLD mission text above
+// a big circular gold play button + START, six light glass control
+// chips across the bottom, NO side box — over a HERO camera (south of
+// the plane, looking north; the storm stays out of frame, the plane
+// reads large at the right). A manual landing at throttle 0.3 / VS −5
+// now WINS (the finish-zone window is speed < 62, VS < 12) instead of
+// crashing on the old caps (50 / 8).
+// Clouds are smooth-shaded multi-puff cumulus (detail-1, bright tops,
+// cool undersides) instead of faceted polyhedra that read as floating
+// rocks; the tornado is a translucent layered vortex (outer funnel
+// 0.45 opacity, darker counter-rotating inner funnel, 3 helix rings,
+// spray crown) instead of a solid grey cone, and the storm wall/anvil
+// sit 100 m further out and lower. The cockpit is rebuilt to Gemini's
+// spec: a real ATTITUDE gauge (live blue/brown horizon disc behind a
+// transparent-window face, fixed aircraft symbol), the VSI as a blue
+// bug on the ALT dial, dark bezels (#2E3440) instead of glare-prone
+// cream rims, darker dial faces (no blown-out white), bigger numbers,
+// no windshield struts, no red panel trims, a light rim highlight on
+// the glareshield lip, and a sloped shell-grey throttle pedestal with
+// a slot and longer levers. The LIVE chase camera is the cover's 3/4
+// geometry (13 m back, 6 m to the side ≈ 25°, look-ahead 24 m) — the
+// v20 live camera stayed dead-rear and the nose/prop were invisible.
+// Rings 1–5 are forgiving (wander 0.12 rad, jitter ±12 m) so a
+// tap-rate-limited pilot passes ring 5 (headless test 17: 20.9 s;
+// live phase A9). The crash camera pulls to 60 m and looks AT the
+// wreck (was 48 m / look-ahead 40 into the hillside), with a terrain
+// clamp in the chase branch, and the blast smoke is 8 near-black
+// flattened puffs clustered on the fireball (no more pale balls).
+// Rival shadows are 1.3x (sun-offset) / 1.25x (contact). The title
+// hides the rival race-number markers. The next-ring glow is damped
+// (tube 2.0x, opacity 0.20) so it never reads as a giant bubble. v20: the Gemini v19 blind-test fixes + the seven
 // v19 live-playtest P0s. Dials are redrawn at 1024 px with real instrument
 // scales (IAS 0/25/50/75/100, ALT 0/225/450/675/900, VSI −10..10, RPM 0..4,
 // HDG N/E/S/W, needle #E53935, no overlaps) and the cockpit camera is

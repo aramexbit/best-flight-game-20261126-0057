@@ -174,3 +174,61 @@ the subject must read in one second.
 - No white instruction text on sky. No "Press Space" line.
 - No rebuilding the palette mid-version — `config.js` PALETTE is the law.
 - No full rebuilds. Patch on the last working version.
+
+## v21 style notes
+
+- Clouds are SMOOTH (detail-1, flatShading false): bright white tops,
+  cool undersides, tight multi-puff packing. Faceted polyhedra read as
+  floating rocks — never again.
+- The tornado is a translucent layered vortex (outer funnel 0.45
+  opacity + darker inner funnel counter-rotating + thin helix rings),
+  never a solid grey cone with a white disc base.
+- Smoke is FLATTENED and dark (near-black slate, flat 0.55–0.6) — round
+  smooth spheres read as bubbles whatever their opacity.
+- The prop blur is a RING (transparent hub + rim), never a solid disc.
+- Cockpit: dark bezels (#2E3440), darker dial faces (no blown-out
+  white), a real attitude horizon (blue/brown), no red placeholder
+  strips, no windshield struts — one clear pane, contoured glareshield
+  with a light rim highlight.
+- Title (v21b–v21h, final): FLAT solid gold (#FFD52A, no gradient, no
+  stroke), centred, one line — the hero spans the full width so the
+  title never wraps and collides with the mission text. ALL text
+  above the play button is gold — no white text there. The play
+  button is a big gold circle (140 px) with a WHITE triangle +
+  START in gold caps under it. The controls are six separate LIGHT
+  glass chips (white 0.85 + blur, gold key badge, dark navy label)
+  spread across the bottom — never one dark strip, never 3D keycaps.
+  No instruction box, no logo, no gear on the title. The live
+  background is the HERO camera: south of the plane, looking north
+  — beach + hills behind the plane, storm out of frame, the plane
+  large at the right, clear of the button.
+- v21c LOW START: the course flies LOW over the sea (spawn AGL
+  ~58 m, rings 1–3 AGL 45–99 m) and CLIMBS between steep ridge
+  islands (300–320 m crests, 450 m off the course line) — the
+  plane is always BELOW the crests in the early course, so the
+  frame reads "between hills", not "over flat sea". The ridges are
+  green at the base, rock/snow at the crest (the standard
+  height/slope vertex colours).
+- v21c DENSE STORM: five tornadoes spread along the whole course
+  (not one cell) — each a translucent layered vortex (outer +
+  darker counter-rotating inner + helix rings + spray base), never
+  a solid cone. Four rain systems (pale ice-blue streaks, 0.3–0.35
+  opacity) so the rain is visible along the whole way without
+  washing out the plane or the rings. Lightning in a random cell
+  every 3–7 s. A tornado kill is a CHAIN FIREBALL + two torn-apart
+  burning airframe halves tumbling away — the same visual language
+  as the mid-air collision, so it reads as a destruction, not a
+  disappearance. The storm is dramatic but never covers a ring or
+  the player's plane.
+- v21d STORM DECK: a black cumulonimbus CEILING over the whole
+  course (~15 flat dark lobes, base ~196 m, #0F172A/#1E293B/
+  #334155, opaque) — the storm sky is dominant. The rings sit
+  UNDER it (top 172 m), so flying through a ring feels like rain
+  + lightning: 3 course rain systems under the deck (thin pale
+  streaks, 0.32) and lightning striking by the rings every 2–5 s
+  (a thin pale zigzag bolt, 0.2 s live; the staged cover/cockpit
+  shots fire a real bolt at the next ring so the frame shows it).
+  The deck frames the TOP of the view — it never covers a ring or
+  the plane, and it never appears in the title (the hero camera
+  looks north, away from the course) or the landing (overhead,
+  out of frame).
