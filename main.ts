@@ -1,31 +1,48 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v19: the Gemini v18 blind-test fixes + the six
-// v18 live-playtest P0s. Pitch taps are ~2x stronger and symmetric now
-// (pitchRate 0.9, pitchLevel 0.30 — 1 s hold: S −26.4 m / W +24.8 m), so
-// ring 2 is reachable with held keys; the 1→2 leg stays 206 m by
-// construction (course length / 12 — a 260 m floor collapsed the final leg
-// and broke the Reference sim, so COURSE is legMin 120 / legMax 480 with
-// wander 0.22 rad). The blast gate is tighter (80–300 m, facing >0.88)
-// and the fireball bigger (shell 42 m / 3.5 s); the collision message now
-// clears from the DOM text itself (was opacity-only, surviving >140 s).
-// On a player crash the camera pulls wide and the fireball stays visible
-// as an object for 1.5 s before the over panel. Contact shadows sit under
-// all five planes (AGL < 120 m) and the sun-offset shadow cap is 50 m.
-// The horizon is visible low over the sea (fog #9CC8E8, was ≈ the pale
-// horizon). The giant transparent bubbles are gone: rival smoke is
-// flattened (1.2 m, grow 0.9, life 2.0 s) and clouds are fully opaque
-// with smaller lobes (base 40–60 m); the explosion shockwave ring is
-// deleted. The tornado is a real vortex (12 segments, taper 4→46 m, dark
-// slate #3B4652/#586675, 18 rotating debris flecks). The grass grid is
-// gone (mottle 0.012, SEG 192). The runway has turnaround pads, PAPI and
-// an animated striped windsock. Dials are redrawn (84 px numbers at
-// radius 120, needle #E53935, labels IAS/VSI, VSI as the 6th gauge).
-// The title hides the in-flight counters (Fuel, 0/12) and the instruction
-// card sits at left 4% / top 44% / max-width 44%. An AGL/glide pill
-// ("AGL 148 FT · HIGH") shows on approach. The cover freezes at 49.5 s
-// — the pre-collision convergence, deterministic every run (the 51.6 s
-// freeze caught a random debris fragment crossing the lens). v18: the
-// Gemini v17 blind-test fixes + the five v17 live-playtest P0s. The Caravan is faceted + tapered now (nose
+// standard library only). v20: the Gemini v19 blind-test fixes + the seven
+// v19 live-playtest P0s. Dials are redrawn at 1024 px with real instrument
+// scales (IAS 0/25/50/75/100, ALT 0/225/450/675/900, VSI −10..10, RPM 0..4,
+// HDG N/E/S/W, needle #E53935, no overlaps) and the cockpit camera is
+// pulled back 0.35 m so the leftmost dial is no longer clipped. Rings 1–3
+// are forgiving (wander 0.12 rad, altitude jitter ±12 m) and a tap-rate-
+// limited pilot passes ring 2 (headless test 15: 11.7 s at 40% duty; live
+// phase A9 with a sigma-delta PWM tap driver). The crash camera holds the
+// fireball for 3.0 s, clamped clear of the terrain. Contact shadows are
+// darker/bigger (opacity 0.75, AGL < 160 m). The gear button is hidden on
+// the title, the ring toast is unmissable ("RING 1/12 +112", 4.0 s, 40 px),
+// trees are buried −0.15 m with ground discs tilted to the terrain normal,
+// the storm is a smooth grey squall cell (not black rock), and the blast
+// smoke is dark slate at 0.85 opacity clustered on the fireball (no more
+// pale bubbles). The cover freezes at 43.5 s (mid-race, ring 10/11) and
+// the landing at 47.2 s (a LOW short-final flare, 250 m / +25 m, ON
+// GLIDE) — the two shots are clearly different moments. v19: the Gemini
+// v18 blind-test fixes + the six v18 live-playtest P0s. Pitch taps are
+// ~2x stronger and symmetric now (pitchRate 0.9, pitchLevel 0.30 — 1 s
+// hold: S −26.4 m / W +24.8 m), so ring 2 is reachable with held keys;
+// the 1→2 leg stays 206 m by construction (course length / 12 — a 260 m
+// floor collapsed the final leg and broke the Reference sim, so COURSE
+// is legMin 120 / legMax 480 with wander 0.22 rad). The blast gate is
+// tighter (80–300 m, facing >0.88) and the fireball bigger (shell 42 m /
+// 3.5 s); the collision message now clears from the DOM text itself
+// (was opacity-only, surviving >140 s). On a player crash the camera
+// pulls wide and the fireball stays visible as an object for 1.5 s before
+// the over panel. Contact shadows sit under all five planes (AGL < 120 m)
+// and the sun-offset shadow cap is 50 m. The horizon is visible low over
+// the sea (fog #9CC8E8, was ≈ the pale horizon). The giant transparent
+// bubbles are gone: rival smoke is flattened (1.2 m, grow 0.9, life 2.0 s)
+// and clouds are fully opaque with smaller lobes (base 40–60 m); the
+// explosion shockwave ring is deleted. The tornado is a real vortex (12
+// segments, taper 4→46 m, dark slate #3B4652/#586675, 18 rotating debris
+// flecks). The grass grid is gone (mottle 0.012, SEG 192). The runway has
+// turnaround pads, PAPI and an animated striped windsock. Dials are
+// redrawn (84 px numbers at radius 120, needle #E53935, labels IAS/VSI,
+// VSI as the 6th gauge). The title hides the in-flight counters (Fuel,
+// 0/12) and the instruction card sits at left 4% / top 44% / max-width
+// 44%. An AGL/glide pill ("AGL 148 FT · HIGH") shows on approach. The
+// cover freezes at 49.5 s — the pre-collision convergence, deterministic
+// every run (the 51.6 s freeze caught a random debris fragment crossing
+// the lens). v18: the Gemini v17 blind-test fixes + the five v17
+// live-playtest P0s. The Caravan is faceted + tapered now (nose
 // 1.0→0.42, wings tapered chord 1.6→1.15 with 3° dihedral, red tapered
 // wingtips, wing struts, tapered stabiliser, dark wheels, flatShading),
 // the cockpit has slimmer pillars (0.05 m), trim #273244, a dark

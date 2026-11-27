@@ -684,13 +684,14 @@ focused re-check above.
   inspection (rev 3); the PWM tap pass is screenshot-proven once
   only (second attempt's log lost to a runtime restart).)
 - [x] Entrypoint run twice, byte-identical.
-  (`MAKEFUN_OUTPUT_DIR=/tmp/out-v20-a|b node main.ts` twice, exit 0;
-  `diff -r` exit 0, both dirs 2,227,779 bytes, dossier.json sha256
-  1eddfb9af4ca8c3f5c5ac12db8fa1a0e25e5b20bcddb6e0191b9e7c7cdbd1afa
+  (`MAKEFUN_OUTPUT_DIR=/tmp/out-v20c-a|b node main.ts` twice, exit 0;
+  `diff -r` exit 0, both dirs 2,230,121 bytes, dossier.json sha256
+  ad6106680b6666793699ca78d5f11c53a5608528c936416cf3e23c4df20dcbb0
   in both. v19: sha d8ae1e6c…, 2,249,269 bytes — the delta is the
-  v20 code + the rev-2/rev-3 smoke edits. An earlier pair was run on
-  the rev-2 code (2,227,289 byte, sha af7021ac…); the final pair
-  above is on the rev-3 code.)
+  v20 code + the rev-2/rev-3 smoke edits + the v20 main.ts header.
+  An earlier pair was run on the rev-3 code before the header edit
+  (2,227,779 byte, sha 1eddfb9a…); the final pair above is on the
+  final code.)
 - [x] Bundle dry-run `--repo` exit 0.
   (`/tmp/bundle-v20.log`, ~128 s, exit 0. 24 session files found
   (v19: 23 — now includes this builder session). 0 errors. Standard
