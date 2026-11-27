@@ -5,7 +5,7 @@
 // the game-over panel, so the fireball is seen on a wide camera first.
 // C switches chase/cockpit, M mutes, R restarts a finished run.
 //
-// ?seed=N fixes the islands and the course. ?shot=start|play|cockpit|landing
+// ?seed=N fixes the islands and the course. ?shot=start|play|cockpit|landing|blast
 // (with &seed=N) stages that scene instead of running the loop, paints it twice
 // and sets window.__shotReady for a screenshot.
 import * as THREE from '../vendor/three.module.min.js';
@@ -189,13 +189,40 @@ function runShot(name) {
   // The staged run flies the race too: rivals and effects step with the
   // player, so the cover catches the flyby and the collisions and the
   // landing catches the burning wreck.
+  // v23: the blast shot freezes ~0.5 s after the ORANYE tornado-kill —
+  // the staged clock stops while the fireball is at full bloom and the
+  // kill message is still up (the fireball is gone ~2.4 s after the
+  // kill in live play, so a full-length run would catch only smoke).
+  let blastKillT = null;
   const scene = stageShot(name, { flight, course, terrain }, (dt, t) => {
     rivals.update(dt, t, flight, course, terrain.groundAt, course.runway, audio, (amp) => renderer.triggerShake(amp),
-      (kind, detail) => window.__raceEvents.push({ kind, time: t, ...detail }));
+      (kind, detail) => {
+        window.__raceEvents.push({ kind, time: t, ...detail });
+        // v23: in the blast scene the kill is announced exactly as live
+        // play announces it — the same gold message, boom and shake —
+        // because the staged run otherwise only logs the event (the
+        // v21c gate rule) and the frame would show a fireball with no
+        // message. The message timer runs on real frame time and
+        // runShot refreshes the HUD with dt = 0, so it stays up for
+        // the capture.
+        if (name === 'blast' && kind === 'tornado-kill') {
+          hud.showMessage(`🌪️ ${detail.name || 'RIVAL'} DESTROYED BY THE TORNADO!`, 3.0);
+          audio.boom();
+          renderer.triggerShake(0.5);
+          if (blastKillT === null) blastKillT = t;
+        }
+      });
     effects.update(dt);
     // v16: the storm lives on the same staged clock — the cover
     // catches the tornado, the rain and the flak at the right age.
     storm.update(dt, t);
+    // v23: stop the staged clock 0.5 s after the kill — stageShot
+    // breaks when onStep returns false (shots.js), so the capture
+    // freezes on the fireball at full bloom instead of running on
+    // to the smoke. Other scenes return true and run their full
+    // length.
+    if (name === 'blast' && blastKillT !== null && t >= blastKillT + 0.5) return false;
+    return true;
   });
   renderer.setCameraMode(name === 'start' ? CAMERA_HERO : scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
@@ -245,7 +272,10 @@ function runShot(name) {
   // background is beach + hills + sky, never the storm. The geometry
   // is fixed in render.js; no setChase here.
   if (name === 'start') { renderer.setFov(62); renderer.setCameraMode(CAMERA_HERO); }
-  else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, -6, 4.5); }
+  // v23: the blast shot uses the cover's chase (FOV 68, 13 m back, 6 m to
+  // the side) — the same framing as the live A12 tornado-kill frame
+  // (fireball left, the player's plane intact at the right).
+  else if (name === 'play' || name === 'blast') { renderer.setFov(68); renderer.setChase(13, -6, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
   // v20: the landing chase pulls back and up a touch (16 m back,
   // 3.0 m up, FOV 55, was 14 m / 2.6 m / FOV 52) with a little more

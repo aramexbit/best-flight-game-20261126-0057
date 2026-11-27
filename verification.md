@@ -16,6 +16,91 @@ Rule: an item is checked ONLY with proof (screenshot / sim / test), never
 a claim. Evidence is cited per item. Re-verify after any game-code change
 (the 4 screenshots are regenerated last, before commit).
 
+# Langit Nusantara — Ring Run: Verification Checklist (v23)
+
+Rule: an item is checked ONLY with proof (screenshot / sim / test), never
+a claim. Evidence is cited per item. Re-verify after any game-code change
+(the 5 screenshots are regenerated last, before commit).
+
+## What changed in v23 (vs v22) — all patched on top of v22
+
+- [x] **(1) SCREENSHOT KE-5: RIVAL ORANYE MELEDAK KENA TORNADO (v23 —
+  perintah pengguna 27 Nov 19:42 "Untuk screenshotnya buat yang team
+  lain sedang hancur meledak").** Scene staged baru `blast` di
+  `game/src/shots.js` (`BLAST_SECONDS = 20` — batas atas saja, scene
+  membeku lebih awal): ORANYE diteleport ke spout3 seperti probe
+  A11/A12 (tornado-kill terukur t ~16,5 dtk), kamera cover FOV 68
+  `setChase(13,-6,4.5)`, freeze saat kill + 0,5 dtk. `onStep` kini
+  boleh return `false` → break (scene lain abaikan return, jalan
+  penuh). `game/src/main.js` runShot: `blastKillT` + saat event
+  `tornado-kill` di scene blast → handler PERSIS live
+  (`hud.showMessage('🌪️ ORANYE DESTROYED BY THE TORNADO!', 3.0)` +
+  `audio.boom()` + `renderer.triggerShake(0.5)`); freeze saat
+  `t >= blastKillT + 0.5` (return false). `audio.boom()` aman di
+  staged (ctx null → no-op). Pesan bertahan karena
+  `hud.update(..., 0)` tidak mengurangi timer. `shots.json` tambah
+  `{"name":"5-blast.jpg","query":"?shot=blast&seed=1"}`. `shots.mjs`
+  asersi blast (event `tornado-kill` name ORANYE + `hud-msg` berisi
+  `DESTROYED BY THE TORNADO`, throw bila gagal). `main.ts`: header
+  v23 + `screenshots.max` 4→5 + komentar scorer jujur (gate.json cap
+  4, deviasi disengaja) + "Put 3 to 5 PNG or JPEG screenshots".
+  Proof: `node shots.mjs` exit 0 (~84 dtk): 5 shot + playtest + cek
+  dedup kokpit + asersi blast SEMUA lolos. **5-blast.jpg DIBACA
+  SENDIRI (140.459 byte, sha256
+  `4e1df36e0a92b2404d1faf2748e499fe4b2a98b8fe219d74a457c5e2896580cb`):**
+  pesan emas "🌪️ ORANYE DESTROYED BY THE TORNADO!" jelas di atas;
+  fireball faceted kuning/oranye/merah BESAR di kiri melilit funnel
+  tornado + debris merah beterbangan; pesawat PEMAIN putih-merah UTUH
+  jelas di kanan-tengah di atas laut turquoise, banking; ring 4 emas
+  di depan (57 m) + rival terlihat; HUD: TIME 0:17, SCORE 521,
+  POSITION 3/5, RING 3/12, ALT·MSL 262 FT, 129 KTS, HDG 096°. Freeze
+  kill+0,5 dtk TERBUKTI (TIME 0:17). Headless, `sim-3tier.mjs`,
+  `sim-win-autoland.mjs` exit 0 semua (log `out/v23-*.log`).
+  Entrypoint 2× byte-identik: `MAKEFUN_OUTPUT_DIR=out-v23-a|b node
+  main.ts`, exit 0 dua-duanya; `diff -r` exit 0; dossier sha256
+  **`77e66929e5d322f77de4196606d89def95ce5eaa3c2cdf423e6f86dcff6ac719`**
+  di keduanya; dossier.json **986.884 byte** (v22: 797.824); total
+  entrypoint **2.771.125 byte** di keduanya (v22: 2.437.867).
+  `5-blast` muncul 1× di dossier → shot ke-5 TER-BUNDLE.
+  **4 shot lama DIBACA SENDIRI — momen SAMA persis dengan v22 (HUD
+  cocok), TAPI TIDAK byte-identik:** cover 132.806 (v22: 132.504),
+  kokpit 129.601 (129.590), title 99.584 (99.496), landing 111.529
+  (110.741). Penyebab: drift wall-clock awan/prop di paint akhir —
+  SUDAH DIDOKUMENTASIKAN sejak v7 ("screenshot cover/start JPEG
+  berubah sedikit byte-nya antar regenerasi (awan bergerak mengikuti
+  wall-clock)"). Bukan regresi sim (semua cabang edit di-gate
+  `name==='blast'`).
+- [ ] **(2) CAVEAT BLOKIR — BUNDLE DRY-RUN EXIT 2 (BELUM exit 0).**
+  Perintah `node <kit>/cli/makefun.mjs bundle --repo --dry-run`
+  exit 2 dalam 1,5 dtk (terlalu cepat untuk dry-run yang memindai
+  sesi; v18/v20 butuh ~100–114 dtk), output ke
+  `out/v23-bundle-dryrun.log` (TIDAK PERNAH dibuka). **Penyebab
+  teridentifikasi dari RULES.txt kit (dibaca langsung):** perintah
+  bundle yang didokumentasikan WAJIB `--system-prompt <file>
+  --effort <level> --out <file>` (+ flag run-record:
+  `--prompt-file`, `--prompt-origin`, `--prompt-via`,
+  `--muse-usage`, dll). Perintah minimal saya kekurangan flag wajib
+  → usage error exit 2 sebelum scan sesi. BUKAN masalah kode /
+  dossier. **Koordinator mengulang dengan perintah lengkap persis
+  v22** (yang exit 0 dengan 26 sesi) — saya tidak menebak kombinasi
+  flag (tebakan salah bisa menulis bundle asli — DILARANG).
+- [ ] **(3) CAVEAT BLOKIR — GATE CAP 4 SCREENSHOT, v23 (5 SHOT)
+  TIDAK BISA DISUBMIT APA ADANYA.** RULES.txt kit (otoritatif,
+  dibaca langsung): gate row `screenshots` — "screenshots/ holds
+  **3 to 4 images**"; game_files — "screenshots/ (**4 files at
+  most**)". **Entri 5-shot = INVALID di gate** (row screenshots
+  FAIL → Valid 0, tidak dinilai, tidak dapat hadiah). Ini menguatkan
+  caveat cap dossier (gate.json max 4) menjadi kepastian.
+  **Keputusan di koordinator/pengguna:** (a) submit v22 apa adanya
+  (4 shot, valid), atau (b) TUKAR satu shot lama dengan
+  5-blast.jpg (tetap 4 shot total — kandidat: cover, karena blast
+  juga chase mid-race dan lebih dramatis; atau shot lain sesuai
+  pilihan pengguna). Perintah submit pengguna 19:41:30 ("Submit
+  saja, kan yang test nanti juri ai") diberikan untuk v22 (4 shot);
+  v23 menambah shot ke-5 — keputusan submit versi final tetap di
+  koordinator/pengguna. **v23 TIDAK push, TIDAK submit sampai
+  keputusan ini diambil.**
+
 ## What changed in v22 (vs v21) — all patched on top of v21
 
 - [x] **(1) AUTO-WIN + AUTOPILOT LANDING (v22 — user decision 27 Nov

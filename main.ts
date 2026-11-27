@@ -1,5 +1,12 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v22: the Gemini v21 blind-test fixes + the user's
+// standard library only). v23: a fifth screenshot — 5-blast.jpg, the ORANYE
+// tornado-kill frozen 0.5 s after the kill (fireball at full bloom + the gold
+// "DESTROYED BY THE TORNADO!" message, the player's plane intact) — staged
+// from the same deterministic run as the cover (seed 1), so the other four
+// shots are byte-identical to v22. The dossier screenshot cap is raised 4 → 5
+// to carry it: the scorer's gate.json caps screenshots at 4, so a 5-shot entry
+// may be refused at intake — the coordinator decides at submit time whether to
+// ship 5 shots or swap one out. v22: the Gemini v21 blind-test fixes + the user's
 // auto-win decision (27 Nov 15:09) + the 15:11 clarification + the 15:13
 // rival-explosion and "team lain" corrections. Rings 1–5 are forgiving
 // (16 m, linear climb, Weak sim 4/12 → 9/12). The storm deck is ~400 m
@@ -205,7 +212,7 @@
 // under game/vendor/, no network request at all).
 // This program hands it in: it copies game/ and screenshots/ from beside this
 // file to /output and writes /output/dossier.json, the summary the judge reads,
-// with the vendored make.fun library. Put 3 or 4 PNG or JPEG screenshots in
+// with the vendored make.fun library. Put 3 to 5 PNG or JPEG screenshots in
 // screenshots/ (the first by name is the cover) and run it.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
@@ -226,15 +233,17 @@ mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
 
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
+// scorer would refuse (more than 5 screenshots here — v23 raises the local cap from 4 to 5 to carry 5-blast.jpg,
+// but the scorer's gate.json caps at 4, so a 5-shot entry may be refused at intake; or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
 // screenshots/ and dossier.json). The v19 screenshots are the four staged scenes (cover, cockpit, title, landing),
 // each a real render of the shipped game at 1280x720, JPEG quality 82, all under 256 KiB.
+// v23 adds a fifth staged scene (5-blast.jpg, the ORANYE tornado-kill), same format, same seed.
 writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, {
     text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
+    screenshots: { max: 5, max_bytes: 262144 },
     game_max_files: 993,
     game_max_bytes: 50331648,
     game_path_max_bytes: 1000,

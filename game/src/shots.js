@@ -1,4 +1,4 @@
-// The screenshot scenes behind ?shot=start|play|cockpit|landing. Each one plays the
+// The screenshot scenes behind ?shot=start|play|cockpit|landing|blast. Each one plays the
 // real rules forward from a fresh world for a fixed number of steps, steered by a
 // simple autopilot (bank toward the next ring, pitch toward its height, climb over
 // high ground), so the frame is what a short game really looks like and the same
@@ -33,6 +33,14 @@ const START_SECONDS = 8;
 // and the next ring ahead — the banking 3/4 chase the brief asks
 // for, not a beach. The landing shot still owns the final approach.
 const PLAY_SECONDS = 20.0;
+// v23: the blast shot is only an UPPER bound — the staged clock stops
+// ~0.5 s after the ORANYE tornado-kill (kill at t ~16.3 s in the staged
+// run, the same as headless test 32 and the live A12 probe at t 16.58 s),
+// so the shot never runs the full 20 s. The fireball is at full bloom
+// in its first ~2 s (live A12: huge at kill+1.4 s, gone by kill+2.4 s)
+// and the gold "DESTROYED BY THE TORNADO!" message is still up —
+// freezing at kill+0.5 s catches both, before the smoke takes over.
+const BLAST_SECONDS = 20;
 // v5: 12 s, not 14 — at 14 s the next ring (ring 2) is only 52 m away and
 // fills the whole windshield; at 12 s it is ~160 m out, modest in the
 // upper-middle of the windshield, so the cockpit frame shows the world
@@ -207,6 +215,7 @@ export function stageShot(name, game, onStep) {
   let camera = 'chase';
   let seconds = START_SECONDS;
   if (name === 'play') seconds = PLAY_SECONDS;
+  else if (name === 'blast') seconds = BLAST_SECONDS;
   else if (name === 'cockpit') {
     seconds = COCKPIT_SECONDS;
     camera = 'cockpit';
@@ -294,7 +303,13 @@ export function stageShot(name, game, onStep) {
     // their scripted schedule (see config RACE) and the explosion smoke
     // advances step by step, so the screenshot catches each blast at the
     // right age instead of at frame zero.
-    if (onStep) onStep(SAMPLE, (i + 1) * SAMPLE);
+    // v23: onStep may return false to stop the staged clock early — the
+    // blast scene uses it to freeze ~0.5 s after the tornado-kill. The
+    // other scenes ignore the return value and run their full length.
+    if (onStep) {
+      const keepGoing = onStep(SAMPLE, (i + 1) * SAMPLE);
+      if (keepGoing === false) break;
+    }
   }
   const screen = name === 'start' ? 'title' : 'play';
   return { screen, camera, best: s.score, landed };

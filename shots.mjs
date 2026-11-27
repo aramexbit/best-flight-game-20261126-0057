@@ -47,6 +47,22 @@ try {
       };
     });
     console.log('shot', shot.name, 'ok', statSync(OUT_DIR + '/' + shot.name).size, 'bytes', JSON.stringify(hudState));
+    // v23: the blast shot must prove the ORANYE tornado-kill happened in
+    // the staged run and its destruction message is up in the frame —
+    // otherwise the screenshot would be a mid-race frame with no blast.
+    if (shot.name === '5-blast.jpg') {
+      const blast = await page.evaluate(() => {
+        const evs = window.__raceEvents || [];
+        const kill = evs.find((e) => e.kind === 'tornado-kill');
+        return {
+          kill: kill ? { name: kill.name, time: kill.time } : null,
+          msg: document.getElementById('hud-msg').textContent,
+        };
+      });
+      console.log('blast', JSON.stringify(blast));
+      if (!blast.kill || blast.kill.name !== 'ORANYE') throw new Error('blast shot: no ORANYE tornado-kill');
+      if (!blast.msg.includes('DESTROYED BY THE TORNADO')) throw new Error('blast shot: kill message not visible');
+    }
     // v4: report how much scenery the generator planted (trees/palms/rocks/
     // bushes) — the cover shot is the proof it is visible, this is the count.
     if (shot.name === '1-cover.jpg') {
