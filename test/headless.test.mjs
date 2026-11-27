@@ -22,22 +22,30 @@
 //      player 3-4 s to turn — 0/12 ring 2 in the v18 live playtest).
 //   9. The collision gate refuses a blast beyond 300 m (v19: the
 //      400 m cap let a ~5° fireball fire that nobody could see).
-//  10. A tap-rate-limited pilot (PWM stick) passes ring 2 (v20: the
-//      v19 live playtest failed ring 2 in 3/3 tap flights — the course
-//      must be forgiving enough for a tapping human, not just for a
-//      continuous autopilot).
-//  11. A ring-1 pass pays a toast-worthy bonus (v20: the v19 live
-//      playtest passed ring 1 with no toast visible — the bonus must
-//      be >= 100 so the 4 s toast "RING 1/12 +bonus" means something).
-//
+//  15. Tap-rate-limited pilot passes ring 2 (v20 — see test 15 below).
+//  16. Ring-1 pass pays a toast-worthy bonus (v20 — see test 16 below).
+//  17. A tap-rate-limited pilot (PWM stick) passes ring 5 (v21: the
+//      v20 live playtest failed ring 5 in 3/3 tap flights — the first
+//      real turn. The course now turns gently through ring 5, and
+//      this test proves a tapping pilot can follow it).
+//  18. Legs 1-5 are long and gentle (v21: guards the ring-5
+//      softening — every early leg >= 200 m, every turn into rings
+//      2-5 < 29°).
+//  19. A human landing at throttle 0.3, VS -5, wings level, on the
+//      strip, WINS (v21b: the user's manual landing crashed on speed
+//      alone — 107 kts vs the 50 m/s finish-zone cap — so the
+//      finish-zone tolerances are now 62 m/s / 12 m/s / 0.45 rad).
+//  20. A full-throttle arrival still crashes, and the natural steep
+//      descent from ring 12 (VS -11) at throttle 0.3 now lands (v21b:
+//      the widened window must not make every arrival a win).
 // Run: node test/headless.test.mjs   (exit 0 = all pass)
 import assert from 'node:assert/strict';
 import { createRandom } from '../game/src/random.js';
 import { planIslands, createGroundAt } from '../game/src/terrain.js';
 import { createCourse } from '../game/src/rings.js';
 import { createFlight } from '../game/src/flight.js';
-import { STEP } from '../game/src/config.js';
-import { gustAt } from '../game/src/storm.js';
+import { STEP, COURSE } from '../game/src/config.js';
+import { gustAt, tornadoAt } from '../game/src/storm.js';
 import { collisionGate } from '../game/src/collision.js';
 import { autopilotTo } from '../game/src/shots.js';
 
@@ -404,6 +412,201 @@ check('ring 1 centre pass pays 150, half-radius pass pays >= 120', () => {
   assert.ok(halfPass.bonus >= 120, `half-radius pass bonus is ${halfPass.bonus} (limit 120)`);
 });
 
-console.log(`\n${passed}/16 headless tests passed`);
+// --- 17. Tap-rate-limited pilot passes ring 5 -------------------------
+// v21: the v20 live playtest failed ring 5 in 3 of 3 flights with
+// TAPS (closest 76 m, then the gap ballooned to 1-1.5 km): ring 5 is
+// the first real turn, and a tapping pilot turns ~2-3°/s. The course
+// now turns gently through ring 5 (wander 0.12 rad, jitter ±12 m on
+// rings 1-5), and the same tap pilot that passes ring 2 (test 15)
+// must pass ring 5 within 45 s.
+check('tap-rate-limited pilot (0.2 s on / 0.5 s) passes ring 5 in 45 s', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  let rings = 0;
+  for (let i = 0; i < 45 / STEP; i += 1) {
+    if (s.status !== 'flying') break;
+    const t = s.elapsed;
+    const on = (t % 0.5) < 0.2; // stick live 0.2 s of every 0.5 s
+    const ring = course.nextRing();
+    const input = ring ? autopilotTo(flight, ring, 0.72, groundAt) : { pitch: 0, roll: 0, yaw: 0, throttle: 0.3 };
+    const applied = {
+      pitch: on ? input.pitch : 0,
+      roll: on ? input.roll : 0,
+      yaw: 0,
+      throttle: input.throttle,
+      stickRoll: on ? input.roll : 0,
+      stickPitch: on ? input.pitch : 0,
+    };
+    const gust = gustAt(s.elapsed);
+    applied.pitch = clamp1(applied.pitch + gust.pitch);
+    applied.roll = clamp1(applied.roll + gust.roll);
+    const prev = { x: s.x, y: s.y, z: s.z };
+    flight.step(STEP, applied, groundAt, course.runway);
+    const pass = course.checkPass(prev, s);
+    if (pass && pass.passed) rings += 1;
+    if (rings >= 5) break;
+  }
+  console.log(`  rings=${rings} time=${s.elapsed.toFixed(1)} s status=${s.status}`);
+  assert.ok(rings >= 5, `tap pilot passed ${rings} rings in 45 s (expected >= 5)`);
+});
+
+// --- 18. Early legs are long and gentle --------------------------------
+// v21: guards the ring-5 softening (rings.js early = i < 5): every leg
+// from spawn through ring 5 must be >= 200 m, and every turn into
+// rings 2-5 must stay < 29° (0.5 rad).
+check('legs 1-5 >= 200 m with turns < 29 deg into rings 2-5', () => {
+  const course = buildCourse();
+  const pts = [{ x: course.spawn.x, y: course.spawn.y, z: course.spawn.z }, ...course.rings];
+  const legs = [];
+  for (let i = 1; i < pts.length; i += 1) {
+    legs.push(Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y, pts[i].z - pts[i - 1].z));
+  }
+  let maxTurn = 0;
+  for (let i = 1; i <= 4; i += 1) {
+    const hA = Math.atan2(pts[i].x - pts[i - 1].x, -(pts[i].z - pts[i - 1].z));
+    const hB = Math.atan2(pts[i + 1].x - pts[i].x, -(pts[i + 1].z - pts[i].z));
+    let turn = Math.abs(hB - hA);
+    if (turn > Math.PI) turn = Math.PI * 2 - turn;
+    maxTurn = Math.max(maxTurn, turn);
+  }
+  console.log(`  legs1-5=[${legs.slice(0, 5).map((l) => Math.round(l)).join(', ')}] maxTurn=${(maxTurn * 180 / Math.PI).toFixed(1)}°`);
+  for (let i = 0; i < 5; i += 1) assert.ok(legs[i] >= 200, `leg ${i + 1} is ${legs[i].toFixed(0)} m (limit 200 m)`);
+  assert.ok(maxTurn < 0.5, `sharpest early turn is ${(maxTurn * 180 / Math.PI).toFixed(1)}° (limit 29°)`);
+});
+
+// --- 19 + 20. Human landings after ring 12 (v21b) --------------------
+// The user's own playtest (27 Nov 09:39 WIB) crashed on a manual
+// landing to win. The reproduction proved a wings-level,
+// on-centreline, on-strip touchdown at throttle 0.3 fails on speed
+// alone (107 kts = 55 m/s vs the 50 m/s finish-zone cap — the plane
+// cruises at 105 kts at throttle 0.3, so a human who slows down
+// naturally still arrives too fast), and the natural descent from
+// ring 12 (55 m over ~300 m) at cruise speed is VS -11 m/s vs the
+// 8 cap. The finish-zone tolerances are now 62 m/s / 12 m/s /
+// 0.45 rad pitch. The human controller below is the sim's land
+// regulator with a human's throttle + VS targets: cross-track roll
+// (aim 500 m PAST the runway, never at the centre — aiming at the
+// centre makes the target jump behind the plane once it flies past
+// it and commands a max-bank U-turn), VS-hold pitch, throttle
+// slewed to a target (Shift/Ctrl held).
+function humanLandInput(flight, runway, targetVS, throttleTarget) {
+  const s = flight.state;
+  const farX = runway.x + runway.dirX * 500;
+  const farZ = runway.z + runway.dirZ * 500;
+  const targetYaw = Math.atan2(farX - s.x, -(farZ - s.z));
+  let herr = targetYaw - s.yaw;
+  herr = Math.atan2(Math.sin(herr), Math.cos(herr));
+  const lat = -(s.x - runway.x) * runway.dirZ + (s.z - runway.z) * runway.dirX;
+  const roll = clamp1(-s.roll * 2 - lat * 0.01 + herr * 1.5);
+  const pitch = clamp1((targetVS - (s.verticalSpeed || 0)) * 0.05);
+  const thrErr = throttleTarget - s.throttle;
+  const throttle = Math.abs(thrErr) < 0.05 ? 0 : Math.sign(thrErr);
+  return { pitch, roll, yaw: 0, throttle, stickRoll: roll, stickPitch: pitch };
+}
+
+// Fly the autopilot through all 12 rings, then land with the human
+// profile (targetVS, throttleTarget). Returns the final state.
+function flyRingsThenLand(targetVS, throttleTarget) {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  let prev = { x: s.x, y: s.y, z: s.z };
+  for (let i = 0; i < 300 / STEP; i += 1) {
+    if (s.status !== 'flying') break;
+    const ring = course.nextRing();
+    const input = ring
+      ? autopilotTo(flight, ring, 0.72, groundAt)
+      : humanLandInput(flight, course.runway, targetVS, throttleTarget);
+    flight.step(STEP, input, groundAt, course.runway);
+    const pass = course.checkPass(prev, s);
+    if (pass && pass.passed) s.ringsPassed += 1;
+    prev = { x: s.x, y: s.y, z: s.z };
+  }
+  return { s, runway: course.runway };
+}
+
+check('human landing at throttle 0.3, VS -5, wins after 12 rings', () => {
+  const { s, runway } = flyRingsThenLand(-5, 0.3);
+  console.log(`  status=${s.status} rings=${s.ringsPassed} td(x${Math.round(s.x - runway.x)}/z${Math.round(s.z - runway.z)}) spd=${Math.round(s.speed * 1.94)} kts VS=${s.verticalSpeed.toFixed(1)}`);
+  assert.equal(s.ringsPassed, 12, `passed ${s.ringsPassed} rings (expected 12)`);
+  assert.equal(s.status, 'landed', `human landing at 0.3 throttle ${s.status} (expected landed)`);
+});
+
+check('full-throttle arrival still crashes; steep -11 m/s at 0.3 lands', () => {
+  const fast = flyRingsThenLand(-5, 0.72);
+  console.log(`  full-throttle: status=${fast.s.status} spd=${Math.round(fast.s.speed * 1.94)} kts`);
+  assert.equal(fast.s.status, 'crashed', `full-throttle arrival ${fast.s.status} (expected crashed)`);
+  const steep = flyRingsThenLand(-11, 0.3);
+  console.log(`  steep -11: status=${steep.s.status} spd=${Math.round(steep.s.speed * 1.94)} kts VS=${steep.s.verticalSpeed.toFixed(1)}`);
+  assert.equal(steep.s.status, 'landed', `steep -11 m/s landing at 0.3 throttle ${steep.s.status} (expected landed)`);
+});
+
+// --- 21. Tornado kill cylinder (v21c: user 27 Nov 10:17) ---------------
+// A rival inside a tornado's radius AND height band dies; outside the
+// radius, above the crown or below the foot it lives. The kill is a
+// pure function (storm.js tornadoAt), so this test needs no Three.js.
+check('tornado kill cylinder: inside dies, outside and above live', () => {
+  const tornadoes = [
+    { x: 0, z: 0, baseY: 0, radius: 35, scale: 0.55 },
+    { x: 500, z: 0, baseY: 10, radius: 45, scale: 1 },
+  ];
+  assert.ok(tornadoAt(0, 80, 0, tornadoes), 'centre of spout3 should kill');
+  assert.ok(tornadoAt(34, 80, 0, tornadoes), '34 m (inside 35 m radius) should kill');
+  assert.equal(tornadoAt(36, 80, 0, tornadoes), null, '36 m (outside 35 m radius) should be safe');
+  assert.equal(tornadoAt(0, 200, 0, tornadoes), null, 'above the funnel crown (264 x 0.55 = 145 m) should be safe');
+  assert.equal(tornadoAt(0, -5, 0, tornadoes), null, 'below the funnel foot should be safe');
+  assert.ok(tornadoAt(500, 100, 40, tornadoes), '40 m inside the 45 m main cell should kill');
+  assert.equal(tornadoAt(500, 100, 50, tornadoes), null, '50 m outside the 45 m main cell should be safe');
+  console.log('  spout3 r35: 0/34 kill, 36 safe, 200 (above crown) safe; main r45: 40 kill, 50 safe');
+});
+
+// --- 22. Low start + steep ridges (v21c: user 27 Nov 10:17) --------------
+// Spawn AGL 40-60 m over the sea, early rings low (< 100 m AGL) and the
+// course climbing to the approach — and the ridge islands flank the
+// early course (steep hill 300 m north of ring 3, sea under the ring).
+check('low start: spawn AGL 40-60 m, early rings low and climbing, ridges flank them', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const spawnAGL = course.spawn.y - groundAt(course.spawn.x, course.spawn.z);
+  const r1agl = course.rings[0].y - groundAt(course.rings[0].x, course.rings[0].z);
+  const r3agl = course.rings[2].y - groundAt(course.rings[2].x, course.rings[2].z);
+  console.log(`  spawn AGL=${spawnAGL.toFixed(1)} ring1 AGL=${r1agl.toFixed(1)} ring3 AGL=${r3agl.toFixed(1)} ring12 y=${course.rings[11].y.toFixed(0)}`);
+  assert.ok(spawnAGL >= 40 && spawnAGL <= 60, `spawn AGL ${spawnAGL.toFixed(1)} (expected 40-60)`);
+  for (let i = 0; i < 3; i += 1) {
+    const agl = course.rings[i].y - groundAt(course.rings[i].x, course.rings[i].z);
+    assert.ok(agl < 100, `ring ${i + 1} AGL ${agl.toFixed(1)} (expected < 100)`);
+  }
+  assert.ok(course.rings[11].y > course.rings[0].y + 50, `course climbs: ring12 ${course.rings[11].y.toFixed(0)} vs ring1 ${course.rings[0].y.toFixed(0)}`);
+  const r3 = course.rings[2];
+  const gUnder = groundAt(r3.x, r3.z);
+  const gNorth = groundAt(r3.x, r3.z - 300);
+  const gCrest = groundAt(r3.x, r3.z - 450);
+  console.log(`  ring3 ground under=${gUnder.toFixed(1)} 300m north=${gNorth.toFixed(1)} 450m north (crest)=${gCrest.toFixed(1)}`);
+  assert.ok(gUnder < 5, `ground under ring 3 ${gUnder.toFixed(1)} (expected sea < 5)`);
+  assert.ok(gNorth > 60, `ground 300 m north of ring 3 ${gNorth.toFixed(1)} (expected steep hill flank > 60)`);
+  assert.ok(gCrest > 120, `ground 450 m north of ring 3 ${gCrest.toFixed(1)} (expected ridge crest > 120)`);
+});
+
+// --- 23. Rings sit below the storm deck (v21d: user 27 Nov 11:49) ------
+// The storm deck's base is ~196 m (lobe y 248 minus rx x y-scale);
+// every ring's top (y + ring radius) must sit below it, so the
+// rings are UNDER the black clouds and stay readable — a regression
+// guard: if the course is ever raised, this fails before the rings
+// poke into the deck.
+check('rings sit below the storm deck base', () => {
+  const course = buildCourse();
+  let maxTop = -Infinity;
+  for (const r of course.rings) maxTop = Math.max(maxTop, r.y + COURSE.ringRadius);
+  console.log(`  highest ring top=${maxTop.toFixed(1)} (deck base ~196)`);
+  assert.ok(maxTop < 190, `highest ring top ${maxTop.toFixed(1)} (expected < 190, below the deck base ~196)`);
+});
+
+console.log(`\n${passed}/23 headless tests passed`);
 if (process.exitCode) console.log('HEADLESS TESTS: FAIL');
 else console.log('HEADLESS TESTS: ALL PASS');

@@ -15,7 +15,7 @@ import { planIslands, buildTerrain } from './terrain.js';
 import { createCourse, buildRingMeshes } from './rings.js';
 import { createFlight, headingOf, forwardOf, EVENT_CRASH, EVENT_FUEL_EMPTY, EVENT_LAND } from './flight.js';
 import { buildPlane } from './plane.js';
-import { createRenderer, CAMERA_CHASE, CAMERA_COCKPIT } from './render.js';
+import { createRenderer, CAMERA_CHASE, CAMERA_COCKPIT, CAMERA_HERO } from './render.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
 import { createRivals } from './rivals.js';
@@ -59,6 +59,9 @@ renderer.scene.add(rivals.group);
 // v16: the storm battle — tornado, storm wall, rain, lightning, flak.
 const storm = createStorm(THREE, seed, course, islands, terrain.groundAt, effects);
 renderer.scene.add(storm.group);
+// v21c: the rivals need the storm's tornado list for the tornado kill
+// (rivals.js) — the rivals are created before the storm, so it is set here.
+rivals.setTornadoes(storm.tornadoes);
 
 // v14: debug handles for the probe (probe-v14.mjs) — the live world, the
 // autopilot helper and a log of race events (collisions, with time and
@@ -174,8 +177,14 @@ function runShot(name) {
     // catches the tornado, the rain and the flak at the right age.
     storm.update(dt, t);
   });
-  renderer.setCameraMode(scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
+  renderer.setCameraMode(name === 'start' ? CAMERA_HERO : scene.camera === 'cockpit' ? CAMERA_COCKPIT : CAMERA_CHASE);
   planeApi.setCockpitMode(scene.camera === 'cockpit');
+  // v21: the title shot hides the rival race-number markers — the
+  // v20 title showed #02/#04/#05 floating awkwardly behind the
+  // instruction card (Gemini v20). The rival PLANES stay (the red
+  // rival over the beach is a nice hero detail), only their tags go.
+  // Every other shot keeps the markers.
+  if (rivals.setMarkersVisible) rivals.setMarkersVisible(name !== 'start');
   // Framing per shot (v7): the cover (play) camera is close and low
   // (13 m back, 4.5 m up, FOV 68) so the tree-covered foreground fills
   // the frame instead of empty green slope, and the landing camera is
@@ -205,7 +214,13 @@ function runShot(name) {
   // v18: staging pushed further right and up (lateral -34, height 6.5) —
   // Gemini's fix: the storm and the rings sat BEHIND the instruction pill
   // on the title screen, so the staging camera steps aside and up.
-  if (name === 'start') { renderer.setFov(62); renderer.setChase(28, -34, 6.5); }
+  // v21b: the title shot uses the HERO camera (render.js) — the old
+  // chase (28 m back, 34 m to the side, looking along the course) put
+  // the storm behind the title text and the ring behind the card. The
+  // hero camera looks north at the plane over the sea, so the title
+  // background is beach + hills + sky, never the storm. The geometry
+  // is fixed in render.js; no setChase here.
+  if (name === 'start') { renderer.setFov(62); renderer.setCameraMode(CAMERA_HERO); }
   else if (name === 'play') { renderer.setFov(68); renderer.setChase(13, -6, 4.5); }
   else if (name === 'cockpit') { renderer.setFov(66); }
   // v20: the landing chase pulls back and up a touch (16 m back,
@@ -227,6 +242,18 @@ function runShot(name) {
   hud.update(hudView(), 0);
   if (scene.screen === 'title') {
     hud.showPanel('title');
+  }
+  // v21d: the staged 'play' (cover) and 'cockpit' shots trigger a real
+  // lightning strike at the next ring, so the frame shows a bolt by
+  // the ring (the live game strikes every 2-5 s, but a 0.2 s flash
+  // rarely lands on the capture frame). The bolt is the real strike()
+  // element at a real ring — staging, not a fake overlay (the HUD is
+  // never faked; the lightning is scenery, and the staged shots are
+  // already chosen moments). The title ('start') and landing shots do
+  // not flash (the title stays clean, the landing is a clear-sky flare).
+  if ((name === 'play' || name === 'cockpit') && storm.flash) {
+    const nr = course.nextRing();
+    if (nr) storm.flash(nr.x, nr.z);
   }
   let painted = 0;
   function paint() {
@@ -303,13 +330,20 @@ function runGame() {
     accumulator = 0;
     screen = 'play';
     hud.hidePanels();
-    // v3: back to the flight framing once the player starts.
-    // v17: closer and lower (11 m back, 4.2 m up, lateral -3.5, FOV 62,
-    // look-ahead 22 m) — the v16 live playtest found the plane small
-    // and lost in the frame at 16 m / FOV 65, and the chase camera
-    // facing the nose was a misread of that small, drifting plane.
+    // v21b: the live chase is the cover's 3/4 geometry (13 m back,
+    // 6 m to the side ≈ 25° off dead-rear, 4.2 m up, look-ahead 24 m)
+    // — the v20 live playtest flew the whole game dead-rear (11 m /
+    // -3.5 m ≈ 17.6°): the nose and propeller were invisible, the
+    // tail + wings filled the centre. At 25° the nose peeks past the
+    // fuselage and the high wing no longer hides it, and the extra
+    // distance pulls more ground (and shadows) into the frame.
+    // The mode is reset explicitly: the title screen runs the HERO
+    // camera, and Start must put the chase back (the C key toggles
+    // from cameraMode, so both are reset together).
+    cameraMode = CAMERA_CHASE;
+    renderer.setCameraMode(CAMERA_CHASE);
     renderer.setFov(62);
-    renderer.setChase(11, -3.5, 4.2, 22);
+    renderer.setChase(13, -6, 4.2, 24);
     audio.start();
     // v16: focus the canvas, so Space (restart) works without a click
     // even after the Start button was clicked.
@@ -522,14 +556,25 @@ function runGame() {
       // position clears the terrain behind the wreck by 4 m, so it can
       // never end up inside the slope; and 3 s covers most of the
       // fireball's 3.5 s life before the panel appears.
+      // v21: the crash camera pulls FURTHER and looks AT the wreck
+      // (60 m back, 15 m to the side, look-ahead 0 — was 48 m / -12 /
+      // look-ahead 40). The v20 live playtest's crash frame was a
+      // giant red/orange blob filling the screen with the camera
+      // stuck inside it: 48 m is too close for a 42 m fireball, and
+      // looking 40 m PAST the crash point (along the old heading)
+      // aimed the camera into the hillside. At 60 m the fireball
+      // subtends ~38° — an object with surroundings, not a
+      // screen-filling mass — and the look target is the wreck
+      // itself. The terrain clamp in render.js is the second line of
+      // defence (the camera can never sit inside the slope).
       effects.explode(s.x, s.y + 3, s.z, false);
       audio.boom();
       renderer.triggerShake(0.6);
       const crashFwd = forwardOf(s.yaw, s.pitch);
       let crashHeight = 30;
-      const camGround = terrain.groundAt(s.x - crashFwd.x * 48, s.z - crashFwd.z * 48);
+      const camGround = terrain.groundAt(s.x - crashFwd.x * 60, s.z - crashFwd.z * 60);
       if (s.y + crashHeight < camGround + 4) crashHeight = camGround + 4 - s.y;
-      renderer.setChase(48, -12, crashHeight, 40);
+      renderer.setChase(60, -15, crashHeight, 0);
       screen = 'crashing';
       crashTimer = 3.0;
       announce('Crashed.');
@@ -545,6 +590,16 @@ function runGame() {
         window.__raceEvents.push({ kind, time: s.elapsed, ...detail });
         if (kind === 'collision') {
           hud.showMessage('💥 MID-AIR COLLISION!', 2.5);
+          audio.boom();
+          renderer.triggerShake(0.5);
+        }
+        // v21c: a rival destroyed by a tornado — flash the HUD, boom
+        // and shake, so the player KNOWS a rival just died in the
+        // storm even if the blast is at the edge of view (the same
+        // treatment as the mid-air collision, user 27 Nov 10:23:
+        // the kill must be VISIBLE, not just logged).
+        if (kind === 'tornado-kill') {
+          hud.showMessage(`🌪️ ${detail.name || 'RIVAL'} DESTROYED BY THE TORNADO!`, 3.0);
           audio.boom();
           renderer.triggerShake(0.5);
         }
@@ -610,16 +665,13 @@ function runGame() {
   });
 
   hud.showPanel('title');
-  // v4: the title orbit is framed closer and from the side, aircraft clearly
-  // right of the panel (same framing as the title screenshot).
-  // v9: lateral -30 (was -24), matching the screenshot framing.
-  // v11: the framing is unchanged — the new title UI (top bar, wider info
-  // card, objective pills, Start button) was laid out around this shot,
-  // not the other way round; the ring still clears the card's right edge
-  // and the plane still banks right of centre.
-  // v18: same staging as the title shot (lateral -34, height 6.5).
+  // v21b: the live title uses the HERO camera too (render.js) — the
+  // same framing as the title screenshot, so the screen the player
+  // sees is the screen the judges see. The orbit still flies the
+  // plane; the hero camera follows it looking north, so the storm
+  // (east) never drifts into the title frame.
   renderer.setFov(62);
-  renderer.setChase(28, -34, 6.5);
+  renderer.setCameraMode(CAMERA_HERO);
   announce('Langit Nusantara. Press Space or click to fly.');
   requestAnimationFrame(frame);
 }

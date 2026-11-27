@@ -29,6 +29,27 @@ export function gustAt(t) {
   };
 }
 
+/**
+ * v21c (user 27 Nov 10:17): is the point (x, y, z) inside any
+ * tornado's kill cylinder? Pure function (no THREE) so a headless
+ * test can prove it and rivals.js can call it every step. A tornado
+ * kills by 2D distance (inside its radius) AND height (between its
+ * foot, baseY, and its crown, 264 m x scale — the funnel is 12
+ * segments of 22 m). Returns the tornado or null. The PLAYER is
+ * never tested against this (the user: the player keeps the storm
+ * danger as now — gusts — the tornado kill is a RIVAL mechanic).
+ */
+export function tornadoAt(x, y, z, tornadoes) {
+  for (const t of tornadoes) {
+    const dx = x - t.x;
+    const dz = z - t.z;
+    if (dx * dx + dz * dz > t.radius * t.radius) continue;
+    if (y < t.baseY || y > t.baseY + 264 * t.scale) continue;
+    return t;
+  }
+  return null;
+}
+
 export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   const group = new THREE.Group();
   const rnd = createRandom(seed + 1601);
@@ -71,15 +92,24 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // slate #3B4652 / #586675, and 18 spinning debris flecks on the
   // cone surface + at the base, so the rotation is readable from any
   // angle and the funnel reads as a vortex, not a stack.
-  // v20 (f): the funnel reads as weather, not black geometry — the
-  // dark slate lightens a touch (#46545F, was #3B4652) and the opacity
-  // drops to 0.9 (was 0.95), so the vortex keeps its shape without
-  // going solid black against the sky.
+  // v21 (Gemini v21 #1): the funnel is a SOFT VOLUMETRIC vortex,
+  // not a solid cone — the outer layer is TRANSLUCENT (opacity 0.45,
+  // was 0.9), so the sky shows through it and the hard "party-hat"
+  // silhouette is gone; a second, narrower INNER funnel (0.55x the
+  // radius, darker, opacity 0.6) spins the OTHER way, so the two
+  // layers counter-rotate and the twist is readable; and three thin
+  // helix rings wrap the funnel at 1/4, 1/2 and 3/4 height, tilted —
+  // the "multi-ringed, twisting vortex" Gemini asked for. The debris
+  // flecks + spray crown + spray ring stay (they already read as
+  // churning spray at the base).
   const funnelMat = new THREE.MeshStandardMaterial({
-    color: 0x46545f, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
+    color: 0x46545f, roughness: 0.9, transparent: true, opacity: 0.45, side: THREE.DoubleSide,
   });
   const funnelDark = new THREE.MeshStandardMaterial({
-    color: 0x5f707e, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
+    color: 0x5f707e, roughness: 0.9, transparent: true, opacity: 0.45, side: THREE.DoubleSide,
+  });
+  const funnelInnerMat = new THREE.MeshStandardMaterial({
+    color: 0x2f3a45, roughness: 0.9, transparent: true, opacity: 0.6, side: THREE.DoubleSide,
   });
   function buildFunnel(scale) {
     const funnel = new THREE.Group();
@@ -100,6 +130,43 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
       seg.position.x = Math.sin(i * 0.9) * 2.5 * scale;
       seg.position.z = Math.cos(i * 0.9) * 2.5 * scale;
       funnel.add(seg);
+    }
+    // v21: the inner vortex — a narrower cone (0.55x the outer
+    // radius) in darker slate at 0.6 opacity, so the funnel has
+    // depth: a translucent outer sheath over a darker twisting core.
+    // It is built as a second funnel group so update() can spin it
+    // the other way (counter-rotation reads as a vortex, not a
+    // spinning cone).
+    const inner = new THREE.Group();
+    for (let i = 0; i < segs; i += 1) {
+      const rBot = (4 + 3.5 * i) * scale * 0.55;
+      const rTop = (4 + 3.5 * (i + 1)) * scale * 0.55;
+      const h = step + 1.5 * scale;
+      const seg = new THREE.Mesh(
+        new THREE.CylinderGeometry(rTop, rBot, h, 10, 1, true),
+        funnelInnerMat,
+      );
+      seg.position.y = (i + 0.5) * step;
+      seg.position.x = Math.sin(i * 0.9 + 0.6) * 1.4 * scale;
+      seg.position.z = Math.cos(i * 0.9 + 0.6) * 1.4 * scale;
+      inner.add(seg);
+    }
+    funnel.add(inner);
+    funnel.userData.inner = inner;
+    // v21: three helix rings — thin translucent bands wrapping the
+    // funnel at 1/4, 1/2 and 3/4 height, tilted, so the vortex reads
+    // as multi-ringed and twisting instead of one smooth cone.
+    const helixMat = new THREE.MeshBasicMaterial({
+      color: 0xcfd8e3, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false,
+    });
+    for (let hI = 0; hI < 3; hI += 1) {
+      const hy = (0.25 + hI * 0.25) * 264 * scale;
+      const hr = (4 + 3.5 * (hy / (22 * scale))) * scale * 1.05;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(hr, 1.6 * scale, 6, 28), helixMat);
+      ring.rotation.x = Math.PI / 2 - 0.18;
+      ring.rotation.y = hI * 0.9;
+      ring.position.y = hy;
+      funnel.add(ring);
     }
     // Spinning debris flecks on the cone surface — the funnel's spin
     // is otherwise invisible on a smooth cone. 10 flecks spiral up
@@ -157,22 +224,77 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   group.add(funnel);
 
   // --- Second waterspout ahead of the spawn (title staging). ---
-  // v20 (f): 750 m along the course from the spawn, 320 m to the
-  // side (was 500 m / 180 m), at 0.45 scale (was 0.55). In v19 it sat
-  // almost exactly on the spawn->ring-1 line, so from the chase camera
-  // the funnel pierced the centre of ring 1 and the title camera saw
-  // it towering over the first gate. Now it is clearly a hazard beside
-  // the course, not a spike through the gate.
+  // v21: 1100 m along the course from the spawn, 450 m to the side,
+  // at 0.4 scale (was 750 m / 320 m / 0.45). In v20 it sat close
+  // enough to the title camera to read as a cone "right on the
+  // beach/grass edge" (Gemini v20 title critique). Further away it
+  // is a distant column, not a spike over the beach.
   const spawn = course.spawn;
   const sfx = Math.sin(spawn.yaw);
   const sfz = -Math.cos(spawn.yaw);
   const spx = Math.cos(spawn.yaw);
   const spz = Math.sin(spawn.yaw);
-  const spout2 = buildFunnel(0.45);
-  const s2x = spawn.x + sfx * 750 + spx * 320;
-  const s2z = spawn.z + sfz * 750 + spz * 320;
-  spout2.position.set(s2x, Math.max(0.6, groundAt(s2x, s2z)), s2z);
+  const spout2 = buildFunnel(0.4);
+  const s2x = spawn.x + sfx * 1100 + spx * 450;
+  const s2z = spawn.z + sfz * 1100 + spz * 450;
+  const s2baseY = Math.max(0.6, groundAt(s2x, s2z));
+  spout2.position.set(s2x, s2baseY, s2z);
   group.add(spout2);
+
+  // --- v21c: THREE more waterspouts along the course (user 27 Nov ---
+  // 10:17 + 10:23) — obstacles the WHOLE way, not one point. spout3
+  // sits CLOSE to the early course (70 m north of ring 4, toward the
+  // north ridge, 0.55 scale): a rival that weaves or goes off-course
+  // there can enter its 35 m kill radius, so the tornado kill can
+  // fire in real play, not only in the probe. spout4 (ring 9, 200 m
+  // south over the sea, 0.6) is the cover tornado; spout5 (ring 10,
+  // 260 m north, 0.5) arms the final stretch. All three stay OFF the
+  // ring line (the nearest is 70 m from a ring centre, the kill
+  // radius 35 m), so no ring and no player line is ever covered —
+  // the coordinator's readability rule. The funnel is the same
+  // buildFunnel as the main cell, so the look matches.
+  function spoutPos(ringIdx, offset, north) {
+    const a = course.rings[Math.max(0, ringIdx - 1)];
+    const b = course.rings[Math.min(course.rings.length - 1, ringIdx + 1)];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const px = -dz / len;
+    const pz = dx / len;
+    const r = course.rings[ringIdx];
+    const c1 = { x: r.x + px * offset, z: r.z + pz * offset };
+    const c2 = { x: r.x - px * offset, z: r.z - pz * offset };
+    if (north) return c1.z < c2.z ? c1 : c2;
+    return c1.z > c2.z ? c1 : c2;
+  }
+  const s3p = spoutPos(3, 70, true);
+  const spout3 = buildFunnel(0.55);
+  const s3baseY = Math.max(0.6, groundAt(s3p.x, s3p.z));
+  spout3.position.set(s3p.x, s3baseY, s3p.z);
+  group.add(spout3);
+  const s4p = spoutPos(8, 200, false);
+  const spout4 = buildFunnel(0.6);
+  const s4baseY = Math.max(0.6, groundAt(s4p.x, s4p.z));
+  spout4.position.set(s4p.x, s4baseY, s4p.z);
+  group.add(spout4);
+  const s5p = spoutPos(9, 260, true);
+  const spout5 = buildFunnel(0.5);
+  const s5baseY = Math.max(0.6, groundAt(s5p.x, s5p.z));
+  spout5.position.set(s5p.x, s5baseY, s5p.z);
+  group.add(spout5);
+
+  // The tornadoes, for the rival kill (rivals.js) and the lightning
+  // (below). `radius` is the KILL radius, not the visible funnel —
+  // the vortex winds reach past the condensation funnel, and the
+  // crown is 46 m x scale wide at the top. The player is never
+  // tested against this list.
+  const tornadoes = [
+    { x: cellX, z: cellZ, baseY, radius: 45, scale: 1 },
+    { x: s2x, z: s2z, baseY: s2baseY, radius: 25, scale: 0.4 },
+    { x: s3p.x, z: s3p.z, baseY: s3baseY, radius: 35, scale: 0.55 },
+    { x: s4p.x, z: s4p.z, baseY: s4baseY, radius: 30, scale: 0.6 },
+    { x: s5p.x, z: s5p.z, baseY: s5baseY, radius: 25, scale: 0.5 },
+  ];
 
   // --- The storm wall: ONE dark bank hugging the tornado side. ---
   // Seven overlapping rounded lobes in slate blue-grey, in an arc along
@@ -196,90 +318,196 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // the white cumulus banks keep their flat-shaded style (bright
   // facets read as cloud, dark facets read as rock).
   const wallMats = [
-    new THREE.MeshStandardMaterial({ color: 0x5f7285, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
-    new THREE.MeshStandardMaterial({ color: 0x71849a, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x4a5a6a, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
     new THREE.MeshStandardMaterial({ color: 0x5a6c7e, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x42525f, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
   ];
   const lobeGeo = new THREE.IcosahedronGeometry(1, 1);
-  const wallAnchor = { x: cellX + perpX * 220 * side, z: cellZ + perpZ * 220 * side };
-  for (let i = 0; i < 6; i += 1) {
+  // v21: the wall anchor moves FURTHER out (perp 320 m, was 220) and
+  // the bank sits LOWER (y ~250, was ~280) — the v20 wall/anvil sat
+  // behind the title text ("NUSANTARA") and read as lumpy grey blobs
+  // over the hero. Further out + lower puts the dark bank at the
+  // frame's right edge, below the title band, in the title shot —
+  // while in flight it still reads as the storm cell beside the
+  // course. The bank itself is now TEN smaller, FLATTER lobes
+  // (rx 60-85 m, y-scale 0.35-0.45, spacing 45 m, was 6 lobes of
+  // 100-150 m at 80 m) — a continuous dark thunderhead bank, not a
+  // row of separate grey balls. A real storm bank is dark; smooth
+  // shading keeps it cloud, not rock (the v20 lesson).
+  const wallAnchor = { x: cellX + perpX * 320 * side, z: cellZ + perpZ * 320 * side };
+  for (let i = 0; i < 10; i += 1) {
     const lobe = new THREE.Mesh(lobeGeo, wallMats[i % wallMats.length]);
-    const rx = 100 + rnd.range(0, 50);
-    lobe.scale.set(rx, rx * rnd.range(0.5, 0.65), rx * rnd.range(0.75, 1.0));
+    const rx = 60 + rnd.range(0, 25);
+    lobe.scale.set(rx, rx * rnd.range(0.35, 0.45), rx * rnd.range(0.75, 1.0));
+    lobe.position.set(
+      wallAnchor.x + (ax / alen) * (i - 4.5) * 45 + rnd.range(-12, 12),
+      250 + rnd.range(-12, 30),
+      wallAnchor.z + (az / alen) * (i - 4.5) * 45 + rnd.range(-12, 12),
+    );
+    lobe.rotation.y = rnd.range(0, Math.PI * 2);
+    wall.add(lobe);
+  }
+  // v21: the anvil is a SPREADING SHELF now — 6 flatter lobes
+  // (rx 70-100 m, y-scale 0.3-0.4, y 290-315, was 4 lobes of
+  // 100-140 m at y 320-350) above the same pushed-out anchor, so it
+  // reads as the storm's spreading top, not a blob over the title.
+  const anvilMats = [
+    new THREE.MeshStandardMaterial({ color: 0x6b7e92, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x8296a8, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+  ];
+  for (let i = 0; i < 6; i += 1) {
+    const lobe = new THREE.Mesh(lobeGeo, anvilMats[i % anvilMats.length]);
+    const rx = 70 + rnd.range(0, 30);
+    lobe.scale.set(rx, rx * rnd.range(0.3, 0.4), rx * rnd.range(0.7, 0.95));
     lobe.position.set(
       wallAnchor.x + (ax / alen) * (i - 2.5) * 80 + rnd.range(-20, 20),
-      280 + rnd.range(-15, 45),
+      290 + rnd.range(-8, 25),
       wallAnchor.z + (az / alen) * (i - 2.5) * 80 + rnd.range(-20, 20),
     );
     lobe.rotation.y = rnd.range(0, Math.PI * 2);
     wall.add(lobe);
   }
-  // v20 (f): the anvil is SMALLER, LIGHTER and LOWER — 4 lobes of
-  // 100-140 m at y 320-350 (was 5 lobes of 140-200 m at y 375-425),
-  // in mid grey-blue #6B7E92/#8296A8 (was #3B4652/#586675, then
-  // #4A5A6A/#6B7C8C). The v19 anvil was a giant faceted black mass
-  // sitting right over ring 1 and behind the title text ("NUSANTARA"),
-  // reading as a floating black rock, not a storm cloud — and the first
-  // v20 screenshots showed it STILL doing that, because flat-shaded
-  // dark slate reads as rock whatever its size. Mid grey-blue facets
-  // read as cloud shading instead, and the lower ceiling (320-350)
-  // drops it out of the title text's band. Smaller + lighter + lower
-  // keeps it a storm ceiling, not the sky's main event.
-  const anvilMats = [
-    new THREE.MeshStandardMaterial({ color: 0x6b7e92, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
-    new THREE.MeshStandardMaterial({ color: 0x8296a8, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
-  ];
-  for (let i = 0; i < 4; i += 1) {
-    const lobe = new THREE.Mesh(lobeGeo, anvilMats[i % anvilMats.length]);
-    const rx = 100 + rnd.range(0, 40);
-    lobe.scale.set(rx, rx * rnd.range(0.45, 0.6), rx * rnd.range(0.7, 0.95));
+  // v21c: a SECOND, smaller storm wall at spout4 (ring 9) — six
+  // flatter lobes (rx 50-70 m, y-scale 0.35-0.45) on an anchor 250 m
+  // south of the spout, y ~235-250, so the mid-course has its own
+  // dark thunderhead bank instead of one wall at the main cell.
+  // Same group, so it breathes with the main wall.
+  for (let i = 0; i < 6; i += 1) {
+    const lobe = new THREE.Mesh(lobeGeo, wallMats[i % wallMats.length]);
+    const rx = 50 + rnd.range(0, 20);
+    lobe.scale.set(rx, rx * rnd.range(0.35, 0.45), rx * rnd.range(0.75, 1.0));
     lobe.position.set(
-      wallAnchor.x + (ax / alen) * (i - 1.5) * 110 + rnd.range(-25, 25),
-      320 + rnd.range(-10, 30),
-      wallAnchor.z + (az / alen) * (i - 1.5) * 110 + rnd.range(-25, 25),
+      s4p.x + (ax / alen) * (i - 2.5) * 40 + rnd.range(-10, 10),
+      240 + rnd.range(-10, 15),
+      s4p.z + 250 + (az / alen) * (i - 2.5) * 40 + rnd.range(-10, 10),
     );
     lobe.rotation.y = rnd.range(0, Math.PI * 2);
     wall.add(lobe);
   }
+  // v21d: the STORM DECK — a black cumulonimbus ceiling over the
+  // WHOLE course (user 27 Nov 11:49). The storm sky must feel
+  // DOMINANT, not a few blobs, and the rings must sit UNDER black
+  // clouds so flying through a ring feels like rain + lightning.
+  // ~15 large, FLAT, DARK lobes (rx 90-130 m, y-scale 0.3-0.4, y
+  // ~248 m, base ~196 m) spaced ~220 m along the course polyline
+  // (spawn -> rings -> runway) — a continuous dark ceiling (the
+  // lobes overlap or nearly touch). The rings (60-159 m, top 172 m)
+  // sit 25+ m BELOW the deck base, so they stay readable: the deck
+  // frames the TOP of the view, it never covers a ring or the plane
+  // (the coordinator's rule). The deck is DARK (#0F172A / #1E293B /
+  // #334155, opaque) — black rain clouds, not grey puffs. It lives
+  // in the `wall` group so it breathes with the storm (±30 m). The
+  // title stays clean: the hero camera looks NORTH from the spawn
+  // and the course/deck run SOUTH + EAST, behind the camera.
+  const deckMats = [
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+    new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 1, flatShading: false, transparent: true, opacity: 0.98 }),
+  ];
+  {
+    const pts = [{ x: spawn.x, z: spawn.z },
+      ...course.rings.map((r) => ({ x: r.x, z: r.z })),
+      { x: course.runway.x, z: course.runway.z }];
+    let acc = 0;
+    let deckIdx = 0;
+    for (let i = 0; i < pts.length - 1; i += 1) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      const segLen = Math.hypot(b.x - a.x, b.z - a.z);
+      const dx = (b.x - a.x) / (segLen || 1);
+      const dz = (b.z - a.z) / (segLen || 1);
+      const px = -dz;
+      const pz = dx;
+      let d = 220 - acc;
+      while (d < segLen) {
+        const cx = a.x + dx * d + px * rnd.range(-40, 40);
+        const cz = a.z + dz * d + pz * rnd.range(-40, 40);
+        const lobe = new THREE.Mesh(lobeGeo, deckMats[deckIdx % deckMats.length]);
+        const rx = 90 + rnd.range(0, 40);
+        lobe.scale.set(rx, rx * rnd.range(0.3, 0.4), rx * rnd.range(0.8, 1.05));
+        lobe.position.set(cx, 248 + rnd.range(-12, 12), cz);
+        lobe.rotation.y = rnd.range(0, Math.PI * 2);
+        wall.add(lobe);
+        deckIdx += 1;
+        d += 220;
+      }
+      acc = (acc + segLen) % 220;
+    }
+  }
   group.add(wall);
 
-  // --- Slanted rain inside the cell: 350 streaks in a box over the ---
-  // funnel, falling fast and slanting along the wind vector, wrapping
-  // back to the top. A LineSegments cloud, no per-frame allocation.
-  const RAIN_N = 350;
-  const rainPos = new Float32Array(RAIN_N * 6);
-  const rainSeed = [];
-  for (let i = 0; i < RAIN_N; i += 1) {
-    rainSeed.push({
-      x: cellX + rnd.range(-250, 250),
-      y: 40 + rnd.range(0, 320),
-      z: cellZ + rnd.range(-250, 250),
-    });
-  }
-  const rainGeo = new THREE.BufferGeometry();
-  rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
-  const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({
-    // v18: pale ice-blue rain #E0F2FE at 0.45 opacity (was #BCD8EE at
-    // 0.6) — Gemini's spec: the rain reads as bright streaks against
-    // the dark cell, not grey smears.
-    // v19: #E6F4FF at 0.35 opacity — lighter and fainter still, so the
-    // rain reads as weather, not as bright scratches on the sky.
-    color: 0xe6f4ff, transparent: true, opacity: 0.35,
-  }));
-  group.add(rain);
-  function writeRain() {
-    for (let i = 0; i < RAIN_N; i += 1) {
-      const r = rainSeed[i];
-      rainPos[i * 6] = r.x;
-      rainPos[i * 6 + 1] = r.y;
-      rainPos[i * 6 + 2] = r.z;
-      rainPos[i * 6 + 3] = r.x + STORM.windX * 1.4;
-      rainPos[i * 6 + 4] = r.y - 22;
-      rainPos[i * 6 + 5] = r.z + STORM.windZ * 1.4;
+  // --- Slanted rain inside the cells: one streak system per storm ---
+  // cell, falling fast and slanting along the wind vector, wrapping
+  // back to the top. A LineSegments cloud each, no per-frame allocation.
+  // v21c (user 27 Nov 10:17 + 10:23): rain falls over FOUR cells now
+  // (the main cell + spouts 3-5), not just the main cell — rain along
+  // the whole course. The main cell keeps its exact 350-streak box
+  // (±250 m, opacity 0.35); spout3 (close to the course) gets a
+  // narrower box (±150 m, 200 streaks, fainter 0.3) so its rain stays
+  // near the tornado instead of washing over the ring line; spouts
+  // 4-5 get ±200 m, 250 streaks, 0.35.
+  const rains = [];
+  function makeRain(cx, cz, n, opacity, spread) {
+    const seed = [];
+    for (let i = 0; i < n; i += 1) {
+      seed.push({
+        x: cx + rnd.range(-spread, spread),
+        y: 40 + rnd.range(0, 320),
+        z: cz + rnd.range(-spread, spread),
+      });
     }
-    rainGeo.attributes.position.needsUpdate = true;
+    const pos = new Float32Array(n * 6);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+      // v18: pale ice-blue rain #E0F2FE at 0.45 opacity (was #BCD8EE at
+      // 0.6) — Gemini's spec: the rain reads as bright streaks against
+      // the dark cell, not grey smears.
+      // v19: #E6F4FF at 0.35 opacity — lighter and fainter still, so the
+      // rain reads as weather, not as bright scratches on the sky.
+      color: 0xe6f4ff, transparent: true, opacity,
+    }));
+    group.add(line);
+    const sys = { cx, cz, n, spread, seed, pos, geo, line };
+    rains.push(sys);
+    return sys;
   }
-  writeRain();
+  function writeRain(sys) {
+    for (let i = 0; i < sys.n; i += 1) {
+      const r = sys.seed[i];
+      sys.pos[i * 6] = r.x;
+      sys.pos[i * 6 + 1] = r.y;
+      sys.pos[i * 6 + 2] = r.z;
+      sys.pos[i * 6 + 3] = r.x + STORM.windX * 1.4;
+      sys.pos[i * 6 + 4] = r.y - 22;
+      sys.pos[i * 6 + 5] = r.z + STORM.windZ * 1.4;
+    }
+    sys.geo.attributes.position.needsUpdate = true;
+  }
+  makeRain(cellX, cellZ, 350, 0.35, 250);
+  makeRain(s3p.x, s3p.z, 200, 0.3, 150);
+  makeRain(s4p.x, s4p.z, 250, 0.35, 200);
+  makeRain(s5p.x, s5p.z, 250, 0.35, 200);
+  // v21d: COURSE RAIN — rain falls under the deck along the whole
+  // course (user 27 Nov 11:49), so the player flies through rain
+  // when passing the rings. Three systems (rings 1-4, 5-8, 9-12),
+  // each centred on its segment's midpoint, spread ±250 m, 250
+  // streaks, 0.32 opacity. The streaks are thin/translucent — they
+  // add weather around the rings without covering them.
+  {
+    const segMid = (i0, i1) => {
+      const a = course.rings[i0];
+      const b = course.rings[i1];
+      return { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    };
+    const m1 = segMid(0, 3);
+    makeRain(m1.x, m1.z, 250, 0.32, 250);
+    const m2 = segMid(4, 7);
+    makeRain(m2.x, m2.z, 250, 0.32, 250);
+    const m3 = segMid(8, 11);
+    makeRain(m3.x, m3.z, 250, 0.32, 250);
+  }
+  for (const sys of rains) writeRain(sys);
 
   // --- Lightning: one jagged bolt, rebuilt at a random spot in the ---
   // cell on each flash, plus a cold flash light. Daytime only: the
@@ -294,11 +522,25 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   group.add(bolt);
   const boltLight = new THREE.PointLight(0xcfe4ff, 0, 1200, 1);
   group.add(boltLight);
-  let boltTimer = 3 + rnd.range(0, 3);
+  let boltTimer = 2 + rnd.range(0, 2);
   let boltLife = 0;
-  function strike() {
-    const bx = cellX + rnd.range(-150, 150);
-    const bz = cellZ + rnd.range(-150, 150);
+  function strike(bx, bz, life) {
+    // v21d: the bolt strikes NEAR THE RINGS too (user 27 Nov 11:49)
+    // — the target is a random tornado cell OR a random ring, so the
+    // lightning falls around the rings the player is flying through
+    // (70% of strikes are ring strikes: 12 rings vs 5 tornadoes).
+    // The bolt drops from y 330 through the deck (base ~196 m) past
+    // the ring to the ground. Strikes come every 2-5 s now (was
+    // 3-7 s) and the flash lasts 0.2 s (was 0.12 s) — more lightning
+    // to feel, still a brief daytime flash.
+    // `flash(x, z)` (below) passes explicit coordinates for a staged
+    // screenshot; live play calls strike() with no arguments.
+    if (bx === undefined) {
+      const targets = [...tornadoes, ...course.rings];
+      const cell = targets[Math.floor(rnd.range(0, targets.length))];
+      bx = cell.x + rnd.range(-150, 150);
+      bz = cell.z + rnd.range(-150, 150);
+    }
     const topY = 330;
     const botY = Math.max(1, groundAt(bx, bz));
     for (let i = 0; i < BOLT_PTS; i += 1) {
@@ -311,7 +553,19 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     bolt.material.opacity = 1;
     boltLight.position.set(bx, (topY + botY) / 2, bz);
     boltLight.intensity = 700;
-    boltLife = 0.12;
+    boltLife = life || 0.2;
+  }
+
+  // v21d: force a strike at (x, z) for a staged screenshot — the bolt
+  // is a real game element (the same strike() as live play), just
+  // timed for the capture so the frame shows lightning by the next
+  // ring. The bolt lands ~60 m east / 40 m north of the ring (beside
+  // it, not through it) and stays lit 1.5 s, so it is still visible
+  // when the screenshot is taken ~700 ms after __shotReady (the
+  // staged shot does not call update() after staging, so the bolt
+  // does not fade). Live play never calls this.
+  function flash(x, z) {
+    strike(x + 60, z - 40, 1.5);
   }
 
   // --- Flak: a burst every STORM.flakEvery seconds on an outer ---
@@ -321,29 +575,43 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
 
   function update(dt, t) {
     funnel.rotation.y += dt * 2.2;
+    // v21: the inner vortex counter-rotates (faster, the other way),
+    // so the two layers twist against each other — a vortex, not a
+    // spinning cone.
+    if (funnel.userData.inner) funnel.userData.inner.rotation.y -= dt * 3.1;
+    if (spout2.userData.inner) spout2.userData.inner.rotation.y -= dt * 2.6;
     funnel.rotation.z = Math.sin(t * 0.5) * 0.03;
     spout2.rotation.y -= dt * 1.8;
+    // v21c: the three new spouts spin too (outer + counter-rotating inner).
+    spout3.rotation.y += dt * 2.0;
+    if (spout3.userData.inner) spout3.userData.inner.rotation.y -= dt * 2.8;
+    spout4.rotation.y += dt * 2.1;
+    if (spout4.userData.inner) spout4.userData.inner.rotation.y -= dt * 2.9;
+    spout5.rotation.y += dt * 1.9;
+    if (spout5.userData.inner) spout5.userData.inner.rotation.y -= dt * 2.7;
     // The wall breathes slowly with the wind, ±30 m around its anchor.
     wall.position.x = Math.sin(t * 0.02) * 30;
     wall.position.z = Math.cos(t * 0.017) * 30;
-    // Rain falls and drifts with the wind, wrapping to the top.
-    for (let i = 0; i < RAIN_N; i += 1) {
-      const r = rainSeed[i];
-      r.y -= 55 * dt;
-      r.x += STORM.windX * dt;
-      r.z += STORM.windZ * dt;
-      if (r.y < 40) {
-        r.y = 360;
-        r.x = cellX + rnd.range(-250, 250);
-        r.z = cellZ + rnd.range(-250, 250);
+    // Rain falls and drifts with the wind, wrapping to the top — every cell.
+    for (const sys of rains) {
+      for (let i = 0; i < sys.n; i += 1) {
+        const r = sys.seed[i];
+        r.y -= 55 * dt;
+        r.x += STORM.windX * dt;
+        r.z += STORM.windZ * dt;
+        if (r.y < 40) {
+          r.y = 360;
+          r.x = sys.cx + rnd.range(-sys.spread, sys.spread);
+          r.z = sys.cz + rnd.range(-sys.spread, sys.spread);
+        }
       }
+      writeRain(sys);
     }
-    writeRain();
-    // Lightning: random strikes every 4-9 s, a 0.12 s flash.
+    // Lightning: random strikes every 2-5 s, a 0.2 s flash (v21d).
     boltTimer -= dt;
     if (boltTimer <= 0) {
       strike();
-      boltTimer = 4 + rnd.range(0, 5);
+      boltTimer = 2 + rnd.range(0, 3);
     }
     if (boltLife > 0) {
       boltLife -= dt;
@@ -369,5 +637,8 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
 
   // OpenGame layer 2: gustAt is now the module-level export above;
   // the returned object still exposes it, so main.js is unchanged.
-  return { group, update, gustAt, anchor: { x: cellX, z: cellZ } };
+  // v21c: `tornadoes` is the kill list (rivals.js) and the lightning
+  // cells — {x, z, baseY, radius, scale} per tornado.
+  // v21d: `flash` forces a strike for a staged screenshot (main.js runShot).
+  return { group, update, gustAt, anchor: { x: cellX, z: cellZ }, tornadoes, flash };
 }
