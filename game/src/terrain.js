@@ -125,8 +125,66 @@ export function createGroundAt(islands, seed, runway) {
   return (x, z) => {
     const h = islandHeight(islands, fbm, x, z);
     const b = runwayBlendAt(runway, x, z);
-    return b > 0 ? h * (1 - b) + runway.height * b : h;
+    const blended = b > 0 ? h * (1 - b) + runway.height * b : h;
+    return carveValley(runway, x, z, blended);
   };
+}
+
+/**
+ * v24: the approach valley — a notch carved in the western ridge along
+ * the runway centreline, so a steep dive after ring 12 can reach the
+ * win corridor alive. The v22 live playtest crash, measured: the
+ * player dove from ring 12 (729, 145) at VS -14.5, full throttle, and
+ * flew into the ridge at x=945 (ground 90.1, dx -305) — 55 m short
+ * of the corridor. The dive line is y ~78 m at x=1000, so the valley
+ * floor is 32 m flat until along -280 (x=970) and only then rises to
+ * the runway height at the threshold (along -225, x=1025): at x=1000
+ * the floor is ~64 m, a 14 m margin under the dive line. The weight
+ * stays 1 until along -240 (x=1010) and fades to 0 at the threshold,
+ * so the strip itself (along >= -225) is untouched; across, the full
+ * width is |across| <= 45 m, fading to zero at 110 m. Applied AFTER
+ * the runway blend and only ever LOWERS the ground (never raises
+ * it), in both createGroundAt and buildTerrain's groundAt, so the
+ * mesh, the sim and the tests agree.
+ * REVISION (v24 final, 27 Nov ~22:00 WIB): measured profile x950=32.0,
+ * x1000=63.8, x1025=90.3 (strip height, untouched), +110 m off-centreline
+ * 88.3 — the notch holds. The ring-12 dive (VS -14.5, full throttle)
+ * now WINS at t=3.6 s, x=1001, y=78, touchdown dx -239 / lat 2, kind
+ * autoland (sim-win-autoland + headless test 36). And live, not just in
+ * the sim: the B2 probe teleported to ring 12, flew the valley and
+ * LANDED at 19.9 s, touchdown (1322.9, 91.9, 118.6), dx +73, lat -1.4,
+ * raceComplete true — the ridge that killed the v22 live run is gone.
+ */
+export function approachValleyAt(runway, x, z) {
+  const dirX = runway.dirX;
+  const dirZ = runway.dirZ;
+  const perpX = -dirZ;
+  const perpZ = dirX;
+  const rx = x - runway.x;
+  const rz = z - runway.z;
+  const along = rx * dirX + rz * dirZ;
+  const across = rx * perpX + rz * perpZ;
+  if (along > -225 || along < -550) return 0;
+  if (Math.abs(across) >= 110) return 0;
+  const alongW = along < -480 ? smoothstep(-550, -480, along)
+    : along <= -240 ? 1 : 1 - smoothstep(-240, -225, along);
+  const acrossW = Math.abs(across) <= 45 ? 1 : 1 - smoothstep(45, 110, Math.abs(across));
+  return alongW * acrossW;
+}
+
+/** The valley floor height at one along-track position (runway frame). */
+export function valleyFloorAt(runway, along) {
+  if (along <= -280) return 32;
+  return 32 + (runway.height - 32) * ((along + 280) / 55);
+}
+
+function carveValley(runway, x, z, h) {
+  const w = approachValleyAt(runway, x, z);
+  if (w <= 0) return h;
+  const along = (x - runway.x) * runway.dirX + (z - runway.z) * runway.dirZ;
+  const floor = valleyFloorAt(runway, along);
+  if (floor >= h) return h;
+  return h + (floor - h) * w;
 }
 
 // A 3x5 block font for runway numbers: each digit is 3 columns by 5 rows of
@@ -199,7 +257,11 @@ export function buildTerrain(THREE, seed, islands, runway, course = null) {
   function groundAt(x, z) {
     const h = islandHeight(islands, fbm, x, z);
     const b = runwayBlend(x, z);
-    return b > 0 ? h * (1 - b) + runway.height * b : h;
+    const blended = b > 0 ? h * (1 - b) + runway.height * b : h;
+    // v24: the approach valley (see approachValleyAt) — the mesh must
+    // show the same notch the sim flies over, so the carve applies
+    // here exactly as in createGroundAt.
+    return carveValley(runway, x, z, blended);
   }
 
   // --- Land: a displaced grid with vertex colours by height and slope. ---

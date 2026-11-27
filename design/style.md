@@ -233,6 +233,25 @@ the subject must read in one second.
   looks north, away from the course) or the landing (overhead,
   out of frame).
 
+## v24 style notes
+
+- LIGHTNING AS TUBES (the v22 lines were still 1–2 px on screen
+  and the v23 cover caught no bolt at all): each bolt echo is now a
+  bright core tube (radius 1.8 m) + a soft additive halo tube
+  (radius 5 m, opacity 0.35), so the bolt reads as a thick white
+  column at any distance; the glow sprite is 320 m (opacity 0.95)
+  and the flash light 4000 (distance 2000), so the whole frame
+  brightens on a strike; the live flash lasts 0.35 s. The blast
+  cover also flashes a real bolt at the next ring on the
+  tornado-kill. Live A13 poll: 22 strikes/20 s.
+- APPROACH VALLEY: a notch in the western ridge along the extended
+  centreline (32 m floor to x=970, ~64 m at x=1000) — honest
+  terrain, visible as a gap in the ridge on the approach, not a
+  flattening (the ridge still stands 110 m off the centreline).
+- STABLE RING POINTER: the ▲▼▶◀ chevron no longer flips within a
+  second for one ring (±15° deadband + 0.5 s hold) — the arrow is a
+  reliable guide again, not a flicker.
+
 ## v22 style notes
 
 - STORM DECK WIDER (user 27 Nov 14:06): the deck is ~400 m wide

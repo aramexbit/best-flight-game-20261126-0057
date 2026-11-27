@@ -22,6 +22,148 @@ Rule: an item is checked ONLY with proof (screenshot / sim / test), never
 a claim. Evidence is cited per item. Re-verify after any game-code change
 (the 5 screenshots are regenerated last, before commit).
 
+## What changed in v24 (vs v23) — all patched on top of v23 (already submitted)
+
+Perintah pengguna 27 Nov 20:36 WIB: "Karena sudah bisa submit, dan
+kuota submit ulang masih ada, segera perbaiki yang tadi mau kamu
+perbaiki, kalau sempet bisa submit submit ulang kalau tidak tidak
+masalah karena sudah submit" — perbaiki 3 temuan playtest live v22;
+submit ulang hanya bila sempat + diperintahkan eksplisit (BELUM ada
+perintah submit v24 — builder TIDAK submit, TIDAK push, TIDAK
+bundle).
+
+- [x] **(1) CELAH RIDGE SEBELUM KORIDOR FINISH (P0 — penyebab
+  pengguna gagal finish di v22 live).** Fakta terukur: ring 12 di
+  (729, 145); koridor win |dx| < 250, |lat| < 24 (lama); ridge barat
+  naik x700→33,5, x800→60,2, x850→75,6, x900→86,2, x950→90,2,
+  x1000+→90,3. Dive dari ring 12 (speed 60, VS −14,5, throttle penuh)
+  CRASH di (945, 91,7), ground 90,1, dx −305 — 55 m sebelum koridor.
+  Perbaikan (patch, tanpa ubah ring 12 / runway): **`game/src/
+  terrain.js`** — `approachValleyAt(runway,x,z)` (bobot along
+  [−550,−225], |across| ≤45 penuh memudar ke 110; bobot along 1
+  sampai −240, memudar ke 0 di [−240,−225]) + `valleyFloorAt`
+  (lantai 32 m sampai along −280, naik linear ke runway.height di
+  −225) + `carveValley` (hanya menurunkan, diterapkan SETELAH blend
+  runway, di `createGroundAt` DAN `groundAt` dalam `buildTerrain`
+  supaya mesh/sim/course sepakat; strip along ≥−225 tak tersentuh);
+  **`game/src/config.js`** — `COURSE.winCorridorLat = 40` (baru);
+  **`game/src/flight.js`** — koridor memakai `COURSE.
+  winCorridorLat`; helper murni baru `finalAssistPullUp(y, vs,
+  groundAhead)` (0 bila vs ≥0 atau clearance ≥25 m; bias =
+  min(1,(25−clearance)/15) × min(1,−vs/10)); **`game/src/main.js`**
+  — assist pull-up di cabang onFinal (sample ground 150 m sepanjang
+  heading, blend 0,6 seperti roll assist; `stickPitch` membawa
+  pitchInput saat onFinal supaya pitch auto-level tidak melawan
+  assist). Bukti: profil lembah **x950=32,0, x1000=63,8, x1025=90,3,
+  +110 off-centreline=88,3** (headless tes 35); dive ring-12 **WIN
+  di t=3,6 s, x=1001, y=78, touchdown dx=−239/lat=2, branch WIN,
+  kind autoland** (sim-win-autoland profil 15 + headless tes 36);
+  lat +35 WIN (touchdown lat 6; lat +60 tetap crash, tes 30);
+  `finalAssistPullUp`: dive/10 m = 1,00; high/40 m = 0; climb = 0;
+  gentle/20 m = 0,17 (tes 39). **Live (probe A13/B2, `/tmp/
+  probe24.log`, exit 0): B2-teleport PASS — switch ke human-land di
+  4,7 dtk, LANDED di 19,9 dtk, 12 ring, touchdown (1322,9, 91,9,
+  118,6), dx +73, lat −1,4, raceComplete TRUE** — lembah terbukti
+  diterbangi hidup-hidup, bukan cuma di sim.
+- [x] **(2) PETIR LEBIH TERLIHAT.** Fakta: sistem petir TERBUKTI
+  menyala sering (poll live A13 v22: 7–14 strike/20 dtk), TAPI di
+  screenshot hanya garis tipis 1–2 px di tepi frame, dan playtest
+  browser 17 percobaan hanya melihat 1 kilat jelas. Perbaikan di
+  **`game/src/storm.js`**: tiap echo bolt jadi TUBE — core
+  `TubeGeometry(path, 48, 1,8, 6, false)` + halo `TubeGeometry(path,
+  32, 5, 6, false)` opacity 0,35, di-rebuild tiap strike (dispose
+  geometri lama); bentuk entri `bolts` dipertahankan `{pos, geo,
+  line}` + `halo`/`haloGeo` (`line` = mesh core, material opacity
+  0/1 — sinyal strike probe A13 tetap jalan); glow sprite 150→
+  **320 m**, opacity 0,85→**0,95**; `boltLight` 1500→**4000**,
+  jarak 1200→**2000**; durasi live 0,2→**0,35 dtk** (flash staged
+  tetap 1,5 dtk). Frekuensi dasar tidak diubah (strike tiap 2–5
+  dtk). `BOLT_ECHOES` tetap 3. **`game/src/main.js`** (runShot):
+  shot blast kini juga `storm.flash(nextRing)` saat tornado-kill
+  (sebelumnya hanya play/cockpit) — bolt 1,5 dtk melewati freeze
+  kill+0,5 dtk. Bukti visual (dibaca sendiri, run screenshots 1):
+  cover — kolom putih terang tebal vertikal kiri-tengah (petir
+  tube) + pesan ORANYE + fireball kiri + pesawat pemain utuh + ring
+  4 emas 57 m; kokpit — petir zigzag putih tebal besar di
+  kiri-tengah kaca depan tepat di samping ring 3, JELAS terbaca
+  (bukan garis 1–2 px). **Poll live gaya A13: 22 strike/20 dtk,
+  maxOp 1, 3 garis + glow + 5 tornado — terbanyak sejauh ini (v22
+  terbaik 14); A13b staged: struktur PASS, op0=1, glowOp=0,95.**
+- [x] **(3) PENANDA ARAH RING STABIL.** Fakta playtest: segitiga
+  penanda ring (▲▼▶◀) berubah tidak konsisten — ▲→▼ dalam 1 dtk
+  untuk ring yang sama. Perbaikan di **`game/src/hud.js`**: helper
+  murni terekspor `stableRingDir(raw, state, now, ringNum)` —
+  deadband ±15° (tahan arah tampil di dalam pita), kandidat diadopsi
+  hanya bila stabil dalam ±15° dari kandidat selama ≥0,5 dtk,
+  ganti ring adopsi langsung, raw null → null; state `ringDirState`
+  di closure `createHud`; `update()` memutar panah lewat
+  `stableRingDir(view.ringDir, ringDirState, view.time,
+  view.ringNum)`. Bukti (headless tes 38): raw berosilasi 0↔180 tiap
+  0,1 dtk selama 2 dtk → tampil tetap 0; raw stabil 180 → tetap 0
+  di 2,1/2,4 dtk, berubah 180 di 2,6 dtk (hold 0,5 dtk); jitter ±10°
+  → tetap 180; ganti ring → adopsi −90 langsung. **Koreksi
+  `main.js` runShot: `hud.update(hudView(), 0)` pra-paint DIHAPUS**
+  (hanya update pasca-draw di `paint()` yang tersisa; pesan/
+  objective diset langsung oleh showMessage/showObjective) —
+  update pra-paint memakai kamera sebelum diposisikan (diketahui
+  sejak v17) dan stabiliser menahan arah basi itu karena kedua
+  update berbagi `view.time` yang sama. **Koreksi catatan (jujur):
+  pembacaan awal "panah ▶ sementara ring di kiri-atas" ternyata
+  ARTEFAK HARNESS, bukan bug game** — probe in-page mengukur panah
+  `rotate(-23deg)`, ringDir −22,7°, ring di NDC (−0,04, 0,18) =
+  layar (612,294) kiri-atas — nilainya BENAR; crop kecil di
+  headless shell menunjukkan frame compositor BASI (terbukti:
+  setelah dipaksa dua frame rAF segar, −90° me-render ◀ dan +45°
+  me-render ↗ dengan benar). Penghapusan pre-paint tetap dipertahankan
+  (menghapus benih kamera basi), tapi shot kokpit tidak pernah
+  terbukti salah — harness-nya yang salah baca.
+- [x] **Verifikasi pasca-revisi (semua angka terukur, setelah revision
+  pass gate authorship — komentar saja, perilaku tidak berubah):**
+  `node --check` lolos 10 file (terrain, config, flight, main,
+  storm, hud, headless.test, sim-win-autoland, sim-3tier, main.ts);
+  **headless 39/39 ALL PASS**; **sim-win-autoland 15/15 ALL PASS**
+  (14 lama + profil dive ring-12 baru); **sim-3tier ALL PASS**
+  (Reference 12/12 landed 58,7 dtk skor 3411; Weak 9/12 skor 2102;
+  Idle crash 2/12; Manual 12/12 landed 57,5 dtk skor 3411).
+  `node shots.mjs` run 2 (setelah hapus pre-paint update) exit 0,
+  errors none; keempat screenshot beda byte dari v23 (cover
+  sha256 `158d99559391b11071bf59c50f396e0a02a95348edd66d39b8eaed3eee81d263`,
+  kokpit `cb5852bd723bc337b72d26969a9c94e5a848de334660e01727e95d2d5cd16856`,
+  start `cf256556f2cb70378e4dea36800158495acc43f5f2113f7f1e7fe39828b9428a`,
+  landing `4426b3d6b0b25999aab11b16953662e7050c77efc0cf3d465b7c1076217b66c7`;
+  v23: cover `4e1df36e…`, kokpit `8fe640e0…`, start `9c1ec4a7…`,
+  landing `8d8f5e81…`). Screenshot dibaca sendiri (lihat bawah).
+  **Entrypoint 2× byte-identik** (`MAKEFUN_OUTPUT_DIR=out-a|out-b
+  node main.ts`, exit 0 dua-duanya; dossier sha256
+  **`f0758fa80692cbf6b4cdd824eacf06d29b04a0ba1c72adb79c6a2950ef36e61f`**
+  di keduanya; dossier.json **784.408 byte**; total entrypoint
+  **2.430.476 byte** di keduanya; out-a/out-b dihapus setelah
+  perbandingan — scratch, tidak di-commit).
+- [x] **4 screenshot v24 DIBACA SENDIRI (run 2, setelah hapus
+  pre-paint update):** cover 128.720 byte (v23: 140.459) — pesan
+  ORANYE + fireball kiri (terpotong sebagian di tepi kiri, caveat
+  sama seperti v23) + pesawat pemain utuh kanan-tengah + ring 4
+  emas 57 m + kolom petir putih tebal; kokpit 123.249 (v23:
+  129.601) — petir zigzag tebal jelas + dial kokpit + 2 rival +
+  ring 3 (186 m) + dedup HUD benar (panel ALT/SPD/HDG tersembunyi);
+  title 99.578 (v23: 99.584 — beda 6 byte, layar judul FINAL tak
+  tersentuh); landing 112.384 (v23: 111.529) — flare bersih di atas
+  runway 09 (ALT·MSL 378 FT, SPD 109 KTS, HDG 086°, POSITION 1/5,
+  pill "FLY OVER THE RUNWAY TO WIN" + "SPD 109 KT · AGL 165 FT ·
+  ON GLIDE · AUTOLAND READY", 2 rival di depan, PAPI kiri).
+  **Caveat jujur: lembah tidak terbaca jelas sebagai lembah di
+  frame landing** (freeze sudah di atas strip; lembah terbukti
+  lewat sim + probe live B2, bukan frame ini). Veg counts sama
+  (trees 355, palms 205, rocks 110, bushes 320, jungle 42, cliffs
+  126, airport 60, tufts 160). Playtest: Start click OK, HUD
+  bergerak (alt 369→265, spd 82→145), COCKPIT VIEW + dedup OK,
+  kembali CHASE VIEW OK.
+- [x] **Docs:** design/assets.md (baris terrain/config/flight/
+  storm/hud/main + sim-win-autoland 15 profil + headless 39 tes +
+  ukuran screenshot v24), design/plan.md (koridor 24→40 m + catatan
+  v24), design/style.md (petir tube v24), entri gate file v24.
+  Commit lokal menyusul (TIDAK push, TIDAK submit, TIDAK bundle).
+
 ## What changed in v23 (vs v22) — all patched on top of v22
 
 - [x] **(1) SCREENSHOT KE-5: RIVAL ORANYE MELEDAK KENA TORNADO (v23 —

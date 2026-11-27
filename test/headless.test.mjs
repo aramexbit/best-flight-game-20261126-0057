@@ -84,13 +84,33 @@
 //      strip is OBEYED (it crashes — no rescue) and a climb input
 //      actually climbs the plane; with 12 rings the SAME dive is
 //      IGNORED once the win triggers and the autopilot lands it.
+//  35. v24 approach valley: the ground is carved to ~32 m at x=950
+//      and ~64 m at x=1000 on the centreline, the strip threshold
+//      at x=1025 is untouched, and 110 m off the centreline the
+//      ridge still stands — a notch, not a flattening.
+//  36. v24 dive after ring 12 (VS -14.5 from 145 m, full throttle)
+//      reaches the corridor alive and WINS (the v22 live-playtest
+//      crash, replayed exactly — on v23 terrain it died at x=945).
+//  37. v24 widened corridor: lat +35 wins as autoland (lat +60
+//      still crashes, test 30).
+//  38. v24 ring pointer holds: a raw angle flickering 0<->180 for
+//      2 s never flips the shown arrow; a steady 180 flips only
+//      after a 0.5 s hold; jitter within ±10° never moves it; a
+//      new ring adopts at once.
+//  39. v24 final pull-up assist: full bias on a steep dive with the
+//      ground 10 m below, zero when high or climbing, small and
+//      positive on a gentle descent.
+//  40. v24 lightning tubes: core + halo TubeGeometry, 320 m glow,
+//      4000 light, 0.35 s flash — with the probe-facing shape kept
+//      (3 echoes, line.material.opacity as the strike signal).
 // Run: node test/headless.test.mjs   (exit 0 = all pass)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRandom } from '../game/src/random.js';
 import { planIslands, createGroundAt } from '../game/src/terrain.js';
 import { createCourse } from '../game/src/rings.js';
-import { createFlight } from '../game/src/flight.js';
+import { createFlight, finalAssistPullUp } from '../game/src/flight.js';
+import { stableRingDir } from '../game/src/hud.js';
 import { STEP, COURSE } from '../game/src/config.js';
 import { gustAt, tornadoAt, tornadoCells } from '../game/src/storm.js';
 import { collisionGate } from '../game/src/collision.js';
@@ -792,6 +812,14 @@ check('throttle-on level arrival (75 m/s, VS -5, 12 rings) wins as autoland', ()
 });
 
 // --- 29. Steep descents + dives win (v22 auto-win) ---------------------
+// v24: the VS -18 case starts 60 m up, not 30 — its start point
+// (320 m short) sits over the new approach valley floor (32 m, was
+// the 90 m ridge), so "30 m up" on v24 terrain starts at y=62 and
+// the plane meets the valley's rising end bank before the corridor
+// (a plane that enters the valley that low and that steep SHOULD
+// crash — the notch is not a tunnel). At 60 m up (y=92) the same
+// steep descent reaches the corridor alive and wins, which is what
+// this profile asserts.
 check('steep descents win (VS -14 / -18 from short); 80 m/s VS -20 dive wins', () => {
   const course = buildCourse();
   const rw = course.runway;
@@ -801,8 +829,8 @@ check('steep descents win (VS -14 / -18 from short); 80 m/s VS -20 dive wins', (
   assert.equal(s14.s.status, 'landed', `VS -14 ${s14.s.status} (expected landed)`);
   assert.equal(s14.s.landingKind, 'autoland', `VS -14 kind=${s14.s.landingKind} (expected autoland)`);
   assert.equal(s14.s.touchdown.branch, 'WIN', `VS -14 branch=${s14.s.touchdown.branch} (expected WIN)`);
-  const s18 = touchdownAt(rw.x - 320, rw.z, { speed: 61, vs: -18, height: 30 });
-  tdLog('VS -18, 320 m short, 30 m up', s18);
+  const s18 = touchdownAt(rw.x - 320, rw.z, { speed: 61, vs: -18, height: 60 });
+  tdLog('VS -18, 320 m short, 60 m up', s18);
   assert.equal(s18.s.autoLanding, true, 'VS -18 should have triggered the win on corridor entry');
   assert.equal(s18.s.status, 'landed', `VS -18 ${s18.s.status} (expected landed)`);
   assert.equal(s18.s.landingKind, 'autoland', `VS -18 kind=${s18.s.landingKind} (expected autoland)`);
@@ -1035,6 +1063,134 @@ check('manual before the win (11 rings: dive crashes, climb climbs); autopilot o
   assert.equal(sc.status, 'flying', `climb run ${sc.status} (expected flying)`);
 });
 
-console.log(`\n${passed}/33 headless tests passed`);
+// --- 35. v24 approach valley: the notch, measured ----------------------
+// The v22 live-playtest crash was a terrain fact (ridge 90 m at
+// x=950-1000 on the centreline) as much as a flying fact. The valley
+// carves the centreline to a 32 m floor at x=950 and ~64 m at x=1000
+// (under the dive line, ~78 m), leaves the strip threshold at x=1025
+// exactly at runway height, and leaves the ridge standing 110 m off
+// the centreline — a notch, not a flattening.
+// REVISION (v24 final): measured x950=32.0, x1000=63.8, x1025=90.3,
+// off-centreline(+110)=88.3 — the assertions above hold with margin.
+// The live B2 probe flew this notch and landed (dx +73, lat -1.4).
+check('v24 approach valley: ~32 m at x=950, ~64 m at x=1000, strip intact at x=1025, ridge stands off-centreline', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const rw = course.runway;
+  const g950 = groundAt(rw.x - 300, rw.z);
+  const g1000 = groundAt(rw.x - 250, rw.z);
+  const g1025 = groundAt(rw.x - 225, rw.z);
+  const gOff = groundAt(rw.x - 300, rw.z + 110);
+  console.log(`  valley: x950=${g950.toFixed(1)} x1000=${g1000.toFixed(1)} x1025=${g1025.toFixed(1)} off-centreline(+110)=${gOff.toFixed(1)} (was 90.2/90.3/90.3)`);
+  assert.ok(g950 > 28 && g950 < 36, `valley floor at x=950 ${g950.toFixed(1)} (expected ~32)`);
+  assert.ok(g1000 > 58 && g1000 < 70, `valley at x=1000 ${g1000.toFixed(1)} (expected ~64, under the dive line ~78)`);
+  assert.ok(Math.abs(g1025 - rw.height) < 0.5, `strip threshold x=1025 ${g1025.toFixed(1)} vs runway height ${rw.height.toFixed(1)} (expected untouched)`);
+  assert.ok(gOff > 75, `110 m off the centreline the ridge stands (${gOff.toFixed(1)} — the valley is a notch, not a flattening)`);
+});
+
+// --- 36. v24 dive after ring 12 wins (the v22 crash, replayed) ---------
+// Ring 12 (729, 145), speed 60, VS -14.5, throttle full, pitch frozen
+// (the sim profile, at flight level): on v23 terrain this flew into
+// the ridge at x=945 (dx -305). The valley must carry it into the
+// corridor alive; the win then triggers and the autopilot lands it.
+check('v24 dive after ring 12 (VS -14.5 from 145 m, full throttle) reaches the corridor alive and wins', () => {
+  const islands = planIslands(createRandom(SEED));
+  const course = createCourse(createRandom(SEED + 7), SEED, islands);
+  const groundAt = createGroundAt(islands, SEED, course.runway);
+  const rw = course.runway;
+  const r12 = course.rings[11];
+  const flight = createFlight(course.spawn);
+  const s = flight.state;
+  s.x = r12.x; s.y = r12.y; s.z = r12.z;
+  s.yaw = Math.atan2(rw.dirX, -rw.dirZ);
+  s.pitch = Math.asin(-14.5 / 60);
+  s.roll = 0; s.speed = 60; s.throttle = 1.0; s.ringsPassed = 12; s.verticalSpeed = -14.5;
+  for (let i = 0; i < 60 / STEP; i += 1) {
+    if (s.status !== 'flying') break;
+    flight.step(STEP, { pitch: 0, roll: 0, yaw: 0, throttle: 0, stickPitch: 1, stickRoll: 1 }, groundAt, rw);
+  }
+  console.log(`  ring-12 dive: status=${s.status} autoLanding=${s.autoLanding} kind=${s.landingKind} branch=${s.touchdown ? s.touchdown.branch : '-'} td=(${s.touchdown ? s.touchdown.dx : '-'}/${s.touchdown ? s.touchdown.lat : '-'})`);
+  assert.equal(s.autoLanding, true, 'ring-12 dive should have triggered the win on corridor entry');
+  assert.equal(s.status, 'landed', `ring-12 dive ${s.status} (expected landed — the valley carries it in)`);
+  assert.equal(s.landingKind, 'autoland', `ring-12 dive kind=${s.landingKind} (expected autoland)`);
+  assert.equal(s.touchdown.branch, 'WIN', `ring-12 dive branch=${s.touchdown.branch} (expected WIN)`);
+});
+
+// --- 37. v24 widened corridor: lat +35 wins ----------------------------
+check('v24 widened corridor: lat +35 wins as autoland (lat +60 still crashes, test 30)', () => {
+  const course = buildCourse();
+  const rw = course.runway;
+  const lat35 = touchdownAt(rw.x, rw.z + 35, { speed: 55, vs: -5, height: 30 });
+  tdLog('lat +35, 30 m up', lat35);
+  assert.equal(lat35.s.autoLanding, true, 'lat +35 (inside the widened 40 m corridor) should trigger the win');
+  assert.equal(lat35.s.status, 'landed', `lat +35 ${lat35.s.status} (expected landed)`);
+  assert.equal(lat35.s.landingKind, 'autoland', `lat +35 kind=${lat35.s.landingKind} (expected autoland)`);
+  assert.equal(lat35.s.touchdown.branch, 'WIN', `lat +35 branch=${lat35.s.touchdown.branch} (expected WIN)`);
+});
+
+// --- 38. v24 ring pointer holds (stableRingDir, pure) -------------------
+check('v24 ring pointer holds: flicker never flips in 2 s; steady flips after 0.5 s; jitter never moves it', () => {
+  const st = { shown: null, cand: null, candSince: 0, ringNum: 0 };
+  // First sighting adopts at once.
+  assert.equal(stableRingDir(0, st, 0, 1), 0);
+  // Raw flickers 0 <-> 180 every 0.1 s for 2 s (the camera-boundary
+  // flip the live playtest saw): the shown arrow must never move.
+  let shown = 0;
+  for (let t = 0.1; t <= 2.0; t += 0.1) {
+    const raw = (Math.round(t * 10) % 2 === 0) ? 0 : 180;
+    shown = stableRingDir(raw, st, t, 1);
+  }
+  assert.equal(shown, 0, `flickering raw 0<->180 should hold the arrow at 0 (got ${shown})`);
+  // A STEADY 180 for 1 s: still 0 at 0.4 s, flipped by 0.6 s.
+  assert.equal(stableRingDir(180, st, 2.1, 1), 0);
+  assert.equal(stableRingDir(180, st, 2.4, 1), 0);
+  assert.equal(stableRingDir(180, st, 2.6, 1), 180);
+  // Jitter within ±10 deg of the shown 180 never moves it.
+  assert.equal(stableRingDir(172, st, 2.7, 1), 180);
+  assert.equal(stableRingDir(188, st, 2.8, 1), 180);
+  // A new ring adopts its raw at once, whatever the old arrow was.
+  assert.equal(stableRingDir(-90, st, 2.9, 2), -90);
+  console.log('  flicker 2 s: held 0; steady 180: flipped at 2.6 s (0.5 s hold); jitter ±10: held 180; ring change: adopted -90 at once');
+});
+
+// --- 39. v24 final pull-up assist (pure) -------------------------------
+check('v24 final pull-up assist: full bias on a steep dive at the ridge, zero level or high', () => {
+  // Steep dive, ground 10 m below: full pull-up.
+  assert.ok(finalAssistPullUp(100, -14, 90) > 0.9, `dive clearance 10 VS -14 should be ~1 (got ${finalAssistPullUp(100, -14, 90)})`);
+  // Same dive 40 m above the ground ahead: nothing.
+  assert.equal(finalAssistPullUp(130, -14, 90), 0);
+  // Climbing over the ridge: nothing, even close.
+  assert.equal(finalAssistPullUp(100, 2, 90), 0);
+  // Gentle descent, 20 m clearance: a small positive bias.
+  const gentle = finalAssistPullUp(110, -5, 90);
+  assert.ok(gentle > 0 && gentle < 0.4, `gentle descent clearance 20 VS -5 should be small positive (got ${gentle})`);
+  console.log(`  dive/10m=${finalAssistPullUp(100, -14, 90).toFixed(2)} high/40m=0 climb=0 gentle/20m=${gentle.toFixed(2)}`);
+});
+
+// --- 40. v24 lightning tubes (source-level, like test 33) --------------
+// createStorm needs THREE + document, so the tube geometry is asserted
+// on the shipped source (the live A13 probe + the screenshots prove it
+// renders); the probe-facing shape is asserted too.
+// REVISION (v24 final): live A13 poll counted 22 strikes in 20 s
+// (maxOp 1, 3 lines + glow + 5 tornadoes) — the most of any version;
+// A13b staged glowOp 0.95. The tubes are what the frames show: a
+// thick white column on the cover, a thick zigzag in the cockpit.
+check('v24 lightning tubes: core+halo TubeGeometry, 320 m glow, 4000 light, 0.35 s flash; probe shape kept', () => {
+  const stormJs = readFileSync(new URL('../game/src/storm.js', import.meta.url), 'utf8');
+  assert.ok(stormJs.includes('new THREE.TubeGeometry(path, 48, 1.8, 6, false)'), 'core tube should be TubeGeometry radius 1.8');
+  assert.ok(stormJs.includes('new THREE.TubeGeometry(path, 32, 5, 6, false)'), 'halo tube should be TubeGeometry radius 5');
+  assert.ok(stormJs.includes('bolts[e].halo.material.opacity = 0.35'), 'halo should light at 0.35');
+  assert.ok(stormJs.includes('spr.scale.set(320, 320, 1)'), 'glow sprite should be 320 m');
+  assert.ok(stormJs.includes('boltGlow.material.opacity = 0.95'), 'glow should light at 0.95');
+  assert.ok(stormJs.includes('boltLight.intensity = 4000'), 'flash light should be 4000');
+  assert.ok(stormJs.includes('new THREE.PointLight(0xcfe4ff, 0, 2000, 1)'), 'flash light distance should be 2000');
+  assert.ok(stormJs.includes('boltLife = life || 0.35'), 'live flash should last 0.35 s');
+  assert.ok(stormJs.includes('BOLT_ECHOES = [-2.5, 0, 2.5]'), 'still 3 bolt echoes (the probe reads bolts.length === 3)');
+  assert.ok(stormJs.includes('bolts[e].line.material.opacity = 1'), 'core material opacity is still the probe strike signal');
+  console.log('  tubes core 1.8 m + halo 5 m/0.35; glow 320 m/0.95; light 4000/2000; flash 0.35 s; 3 echoes kept');
+});
+
+console.log(`\n${passed}/39 headless tests passed`);
 if (process.exitCode) console.log('HEADLESS TESTS: FAIL');
 else console.log('HEADLESS TESTS: ALL PASS');

@@ -105,6 +105,16 @@ export const COURSE = {
   runwayLength: 450,
   runwayWidth: 28,
   runwayShoulder: 3,
+  // v24: the win corridor's lateral half-width — 40 m (was runwayWidth/2
+  // + 10 = 24 m, hard-coded in flight.js). A final approach that drifts
+  // 35 m off the centreline still wins: the autoland cross-track law
+  // holds a lat +20 entry to a lat +1 touchdown, and the sim proves
+  // lat +35 (sim-win-autoland + headless test 36). 60 m off still
+  // crashes — it is not over the asphalt (headless test 30).
+  // REVISION (v24 final): lat +35 measured touchdown lat 6, branch WIN,
+  // kind autoland (headless test 37); the live B2 probe landed lat -1.4
+  // on the strip — the widened corridor is exercised, not just coded.
+  winCorridorLat: 40,
   // Par time for the landing time bonus, in seconds.
   parTime: 240,
 };

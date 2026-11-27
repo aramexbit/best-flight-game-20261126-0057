@@ -5,6 +5,63 @@
 
 import { FONT, PALETTE } from './config.js';
 
+/** Normalise a degree angle to (-180, 180]. */
+function wrap180(deg) {
+  let d = ((deg + 180) % 360 + 360) % 360 - 180;
+  if (d === -180) d = 180;
+  return d;
+}
+
+/**
+ * v24: the ring pointer's stabiliser (pure) — the live playtest saw
+ * the arrow flip ▲→▼ within 1 s for the same ring: hudView's raw
+ * screen-space angle jumps 0° ↔ 180° as the ring crosses the
+ * camera's forward/backward boundary (f ≈ 0), and update() rotated
+ * the arrow every frame. stableRingDir holds the last shown
+ * direction inside a ±15° deadband and only adopts a new direction
+ * once it has held steady (within ±15° of the candidate) for 0.5 s,
+ * so a flickering raw never accumulates. A ring change adopts at
+ * once. `state` is { shown, cand, candSince, ringNum }, kept by the
+ * HUD closure; `now` is the game clock (view.time).
+ * REVISION (v24 final, headless test 38): raw 0↔180 every 0.1 s for
+ * 2 s → shown holds 0; steady 180 → still 0 at 2.1/2.4 s, flips at
+ * 2.6 s (the 0.5 s hold); jitter ±10° → holds 180; ring change →
+ * adopts -90 at once. The live in-page probe measured the arrow at
+ * rotate(-23deg) against ringDir -22.7° with the ring up-left at
+ * screen (612, 294) — the value is right. (An early ▶ reading of a
+ * small crop turned out to be stale compositor frames in the
+ * headless-shell harness, not the game: forcing two fresh rAF frames
+ * before the capture renders -90° as ◀ and +45° as ↗, correctly.)
+ */
+export function stableRingDir(raw, state, now, ringNum) {
+  if (raw === null || raw === undefined) {
+    state.shown = null;
+    state.cand = null;
+    return null;
+  }
+  if (state.ringNum !== ringNum || state.shown === null || state.shown === undefined) {
+    state.ringNum = ringNum;
+    state.shown = raw;
+    state.cand = null;
+    return raw;
+  }
+  if (Math.abs(wrap180(raw - state.shown)) <= 15) {
+    state.cand = null;
+    return state.shown;
+  }
+  if (state.cand === null || Math.abs(wrap180(raw - state.cand)) > 15) {
+    state.cand = raw;
+    state.candSince = now;
+    return state.shown;
+  }
+  if (now - state.candSince >= 0.5) {
+    state.shown = state.cand;
+    state.cand = null;
+    return state.shown;
+  }
+  return state.shown;
+}
+
 export function createHud() {
   const el = (id) => document.getElementById(id);
   const altEl = el('hud-alt');
@@ -39,6 +96,11 @@ export function createHud() {
   }
 
   let msgTimer = 0;
+  // v24: the ring pointer's stabiliser state (see stableRingDir) —
+  // the arrow holds its last direction inside a ±15° deadband and
+  // only adopts a new one after 0.5 s steady, so it never flips
+  // ▲→▼ within a second for the same ring (v22 live playtest).
+  const ringDirState = { shown: null, cand: null, candSince: 0, ringNum: 0 };
   // v14: the mid-air collision cue rides on this — main.js calls
   // showMessage('MID-AIR COLLISION!', 2.5) when rivals.js fires the
   // collision event, so the player is told even if the blast is far off.
@@ -191,7 +253,12 @@ export function createHud() {
         ringPtr.style.display = 'none';
       } else {
         ringPtr.style.display = 'flex';
-        ringPtrArrow.style.transform = `rotate(${Math.round(view.ringDir)}deg)`;
+        // v24: the arrow turns through stableRingDir, not the raw
+        // angle — the raw angle flips 0° ↔ 180° as the ring crosses
+        // the camera's forward/backward boundary, and the old code
+        // rotated the arrow every frame (▲→▼ in 1 s, live playtest).
+        const dir = stableRingDir(view.ringDir, ringDirState, view.time, view.ringNum);
+        ringPtrArrow.style.transform = `rotate(${Math.round(dir)}deg)`;
         ringPtrText.textContent = `RING ${view.ringNum} · ${Math.round(view.nextDist)} m`;
       }
     }

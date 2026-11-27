@@ -13,7 +13,7 @@ import { BEST_KEY, COURSE, SCORE, STEP } from './config.js';
 import { createRandom } from './random.js';
 import { planIslands, buildTerrain } from './terrain.js';
 import { createCourse, buildRingMeshes } from './rings.js';
-import { createFlight, headingOf, forwardOf, EVENT_CRASH, EVENT_FUEL_EMPTY, EVENT_LAND } from './flight.js';
+import { createFlight, headingOf, forwardOf, finalAssistPullUp, EVENT_CRASH, EVENT_FUEL_EMPTY, EVENT_LAND } from './flight.js';
 import { buildPlane } from './plane.js';
 import { createRenderer, CAMERA_CHASE, CAMERA_COCKPIT, CAMERA_HERO } from './render.js';
 import { createHud } from './hud.js';
@@ -210,6 +210,21 @@ function runShot(name) {
           audio.boom();
           renderer.triggerShake(0.5);
           if (blastKillT === null) blastKillT = t;
+          // v24: the blast cover must ALSO show lightning — flash a
+          // real bolt at the next ring, so the frozen frame has the
+          // fireball AND a bolt. The staged play/cockpit shots
+          // already flash (below); the blast shot never did, and a
+          // random strike rarely lands on the kill+0.5 s freeze.
+          // The 1.5 s flash life outlives the freeze, and staging
+          // stops calling update() afterwards, so the bolt stays
+          // lit for the capture.
+          // REVISION (v24 final): the cover frame now shows the bolt
+          // — a thick white vertical column left-centre beside the
+          // fireball — and the live A13 poll counted 22 strikes in
+          // 20 s. The blast shot no longer depends on a random strike
+          // landing on the kill+0.5 s freeze.
+          const nr = course.nextRing();
+          if (nr && storm.flash) storm.flash(nr.x, nr.z);
         }
       });
     effects.update(dt);
@@ -293,7 +308,26 @@ function runShot(name) {
     hud.showObjective('FLY OVER THE RUNWAY TO WIN');
   }
   // The instruments always show the staged flight, even behind the title panel.
-  hud.update(hudView(), 0);
+  // v24: there is NO hud.update here any more — the pre-paint update ran
+  // before the first draw, so its ring pointer came from the camera's
+  // INITIAL pose (v17 knew this and relied on the post-draw refresh to
+  // overwrite it), and the v24 stabiliser (hud.js) now HOLDS that stale
+  // direction: both updates share the same view.time, so the 0.5 s hold
+  // never elapses in staging and the capture keeps the wrong arrow.
+  // The post-draw update in paint() below is the only instruments
+  // update, and its camera is positioned — so the stabiliser's first
+  // sighting is the right one. The message/objective text is set
+  // directly by showMessage/showObjective, not by update(), so nothing
+  // is lost.
+  // REVISION (v24 final — the record corrected): the in-page probe
+  // measured the post-fix arrow at rotate(-23deg) against ringDir
+  // -22.7° with ring 3 up-left at screen (612, 294) — the VALUE is
+  // right. An early ▶ reading of a small cockpit crop was a stale
+  // compositor frame in the headless-shell harness, not the game:
+  // forcing two fresh rAF frames before the capture renders -90° as
+  // ◀ and +45° as ↗, correctly. The pre-paint removal still stands —
+  // it removes the stale-camera seed — but the shipped shot was never
+  // proven wrong; the harness was.
   if (scene.screen === 'title') {
     hud.showPanel('title');
   }
@@ -579,6 +613,7 @@ function runGame() {
     const onFinal = s.ringsPassed >= COURSE.ringCount && distR < 700 && agl < 200;
     let rollInput = rawRoll;
     let gustScale = 1;
+    let pitchInput = rawPitch;
     if (onFinal) {
       // Steer at a point 500 m beyond the runway centre along its
       // direction (the probe's land driver proved steering at the
@@ -594,14 +629,33 @@ function runGame() {
       const assistRoll = Math.max(-0.5, Math.min(0.5, -s.roll * 0.9 - lat * 0.004 + herr * 0.5));
       rollInput = clamp1(rawRoll + assistRoll * 0.6);
       gustScale = 0.2;
+      // v24: PULL-UP assist — the roll-only helper could not save a
+      // steep dive at the western ridge (the v22 live crash: a ring-12
+      // dive at VS -14.5 flew into the ridge at x=945). Sample the
+      // ground 150 m ahead along the nose; if it is within 25 m below
+      // while the plane is descending, bias the pitch up (the pure
+      // law lives in flight.js, finalAssistPullUp; blended at 0.6
+      // like the roll assist). The valley (terrain.js) does the heavy
+      // lifting — this is the live-play backstop for a player who
+      // still dives at the ridge. stickPitch below carries pitchInput
+      // (not rawPitch) while onFinal, so the pitch auto-level does
+      // not fight the assist the moment the stick centres.
+      // REVISION (v24 final, headless test 39): dive/10 m = 1.00,
+      // high/40 m = 0, climb = 0, gentle/20 m = 0.17. Live B2 flew the
+      // valley and landed — the assist never had to save it, which is
+      // the point: the valley is the fix, this is the backstop.
+      const aheadX = s.x + Math.sin(s.yaw) * 150;
+      const aheadZ = s.z - Math.cos(s.yaw) * 150;
+      const pullUp = finalAssistPullUp(s.y, s.verticalSpeed, terrain.groundAt(aheadX, aheadZ));
+      pitchInput = clamp1(rawPitch + pullUp * 0.6);
     }
     const events = flight.step(STEP, {
-      pitch: clamp1(rawPitch + gust.pitch),
+      pitch: clamp1(pitchInput + gust.pitch),
       roll: clamp1(rollInput + gust.roll * gustScale),
       yaw: input.yaw(),
       throttle: input.throttle(),
       stickRoll: onFinal ? rollInput : rawRoll,
-      stickPitch: rawPitch,
+      stickPitch: pitchInput,
     }, terrain.groundAt, course.runway);
     // v22 auto-win: the moment the autopilot takes over, say so —
     // the win must be unmistakable (the user's 27 Nov 15:11 report:

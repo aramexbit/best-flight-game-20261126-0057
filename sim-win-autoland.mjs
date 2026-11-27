@@ -3,7 +3,7 @@
 // the superseded touchdown tiers (the v22 P0 numbers, then Gemini's
 // 78 m/s / -16.5 m/s / hard landing) — both deleted with this redesign.
 // The win is now a POSITION check, not a touchdown check: after all 12
-// rings, crossing into the Runway 09 corridor (|dx| < 250 m, |lat| < 24 m)
+// rings, crossing into the Runway 09 corridor (|dx| < 250 m, |lat| < 40 m)
 // triggers the win and the autopilot lands the plane. The player's plane
 // must NEVER explode during the autopilot landing, in ANY condition —
 // so the WIN profiles below include a 90 m/s dive and a 150 m high entry,
@@ -113,6 +113,23 @@ check('steep VS -14.5 from 300 m short flies into the corridor and wins', () => 
   tdLog('steep', r);
   expectWin('steep', r);
 });
+check('v24 dive after ring 12 (VS -14.5 from 145 m, full throttle) reaches the corridor alive and wins', () => {
+  // The v22 live-playtest crash, replayed exactly: ring 12 (729, 145),
+  // speed 60, VS -14.5, throttle full — on v23 terrain this flew into
+  // the ridge at x=945 (dx -305, 55 m short of the corridor). The v24
+  // approach valley (terrain.js: 32 m floor to x=970, ~64 m at x=1000)
+  // must carry it into the corridor alive; the win then triggers and
+  // the autopilot lands it (touchdown on the valley's end bank, before
+  // the threshold, is still a WIN).
+  // REVISION (v24 final): measured WIN at t=3.6 s, x=1001, y=78,
+  // touchdown dx -239 / lat 2, kind autoland; 15/15 ALL PASS. The same
+  // dive live (B2 probe, ring 12 → human-land → win) landed at 19.9 s,
+  // touchdown (1322.9, 91.9, 118.6), dx +73, raceComplete true.
+  const r12 = course.rings[11];
+  const r = flyToWin({ x: r12.x, z: r12.z, agl: r12.y - groundAt(r12.x, r12.z), speed: 60, vs: -14.5, throttle: 1.0 });
+  tdLog('ring-12 dive', r);
+  expectWin('ring-12 dive', r);
+});
 check('shallow VS -5.5 wins', () => {
   const r = flyToWin({ x: rw.x, z: rw.z, agl: 20, speed: 54, vs: -5.5, throttle: 0.1 });
   tdLog('shallow', r);
@@ -168,7 +185,7 @@ check('fast touchdown on the strip with 0 rings crashes', () => {
   expectCrash('0 rings', r);
 });
 
-console.log(`\n${passed}/14 win-autoland profiles passed`);
+console.log(`\n${passed}/15 win-autoland profiles passed`);
 if (failed > 0) console.log('SIM-WIN-AUTOLAND: FAIL');
 else console.log('SIM-WIN-AUTOLAND: ALL PASS');
 process.exit(failed > 0 ? 1 : 0);

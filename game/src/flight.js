@@ -35,6 +35,29 @@ export function headingOf(yaw) {
   return ((yaw * 180 / Math.PI) % 360 + 360) % 360;
 }
 
+/**
+ * v24: the final-approach pull-up assist (pure) — how hard the onFinal
+ * helper in main.js should pull the nose up (0..1). It fires only
+ * while the plane is DESCENDING (vs < 0) with the ground ahead close
+ * below (clearance < 25 m): the bias grows as the clearance shrinks
+ * and as the descent steepens, so a steep dive at the ridge gets a
+ * full pull-up while a level final gets nothing. It never pushes the
+ * nose down and never fires while climbing. `groundAhead` is the
+ * terrain height ~150 m ahead along the nose (sampled by main.js).
+ * REVISION (v24 final, headless test 39): dive at 10 m clearance,
+ * VS -14 → 1.00; same dive 40 m up → 0; climbing → 0; gentle descent
+ * at 20 m clearance, VS -5 → 0.17. The law is exactly as designed —
+ * full pull-up only when it is needed, nothing otherwise.
+ */
+export function finalAssistPullUp(y, vs, groundAhead) {
+  if (vs >= 0) return 0;
+  const clearance = y - groundAhead;
+  if (clearance >= 25) return 0;
+  const proximity = Math.min(1, (25 - clearance) / 15);
+  const descent = Math.min(1, -vs / 10);
+  return proximity * descent;
+}
+
 export function createFlight(spawn) {
   const state = {
     x: spawn.x,
@@ -137,16 +160,16 @@ export function createFlight(spawn) {
     // the explosions were the other teams' planes (scripted race
     // crashes), but the win never triggered. So the win is now a
     // POSITION check, not a touchdown check: the moment the plane
-    // is over the runway asphalt (|dx| < 250 m, |lat| < 24 m — the
-    // strip + overrun/shoulder margins), the autopilot takes over
-    // and the plane lands itself. Checked HERE, before any input
-    // is applied, so the autopilot owns the very first frame
+    // is over the runway asphalt (|dx| < 250 m, |lat| <
+    // COURSE.winCorridorLat — v24: 40 m, was 24), the autopilot
+    // takes over and the plane lands itself. Checked HERE, before any
+    // input is applied, so the autopilot owns the very first frame
     // inside the corridor. The '[win]' log line is the telemetry
     // the tests and the probe assert on (the touchdown branch WIN
     // is recorded again at the touchdown, below).
     if (!state.autoLanding && runway !== null && state.ringsPassed >= COURSE.ringCount
       && Math.abs(state.x - runway.x) < COURSE.runwayLength / 2 + 25
-      && Math.abs(state.z - runway.z) < COURSE.runwayWidth / 2 + 10) {
+      && Math.abs(state.z - runway.z) < COURSE.winCorridorLat) {
       state.autoLanding = true;
       console.log('[win] ' + JSON.stringify({
         t: +state.elapsed.toFixed(1),

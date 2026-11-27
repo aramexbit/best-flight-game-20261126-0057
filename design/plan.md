@@ -498,7 +498,8 @@ an outside blind test. v20 is not submitted by the builder.
   LONGER used for the win condition; sim-land-profiles +
   sim-landing-gemini are DELETED as superseded. The new design:
   - After 12/12 rings, the moment the plane enters the runway 09
-    corridor (|dx| < 250 m, |lat| < 24 m) the win triggers
+    corridor (|dx| < 250 m, |lat| < 40 m — v24 widened the lateral
+    half-width from 24 m, see the v24 section below) the win triggers
     (`state.autoLanding`, logged `[win] {...}`) — NO speed/VS/
     pitch threshold at all. **User clarification 27 Nov 15:46 —
     MANUAL until ring 12, autopilot ONLY after the win:** the
@@ -569,3 +570,51 @@ an outside blind test. v20 is not submitted by the builder.
   normal-play/A13-lightning/B2-human-flight-to-the-strip +
   auto-win). v22 is not submitted by the builder.
   Deadline 28 Nov 07:57 WIB — v22 is the LAST big iteration.
+
+## v24 (three v22 live-playtest fixes, on top of submitted v23)
+
+- APPROACH VALLEY (the P0 that killed the user's v22 finish): the
+  western ridge rose to ~90 m at x950–1000 on the centreline while
+  the win corridor only starts at x=1000 — a steep dive from ring 12
+  (729, 145) at VS −14.5 flew into the ridge at x=945, 55 m short of
+  the corridor. terrain.js carves a notch along the extended
+  centreline (floor 32 m to x=970, ~64 m at x=1000, strip untouched
+  at x=1025; full width |across| ≤ 45 m, fading to 0 at 110 m; only
+  ever lowers the ground, applied after the runway blend in both
+  createGroundAt and buildTerrain's groundAt so mesh/sim agree).
+  Measured: x950=32.0, x1000=63.8, x1025=90.3, +110 m off-centreline
+  88.3. The ring-12 dive now WINS (sim t=3.6 s, touchdown dx −239 /
+  lat 2) and the live B2 probe flew it and landed (19.9 s, dx +73).
+- WIN CORRIDOR WIDENED lat 24 → 40 m (COURSE.winCorridorLat, used
+  by the flight.js win trigger): lat +35 wins as autoland
+  (touchdown lat 6); lat +60 still crashes — it is not over the
+  asphalt. The autoland cross-track law holds a lat +20 entry to a
+  lat +1 touchdown.
+- PULL-UP ASSIST on final (main.js onFinal branch + pure
+  finalAssistPullUp in flight.js): samples the ground 150 m ahead
+  along the nose; if it is within 25 m below while descending, the
+  pitch biases up (blend 0.6, like the roll assist). Measured:
+  dive/10 m = 1.00, high/40 m = 0, climb = 0, gentle/20 m = 0.17.
+  The valley is the fix; this is the live-play backstop.
+- LIGHTNING AS TUBES (storm.js): each bolt echo is a core tube
+  (radius 1.8 m) + an additive halo tube (radius 5 m, opacity 0.35),
+  rebuilt per strike; glow sprite 320 m / 0.95; flash light 4000
+  (distance 2000); live flash 0.35 s. The blast cover also flashes a
+  real bolt at the next ring on the tornado-kill. Live A13 poll:
+  22 strikes/20 s (best yet). The cover shows a thick white bolt
+  column; the cockpit a thick zigzag bolt by ring 3.
+- STABLE RING POINTER (hud.js stableRingDir): ±15° deadband +
+  0.5 s steady-hold before adopting a new direction; ring change
+  adopts at once. The pre-paint hud.update in runShot is removed —
+  it seeded the stabiliser with the camera's initial pose. Live
+  probe: arrow rotate(-23deg) vs ringDir −22.7°, ring up-left at
+  screen (612, 294).
+- Verification: headless 39/39, sim-win-autoland 15/15,
+  sim-3tier ALL PASS (Reference 12/12 landed 58.7 s score 3411;
+  Weak 9/12; Manual 12/12 landed 57.5 s), shots.mjs exit 0 (4
+  screenshots, byte-new vs v23), live probe A13 (22 strikes) +
+  B2-teleport PASS (landed 19.9 s, raceComplete true), entrypoint
+  2× byte-identical (dossier sha f0758fa8…, 784,408 byte).
+  Honest caveat: the valley does not read as a valley in the
+  landing frame (the freeze is already over the strip) — it is
+  proven by sim + live B2, not by the frame.

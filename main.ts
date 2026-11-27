@@ -1,5 +1,20 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v23: a new screenshot — the ORANYE tornado-kill
+// standard library only). v24: the three v22 live-playtest fixes, on top of
+// v23 (already submitted) — an approach valley carved in the western ridge
+// (floor 32 m to x=970, 63.8 m at x=1000, strip untouched at 90.3) + the win
+// corridor widened lat 24 → 40 m + a pull-up assist on final (dive/10 m =
+// 1.00, high/40 m = 0, climb = 0, gentle/20 m = 0.17), so the steep ring-12
+// dive (VS -14.5 from 145 m) that crashed at x=945 now reaches the corridor
+// alive and wins — sim WIN at t=3.6 s, touchdown dx -239/lat 2, and live B2
+// landed at 19.9 s, touchdown dx +73/lat -1.4; lightning as thick core+halo
+// tubes (glow 320 m, flash light 4000, 0.35 s) with a real bolt flashed at
+// the next ring in the blast cover too — live A13 poll 22 strikes/20 s,
+// cover + cockpit both show a thick readable bolt; and a stabilised ring
+// pointer (hysteresis ±15° + 0.5 s hold, so the arrow never flips ▲→▼ in
+// a second for one ring — live probe: rotate(-23deg) vs ringDir -22.7°,
+// ring up-left at screen (612, 294)). Headless 39/39, sim-win-autoland
+// 15/15, sim-3tier ALL PASS (Reference/Manual 12/12 landed).
+// v23: a new screenshot — the ORANYE tornado-kill
 // frozen 0.5 s after the kill (fireball at full bloom + the gold
 // "DESTROYED BY THE TORNADO!" message, the player's plane intact) — staged
 // from the same deterministic run as the cover (seed 1). At submit time it

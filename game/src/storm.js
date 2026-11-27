@@ -643,7 +643,7 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
 
   // --- Lightning: three parallel jagged bolts + a glow sprite, ---
   // rebuilt at a random spot in the cell on each flash, plus a cold
-  // flash light. Daytime only: the bolts and light are brief (0.2 s),
+  // flash light. Daytime only: the bolts and light are brief (0.35 s),
   // the sky stays bright.
   // v22: the v21 bolt was a single 1 px white zigzag, barely visible
   // in any screenshot (the v21 live playtest saw NO lightning in
@@ -652,19 +652,44 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // a radial glow sprite at the strike midpoint (~150 m, additive),
   // and the flash light is 1500 (was 700) — lightning must be
   // unmissable in a screenshot.
+  // v24: the lines are TUBES now, not 1 px lines — a bright core
+  // (radius 1.8 m) plus a soft additive halo (radius 5 m, opacity
+  // 0.35), rebuilt from the same jagged path on every strike. The
+  // v22 lines were still 1-2 px on screen and the v23 cover caught
+  // no bolt at all; a tube reads at any distance. The entry shape
+  // stays {pos, geo, line} — `line` is the core mesh and its material
+  // opacity is still the probe's strike signal (A13) — plus `halo`
+  // (the halo mesh) and `haloGeo`. The glow sprite grows to 320 m
+  // (opacity 0.95) and the flash light to 4000 (distance 2000), so
+  // the whole frame brightens on a strike; the live flash lasts
+  // 0.35 s (was 0.2).
+  // REVISION (v24 final): the tubes read in the frames — the cover
+  // shows a thick white vertical bolt column left-centre and the
+  // cockpit a thick zigzag bolt left of ring 3, not 1-2 px lines. Live
+  // A13 poll: 22 strikes in 20 s (best yet — v22's best was 14),
+  // maxOp 1, 3 lines + glow + 5 tornadoes; A13b staged glowOp 0.95.
+  // The frequency is unchanged (a strike every 2-5 s); only the bolt
+  // itself got bigger, so the rate did not inflate the count.
   const BOLT_PTS = 9;
   const BOLT_ECHOES = [-2.5, 0, 2.5];
   const bolts = BOLT_ECHOES.map(() => {
     const pos = new Float32Array(BOLT_PTS * 3);
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+    const line = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
       color: 0xfff6b0, transparent: true, opacity: 0,
     }));
+    line.frustumCulled = false;
     group.add(line);
-    return { pos, geo, line };
+    const haloGeo = new THREE.BufferGeometry();
+    const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({
+      color: 0xcfe4ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    halo.frustumCulled = false;
+    group.add(halo);
+    return { pos, geo, line, halo, haloGeo };
   });
-  const boltLight = new THREE.PointLight(0xcfe4ff, 0, 1200, 1);
+  const boltLight = new THREE.PointLight(0xcfe4ff, 0, 2000, 1);
   group.add(boltLight);
   // The glow sprite: a soft radial-gradient canvas texture, additive.
   const boltGlow = (() => {
@@ -682,7 +707,7 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({
       map: tex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
     }));
-    spr.scale.set(150, 150, 1);
+    spr.scale.set(320, 320, 1);
     group.add(spr);
     return spr;
   })();
@@ -695,7 +720,7 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     // (70% of strikes are ring strikes: 12 rings vs 5 tornadoes).
     // The bolt drops from y 330 through the deck (base ~192 m) past
     // the ring to the ground. Strikes come every 2-5 s now (was
-    // 3-7 s) and the flash lasts 0.2 s (was 0.12 s) — more lightning
+    // 3-7 s) and the flash lasts 0.35 s (was 0.2 s) — more lightning
     // to feel, still a brief daytime flash.
     // `flash(x, z)` (below) passes explicit coordinates for a staged
     // screenshot; live play calls strike() with no arguments.
@@ -707,9 +732,11 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     }
     const topY = 330;
     const botY = Math.max(1, groundAt(bx, bz));
-    // One jagged path, three parallel lines: the echoes follow the
+    // One jagged path, three parallel tubes: the echoes follow the
     // main bolt with a fixed lateral offset, so the strike reads as
-    // one thick bolt instead of three separate zigzags.
+    // one thick bolt instead of three separate zigzags. Each tube is
+    // rebuilt from the path on every strike (the old geometry is
+    // disposed); the core reads ~3.6 m thick with a 10 m halo.
     const jitterX = [];
     const jitterZ = [];
     for (let i = 0; i < BOLT_PTS; i += 1) {
@@ -720,20 +747,35 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     }
     for (let e = 0; e < bolts.length; e += 1) {
       const off = BOLT_ECHOES[e];
+      const pts = [];
       for (let i = 0; i < BOLT_PTS; i += 1) {
         const k = i / (BOLT_PTS - 1);
-        bolts[e].pos[i * 3] = bx + jitterX[i] + off;
-        bolts[e].pos[i * 3 + 1] = topY + (botY - topY) * k;
-        bolts[e].pos[i * 3 + 2] = bz + jitterZ[i] + off * 0.6;
+        const px = bx + jitterX[i] + off;
+        const py = topY + (botY - topY) * k;
+        const pz = bz + jitterZ[i] + off * 0.6;
+        bolts[e].pos[i * 3] = px;
+        bolts[e].pos[i * 3 + 1] = py;
+        bolts[e].pos[i * 3 + 2] = pz;
+        pts.push(new THREE.Vector3(px, py, pz));
       }
-      bolts[e].geo.attributes.position.needsUpdate = true;
+      const path = new THREE.CurvePath();
+      for (let i = 0; i < pts.length - 1; i += 1) path.add(new THREE.LineCurve3(pts[i], pts[i + 1]));
+      const coreGeo = new THREE.TubeGeometry(path, 48, 1.8, 6, false);
+      const haloGeo = new THREE.TubeGeometry(path, 32, 5, 6, false);
+      bolts[e].geo.dispose();
+      bolts[e].haloGeo.dispose();
+      bolts[e].line.geometry = coreGeo;
+      bolts[e].halo.geometry = haloGeo;
+      bolts[e].geo = coreGeo;
+      bolts[e].haloGeo = haloGeo;
       bolts[e].line.material.opacity = 1;
+      bolts[e].halo.material.opacity = 0.35;
     }
     boltGlow.position.set(bx, (topY + botY) / 2, bz);
-    boltGlow.material.opacity = 0.85;
+    boltGlow.material.opacity = 0.95;
     boltLight.position.set(bx, (topY + botY) / 2, bz);
-    boltLight.intensity = 1500;
-    boltLife = life || 0.2;
+    boltLight.intensity = 4000;
+    boltLife = life || 0.35;
   }
 
   // v21d: force a strike at (x, z) for a staged screenshot — the bolt
@@ -810,7 +852,10 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
     if (boltLife > 0) {
       boltLife -= dt;
       if (boltLife <= 0) {
-        for (const b of bolts) b.line.material.opacity = 0;
+        for (const b of bolts) {
+          b.line.material.opacity = 0;
+          b.halo.material.opacity = 0;
+        }
         boltGlow.material.opacity = 0;
         boltLight.intensity = 0;
       }
