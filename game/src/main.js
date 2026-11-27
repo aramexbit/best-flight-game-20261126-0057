@@ -224,7 +224,15 @@ function runShot(name) {
           // 20 s. The blast shot no longer depends on a random strike
           // landing on the kill+0.5 s freeze.
           const nr = course.nextRing();
-          if (nr && storm.flash) storm.flash(nr.x, nr.z);
+          // v25-cover-fix: dimmed flash (0.3) — the frozen blast frame
+          // holds the bolt at peak brightness, and the full-strength
+          // glow washed the cover white (ChatGPT v25: lightning too
+          // bright, a white field covering the scene). The play/cockpit
+          // flashes below stay at full strength.
+          // Measured: the re-staged cover is clearly dimmer — thin soft
+          // bolt column, scene readable, no white wash. Framing left
+          // as the v23 design (fireball left, player plane right).
+          if (nr && storm.flash) storm.flash(nr.x, nr.z, 0.3);
         }
       });
     effects.update(dt);

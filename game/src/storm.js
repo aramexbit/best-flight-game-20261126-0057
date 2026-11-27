@@ -786,8 +786,26 @@ export function createStorm(THREE, seed, course, islands, groundAt, effects) {
   // when the screenshot is taken ~700 ms after __shotReady (the
   // staged shot does not call update() after staging, so the bolt
   // does not fade). Live play never calls this.
-  function flash(x, z) {
+  // v25-cover-fix: `dim` (0-1) scales the staged bolt down — the
+  // frozen blast frame holds the bolt at PEAK brightness (the staged
+  // clock stops before boltLife decays), so the full-strength glow
+  // (320 m sprite at 0.95 + 4000 light) reads as a white wall that
+  // washes out the scene. A dimmed flash keeps the zigzag readable
+  // while the glow/light stop covering the environment. Live play
+  // never calls flash(), so live strikes are untouched.
+  // Measured on the cover re-stage (dim 0.3): glow 0.285, light 1200,
+  // core 0.65 — the bolt reads as a thin soft column and the sea,
+  // beach, ring and player plane stay fully readable; no white wash.
+  function flash(x, z, dim) {
     strike(x + 60, z - 40, 1.5);
+    if (dim !== undefined && dim !== 1) {
+      for (const b of bolts) {
+        b.line.material.opacity = 0.5 + 0.5 * dim;
+        b.halo.material.opacity = 0.35 * dim;
+      }
+      boltGlow.material.opacity = 0.95 * dim;
+      boltLight.intensity = 4000 * dim;
+    }
   }
 
   // --- Flak: a burst every STORM.flakEvery seconds on an outer ---

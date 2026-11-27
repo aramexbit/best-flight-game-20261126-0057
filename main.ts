@@ -1,5 +1,18 @@
 // Langit Nusantara — Ring Run, a best-flight-game-20261126-0057 entry (Node 22,
-// standard library only). v25-fix: the v25 yoke's bar + hub + red cap never
+// standard library only). v25-cover-fix: the v25-fix cover was too bright —
+// the frozen blast frame holds the staged lightning bolt at PEAK brightness
+// (boltLife never decays once staging stops calling update()), so the 320 m
+// glow sprite at 0.95 + 4000 light read as a white wall covering the scene
+// (ChatGPT v25 cover 7,6: lightning too bright). Fix (storm.js flash() +
+// main.js blast branch, staging only): flash(x, z, dim) scales the bolt — the
+// blast flash runs dimmed at 0.3 (core 0.65, halo 0.105, glow 0.285, light
+// 1200), so the cover now shows a thin soft bolt column and the sea, beach,
+// ring and player plane stay readable; the play/cockpit flashes stay full
+// strength and live play never calls flash(). Framing unchanged (v23 design:
+// fireball left, player plane right). Measured: re-staged cover f00d79aa…
+// (140.573 byte), read directly — thin soft bolt column, no white wash.
+// Headless 39/39, sim-win-autoland 15/15,
+// sim-3tier ALL PASS, entrypoint 2x byte-identical. v25-fix: the v25 yoke's bar + hub + red cap never
 // showed in the cockpit shot — they sat INSIDE the console shelf box (its
 // front face is ~0.10 m ahead of the bar at that height), so the shot read as
 // two separate grips; the first fix (bar to local y -0.055, thicker, shorter
